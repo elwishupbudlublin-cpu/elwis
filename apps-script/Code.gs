@@ -5,7 +5,7 @@
  * Wersja: 1.0.0 (schemat danych 1.x). Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.0.0';
+const SCRIPT_VERSION = '1.0.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -73,6 +73,9 @@ function baza_() {
   return SpreadsheetApp.openById(id);
 }
 function rows_(sh) { const v = sh.getDataRange().getValues(); v.shift(); return v; }
+/** Wartości tak, jak widać je w arkuszu (tekst) – arkusz potrafi zamienić „1.2” na datę, a PIN „0123” na liczbę. */
+function rowsT_(sh) { const v = sh.getDataRange().getDisplayValues(); v.shift(); return v; }
+const TEXT = '@';
 function txt_(v) { return v == null ? '' : String(v).trim(); }
 function tak_(v) { return txt_(v).toLowerCase() === 'tak'; }
 function num_(v) { const s = txt_(v).replace(',', '.'); return s === '' ? '' : Number(s); }
@@ -80,14 +83,14 @@ function idFromUrl_(u) { const m = txt_(u).match(/[-\w]{25,}/); return m ? m[0] 
 
 function konfig_() {
   const c = {};
-  rows_(baza_().getSheetByName('Konfiguracja')).forEach(r => { if (txt_(r[0])) c[txt_(r[0])] = txt_(r[1]); });
+  rowsT_(baza_().getSheetByName('Konfiguracja')).forEach(r => { if (txt_(r[0])) c[txt_(r[0])] = txt_(r[1]); });
   if (String(c.wersja_schematu || '').split('.')[0] !== '1') throw new Error('Nieobsługiwana wersja schematu: ' + c.wersja_schematu);
   return c;
 }
 
 function auth_(key) {
   if (!key) return null;
-  const r = rows_(baza_().getSheetByName('Tablety')).find(x => txt_(x[1]) === String(key) && tak_(x[3]));
+  const r = rowsT_(baza_().getSheetByName('Tablety')).find(x => txt_(x[1]) === String(key) && tak_(x[3]));
   return r ? txt_(r[0]) : null;
 }
 
@@ -97,7 +100,7 @@ function sha_(s) {
 }
 
 function aktywne_() {
-  return rows_(baza_().getSheetByName('Projekty'))
+  return rowsT_(baza_().getSheetByName('Projekty'))
     .filter(r => tak_(r[5]) && txt_(r[0]) && ['tak', 'nie'].indexOf(txt_(r[11]).toLowerCase()) >= 0)
     .map(r => ({
       kod: txt_(r[0]), nazwa: txt_(r[1]), adres: txt_(r[2]), lokalizacja: txt_(r[3]), kontakt: txt_(r[4]),
@@ -113,7 +116,7 @@ function projekt_(kod) {
 }
 
 function slowniki_() {
-  const v = rows_(baza_().getSheetByName('Słowniki'));
+  const v = rowsT_(baza_().getSheetByName('Słowniki'));
   return {
     kategorie: v.map(r => txt_(r[0])).filter(String),
     typy: v.filter(r => txt_(r[2])).map(r => ({ prefix: txt_(r[2]).toUpperCase(), nazwa: txt_(r[3]), kroki: txt_(r[4]).split(';').map(s => s.trim()).filter(String), sn: tak_(r[5]) })),
@@ -126,7 +129,7 @@ function slowniki_() {
 function bootstrap_(tablet) {
   const k = konfig_();
   const salt = P.getProperty('SALT');
-  const pr = rows_(baza_().getSheetByName('Pracownicy'))
+  const pr = rowsT_(baza_().getSheetByName('Pracownicy'))
     .filter(r => txt_(r[0]) && tak_(r[4]) && txt_(r[3]))
     .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])) }));
   const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; return o; });
@@ -189,6 +192,7 @@ function zdarzeniaSheet_(p) {
     sh = ss.insertSheet('Zdarzenia');
     sh.appendRow(['ID', 'Czas', 'Pracownik', 'Tablet', 'Urządzenie', 'Typ', 'Dane', 'Odebrano']);
     sh.setFrozenRows(1); sh.getRange(1, 1, 1, 8).setFontWeight('bold');
+    sh.getRange('A:H').setNumberFormat(TEXT);
   }
   return sh;
 }
@@ -199,7 +203,7 @@ function events_(kod, since) {
   const last = sh.getLastRow() - 1; // liczba zdarzeń
   if (since >= last) return { ok: true, events: [], last: last, more: false };
   const n = Math.min(500, last - since);
-  const v = sh.getRange(since + 2, 1, n, 7).getValues();
+  const v = sh.getRange(since + 2, 1, n, 7).getDisplayValues();
   const ev = v.map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), kto: txt_(r[2]), tablet: txt_(r[3]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }));
   return { ok: true, events: ev, last: since + n, more: since + n < last };
 }
@@ -237,7 +241,7 @@ function push_(b, tablet) {
         rows.push([e.id, txt_(e.ts), txt_(e.kto).slice(0, 80), tablet, txt_(e.urz).slice(0, 20), e.typ, JSON.stringify(e.d || {}).slice(0, 45000), now]);
         if (e.urz) touched[e.urz] = true;
       });
-      if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setValues(rows);
+      if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
       przelicz_(p, Object.keys(touched));
     }
     return { ok: true, accepted: accepted };
@@ -248,7 +252,7 @@ function push_(b, tablet) {
 function przelicz_(p, ids) {
   if (!ids.length) return;
   const ss = SpreadsheetApp.openById(p.lista);
-  const ev = rows_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
+  const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
     .sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
   const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
   const braki = {}; ev.forEach(e => { if (e.typ === 'brak') braki[e.id] = { urz: e.urz, open: true }; if (e.typ === 'brak_zamk' && braki[e.d.bid]) braki[e.d.bid].open = false; });
@@ -262,7 +266,7 @@ function przelicz_(p, ids) {
     const done = kroki.filter((k, j) => st[j]).length;
     const open = Object.keys(braki).some(b => braki[b].urz === id && braki[b].open);
     const status = open ? 'brak' : (done === kroki.length && kroki.length ? 'gotowe' : done ? 'w toku' : 'czeka');
-    sh.getRange(i + 2, 10, 1, 2).setValues([[sn, status]]);
+    sh.getRange(i + 2, 10, 1, 2).setNumberFormat(TEXT).setValues([[sn, status]]);
   });
 }
 
@@ -280,5 +284,5 @@ function archiwizuj() {
   const day = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd');
   const kopia = id => { const f = DriveApp.getFileById(id); f.makeCopy(day + ' ' + f.getName(), arch); };
   kopia(P.getProperty('BAZA_ID'));
-  rows_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
+  rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
 }
