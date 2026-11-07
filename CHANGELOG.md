@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.3.0 – 2026-11-07 (aplikacja i serwer)
+- „Pozostałe DTR”: wspólny folder `_Techniczne` (Konfiguracja → `folder_techniczne_id`, podfoldery = grupy) pobierany na każdy tablet; sekcja pod „Dokumenty pomocnicze” na karcie budowy. Pliki usunięte z Dysku znikają z tabletu, zmienione pobierają się ponownie.
+- Pamięć tabletu: komplet danych 30 ostatnio otwieranych budów; na liście budów „✓ offline”. Starsze budowy są usuwane z tabletu (poza niewysłanymi wpisami i zdjęciami) i pobierane ponownie przy otwarciu.
+- Zwykła synchronizacja odświeża bieżącą i 5 ostatnich budów; „Pobierz wszystko ponownie” – wszystkie 30.
+- Prośba o pamięć trwałą przeglądarki; w Ustawieniach liczba budów w pamięci i zajęte miejsce.
+- Serwer: operacja `techniczne`; pliki udostępniane z „Do wglądu” aktywnych budów i z `_Techniczne` (do 3 poziomów podfolderów).
+
 ## 1.2.0 – 2026-11-07 (aplikacja i serwer)
 - Dokumenty pomocnicze do 60 MB: serwer wysyła duże pliki w częściach po 6 MB, aplikacja składa je i trzyma offline (wcześniej limit 15 MB w aplikacji / 20 MB na serwerze).
 - Dotknięcie dokumentu, którego jeszcze nie ma w tablecie, pobiera go od razu (przy internecie) z postępem w procentach.

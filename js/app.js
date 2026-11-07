@@ -127,6 +127,7 @@ const Views = {
     const recent = (await DB.get('recent')) || [];
     const q = UI.par.q || '';
     const rec = recent.map(k => all.find(p => p.kod === k)).filter(Boolean).slice(0, 3);
+    const off = new Set(await Pamiec.lista());
     const nq = U.norm(q);
     const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
     view.innerHTML = `
@@ -136,8 +137,8 @@ const Views = {
       ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(card).join('')}</div>` : ''}
       <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
       <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b>${U.esc(p.kod)}</b><span class="grow">${U.esc(p.nazwa.replace(p.kod, '').trim())}</span>
-        ${p.wojskowy === 'tak' ? '<span class="chip warn">obiekt wojskowy</span>' : ''}<span class="mute">${U.esc(p.adres || '')}</span></button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
-    function card(p) { return `<button class="tile" data-k="${U.esc(p.kod)}"><b>${U.esc(p.nazwa)}</b><span class="mute">${U.esc(p.adres || '')}</span></button>`; }
+        ${p.wojskowy === 'tak' ? '<span class="chip warn">obiekt wojskowy</span>' : ''}<span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" title="Dane w pamięci tabletu">✓ offline</span>' : ''}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
+    function card(p) { return `<button class="tile" data-k="${U.esc(p.kod)}"><b>${U.esc(p.nazwa)}</b><span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" style="align-self:flex-start">✓ offline</span>' : ''}</button>`; }
     const inp = $('#q');
     inp.oninput = () => { UI.par.q = inp.value; Views.home(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
@@ -171,6 +172,7 @@ const Views = {
           ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
           <div class="card"><div class="lbl">Dokumenty pomocnicze</div>
             <div class="stack" style="margin-top:8px" id="docs">${(pd.pliki || []).map(f => `<button class="btn sm doc" data-f="${U.esc(f.id)}" style="text-align:left"><span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
+          ${dtrHtml(await DB.get('tech') || [])}
         </div>
         <div class="stack">
           <h1 style="margin:0">Co dziś robisz?</h1>
@@ -194,7 +196,7 @@ const Views = {
     $('#bBrak').onclick = () => Dialogs.brak('');
     $('#bNote').onclick = () => Dialogs.notatka('');
     view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => openFile(b.dataset.f));
-    (pd.pliki || []).forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.getFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
+    [...(pd.pliki || []), ...((await DB.get('tech')) || [])].forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.hasFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
   },
 
   /* Rzuty + lista urządzeń */
@@ -500,10 +502,17 @@ async function openProject(kod) {
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
   await wczytajEtap(kod);
-  const r = ((await DB.get('recent')) || []).filter(k => k !== kod); r.unshift(kod); await DB.set('recent', r.slice(0, 6));
+  const r = ((await DB.get('recent')) || []).filter(k => k !== kod); r.unshift(kod); await DB.set('recent', r.slice(0, PAMIEC_BUDOW));
   UI.go('budowa');
   if (navigator.onLine) Sync.run();
   else if (!S.proj) UI.toast('Dane tej budowy nie są jeszcze w tablecie – połącz się z WiFi.');
+}
+function dtrHtml(tech) {
+  const groups = groupBy(tech, f => f.grupa || '');
+  return `<details class="card dtr"><summary class="lbl">Pozostałe DTR (${tech.length})</summary>
+    ${S.techInfo ? `<p class="mute">${U.esc(S.techInfo)}</p>` : ''}
+    <div class="stack" style="margin-top:8px">${groups.map(([g, arr]) => (g || groups.length > 1 ? `<div class="mute" style="font-weight:600;margin-top:6px">${U.esc(g || 'Ogólne')}</div>` : '') +
+      arr.map(f => `<button class="btn sm doc" data-f="${U.esc(f.id)}" style="text-align:left"><span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('')).join('') || '<span class="mute">Brak plików w folderze _Techniczne.</span>'}</div></details>`;
 }
 function mb(b) { return b ? (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB' : ''; }
 let pobieranie = null;
@@ -531,11 +540,13 @@ function settings() {
       <div class="card stack" style="font-size:14px"><div>Tablet: <b>${U.esc(c.tablet || '')}</b></div><div>Wersja aplikacji: <b>${APP_VERSION}</b></div>
         <div>Sesja do: <b>${S.user ? new Date(S.user.exp).toLocaleString('pl-PL') : ''}</b></div>
         <div>Ostatnia synchronizacja: <b>${S.lastSync ? new Date(S.lastSync).toLocaleString('pl-PL') : '—'}</b></div>
-        <div>Do wysłania: <b>${S.pending}</b></div>${S.syncErr ? `<div class="badbox">${U.esc(S.syncErr)}</div>` : ''}</div>
+        <div>Do wysłania: <b>${S.pending}</b></div>
+        <div>Budowy w pamięci: <b id="sBud">…</b> (najwyżej ${PAMIEC_BUDOW}) · zajęte: <b id="sMem">…</b></div>${S.syncErr ? `<div class="badbox">${U.esc(S.syncErr)}</div>` : ''}</div>
       <button class="btn pri" id="sLogout">Wyloguj</button>
       <button class="btn" id="sFull">Pobierz wszystko ponownie (WiFi)</button>
       ${Session.isBiuro() ? '<button class="btn bad" id="sReset">Resetuj tablet (usuwa dane z tego urządzenia)</button>' : ''}
     </div></div></div>`;
+  (async () => { $('#sBud').textContent = (await Pamiec.lista()).length; const z = await Pamiec.zajete(); $('#sMem').textContent = z ? mb(z) : 'brak danych'; })();
   $('#sx').onclick = UI.close;
   $('#sLogout').onclick = async () => { await Session.logout(); UI.close(); UI.go('login'); };
   $('#sFull').onclick = () => { UI.close(); Sync.run(true); };
@@ -549,6 +560,7 @@ function settings() {
 /* ---------- Start ---------- */
 (async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
   await API.load();
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
   S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;

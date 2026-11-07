@@ -109,9 +109,14 @@ const Sync = {
         }
       }
       // 4. dane budów: bieżąca + ostatnio używane
+      // bieżąca + 5 ostatnich (pozostałe z 30 – przy otwarciu albo „Pobierz wszystko ponownie”)
       const recent = (await DB.get('recent')) || [];
-      const kody = [...new Set([S.kod, ...recent].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
+      const ile = full ? PAMIEC_BUDOW : 6;
+      const kody = [...new Set([S.kod, ...recent.slice(0, ile)].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
       for (const kod of kody) await this.pullProject(kod, full);
+      // 5. DTR wspólne dla wszystkich budów
+      await this.pullTech(full);
+      await Pamiec.porzadki();
       S.lastSync = Date.now(); await DB.set('lastSync', S.lastSync);
     } catch (err) {
       S.syncErr = err.message; console.warn('sync', err);
@@ -143,6 +148,64 @@ const Sync = {
       if (!r.more) break;
     }
     if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); }
+    await Pamiec.oznacz(kod);
+  },
+  async pullTech(full) {
+    let r;
+    try { r = await API.techniczne(); } catch (e) { S.techInfo = 'Pozostałe DTR wymagają aktualizacji serwera ELWIS.'; return; }
+    S.techInfo = r.brakFolderu ? 'Folder _Techniczne nie jest ustawiony w Konfiguracji.' : '';
+    const old = (await DB.get('tech')) || [];
+    await DB.set('tech', r.pliki);
+    const now = new Set(r.pliki.map(f => f.id));
+    for (const f of old) if (!now.has(f.id) && !(await Pamiec.uzywany(f.id))) await DB.delFile(f.id);   // usunięte z Dysku
+    for (const f of r.pliki) {
+      if (f.size > 60e6) continue;
+      const prev = old.find(x => x.id === f.id);
+      const changed = prev && prev.zm && f.zm && prev.zm !== f.zm;
+      if (!full && !changed && await DB.hasFile(f.id)) continue;
+      try { await pobierzPlik(f.id); } catch (e) { console.warn('dtr', f.id, e); }
+    }
+  }
+};
+
+/* Pamięć tabletu: komplet danych 30 ostatnio otwieranych budów */
+const PAMIEC_BUDOW = 30;
+const Pamiec = {
+  async lista() {
+    let l = await DB.get('offline');
+    if (!l) {   // pierwsze uruchomienie 1.3: budowy pobrane przez starsze wersje
+      l = [];
+      for (const k of (await DB.get('recent')) || []) if (await DB.get('proj:' + k)) l.push(k);
+      await DB.set('offline', l);
+    }
+    return l;
+  },
+  async oznacz(kod) { const l = await this.lista(); if (!l.includes(kod)) { l.push(kod); await DB.set('offline', l); } },
+  /* plik potrzebny innej budowie z pamięci albo DTR? */
+  async uzywany(id, pomin) {
+    const tech = (await DB.get('tech')) || [];
+    if (tech.some(f => f.id === id)) return true;
+    for (const k of await this.lista()) {
+      if (k === pomin) continue;
+      const p = await DB.get('proj:' + k); if (!p) continue;
+      if (Object.values(p.rzuty || {}).includes(id) || (p.pliki || []).some(f => f.id === id)) return true;
+    }
+    return false;
+  },
+  async porzadki() {
+    const recent = ((await DB.get('recent')) || []).slice(0, PAMIEC_BUDOW);
+    const keep = new Set([S.kod, ...recent].filter(Boolean));
+    const l = await this.lista();
+    for (const kod of l.filter(k => !keep.has(k))) {
+      const p = await DB.get('proj:' + kod);
+      if (p) for (const id of [...Object.values(p.rzuty || {}), ...(p.pliki || []).map(f => f.id)]) if (!(await this.uzywany(id, kod))) await DB.delFile(id);
+      await DB.del('proj:' + kod); await DB.del('seq:' + kod);
+      await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod);
+    }
+    await DB.set('offline', l.filter(k => keep.has(k)));
+  },
+  async zajete() {
+    try { const e = await navigator.storage.estimate(); return e.usage || 0; } catch (e) { return 0; }
   }
 };
 

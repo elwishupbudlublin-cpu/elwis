@@ -31,6 +31,12 @@ Rzuty: pliki `<Arkusz>.jpg` w folderze budowy **Do wglądu** (nazwa = wartość 
 ## 4a. Etapy budowy (schemat 1.3)
 Budowa z kilkoma budynkami / częściami: w Bazie projektów kolumna „Etap Budowy” (np. `A: Budynek A; B: Budynek B`), w liście urządzeń kolumna „Etap Budowy” z oznaczeniem (`A`, `B`). Przy co najmniej dwóch etapach aplikacja pokazuje przełącznik etapu.
 
+## 4b. Pozostałe DTR
+Folder `_Budowy/_Techniczne` – DTR wszystkich urządzeń, wrzucane ręcznie (można tworzyć podfoldery, np. producentów). Każdy tablet pobiera całość przy synchronizacji; pierwsze pobranie najlepiej przy WiFi. Pliki do 60 MB.
+
+## 4c. Pamięć tabletu
+Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ offline”). Starsze są usuwane i pobierane ponownie przy otwarciu (wymaga internetu).
+
 ## 5. Gdy coś nie działa
 | Komunikat | Co zrobić |
 |---|---|

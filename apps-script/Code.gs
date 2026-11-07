@@ -1,11 +1,11 @@
 /**
  * ELWIS – serwer synchronizacji (Google Apps Script, konto ELWIS).
- * Zamknięta lista operacji: bootstrap, project, file, events, push. Wszystko inne → odmowa.
+ * Zamknięta lista operacji: bootstrap, project, file, techniczne, events, push. Wszystko inne → odmowa.
  * Bez danych budów i kluczy w kodzie – konfiguracja w Bazie projektów i we właściwościach skryptu.
  * Wersja: 1.1.0 (schemat danych 1.x, etapy budowy od 1.3). Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.2.0';
+const SCRIPT_VERSION = '1.3.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -54,6 +54,7 @@ function handle_(p, body) {
       case 'bootstrap': return out_(bootstrap_(tablet));
       case 'project': return out_(project_(String(p.kod || '')));
       case 'file': return out_(file_(String(p.id || ''), p.part));
+      case 'techniczne': return out_(techniczne_());
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'push': return out_(push_(body, tablet));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
@@ -199,6 +200,7 @@ function file_(id, part) {
     const gp = d.getParents();
     while (gp.hasNext()) if (allowed[gp.next().getId()]) ok = true;
   }
+  if (!ok) ok = wTechnicznych_(f);
   if (!ok) throw new Error('Brak dostępu do pliku');
   if (f.getSize() > MAX_FILE) throw new Error('Plik zbyt duży dla tabletu (ponad 60 MB)');
   let blob = f.getBlob();
@@ -215,6 +217,45 @@ function file_(id, part) {
   head.parts = n; head.part = i;
   head.b64 = Utilities.base64Encode(bytes.slice(i * PART_BYTES, (i + 1) * PART_BYTES));
   return head;
+}
+
+/* ===== _Techniczne: DTR wszystkich urządzeń (wspólne dla wszystkich budów) ===== */
+function techRoot_() {
+  const id = konfig_().folder_techniczne_id;
+  return id ? DriveApp.getFolderById(id) : null;
+}
+function techniczne_() {
+  const root = techRoot_();
+  if (!root) return { ok: true, pliki: [], brakFolderu: true };
+  const out = [];
+  (function walk(folder, grupa, depth) {
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      out.push({ id: f.getId(), name: f.getName(), mime: f.getMimeType(), size: f.getSize(), grupa: grupa, zm: f.getLastUpdated().getTime() });
+    }
+    if (depth >= 3) return;
+    const sub = folder.getFolders();
+    while (sub.hasNext()) { const d = sub.next(); walk(d, grupa ? grupa + ' / ' + d.getName() : d.getName(), depth + 1); }
+  })(root, '', 0);
+  out.sort((a, b) => (a.grupa + '\u0000' + a.name).localeCompare(b.grupa + '\u0000' + b.name, 'pl'));
+  return { ok: true, pliki: out };
+}
+/** Czy plik leży w _Techniczne (do 3 poziomów podfolderów). */
+function wTechnicznych_(f) {
+  const root = techRoot_(); if (!root) return false;
+  const rid = root.getId();
+  let level = [];
+  const p0 = f.getParents(); while (p0.hasNext()) level.push(p0.next());
+  for (let d = 0; d <= 3 && level.length; d++) {
+    const next = [];
+    for (const fo of level) {
+      if (fo.getId() === rid) return true;
+      const pp = fo.getParents(); while (pp.hasNext()) next.push(pp.next());
+    }
+    level = next;
+  }
+  return false;
 }
 
 function zdarzeniaSheet_(p) {

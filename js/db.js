@@ -43,6 +43,11 @@ const DB = (() => {
     getEvent: (id) => tx('events', 'readonly', s => req(s.get(id))),
     putFile: (id, v) => tx('files', 'readwrite', s => { s.put(v, id); }),
     getFile: (id) => tx('files', 'readonly', s => req(s.get(id))),
+    hasFile: (id) => tx('files', 'readonly', s => req(s.getKey(id))).then(k => k !== undefined),
+    delFile: (id) => tx('files', 'readwrite', s => { s.delete(id); }),
+    /* czyszczenie budowy: tylko wysłane zdarzenia i zdjęcia */
+    delSyncedEvents: (kod) => tx('events', 'readwrite', s => req(s.index('kod').getAll(kod)).then(a => a.filter(e => e.synced).forEach(e => s.delete(e.id)))),
+    delSentPhotos: (kod) => tx('photos', 'readwrite', s => req(s.getAll()).then(a => a.filter(p => p.sent && p.kod === kod).forEach(p => s.delete(p.id)))),
     putPhoto: (p) => tx('photos', 'readwrite', s => { s.put(p); }),
     getPhoto: (id) => tx('photos', 'readonly', s => req(s.get(id))),
     unsentPhotos: () => tx('photos', 'readonly', s => req(s.getAll())).then(a => a.filter(p => !p.sent)),
