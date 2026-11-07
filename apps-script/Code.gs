@@ -2,10 +2,10 @@
  * ELWIS – serwer synchronizacji (Google Apps Script, konto ELWIS).
  * Zamknięta lista operacji: bootstrap, project, file, events, push. Wszystko inne → odmowa.
  * Bez danych budów i kluczy w kodzie – konfiguracja w Bazie projektów i we właściwościach skryptu.
- * Wersja: 1.0.0 (schemat danych 1.x). Opis API: docs/API.md.
+ * Wersja: 1.1.0 (schemat danych 1.x, etapy budowy od 1.3). Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.0.1';
+const SCRIPT_VERSION = '1.1.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -105,9 +105,18 @@ function aktywne_() {
     .map(r => ({
       kod: txt_(r[0]), nazwa: txt_(r[1]), adres: txt_(r[2]), lokalizacja: txt_(r[3]), kontakt: txt_(r[4]),
       zakres: txt_(r[6]).split(/[;,]/).map(s => s.trim()).filter(String), uwagi: txt_(r[7]),
-      folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase()
+      folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase(),
+      etapy: etapy_(r[12])
     }));
 }
+/** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
+function etapy_(v) {
+  return txt_(v).split(';').map(x => x.trim()).filter(String).map(x => {
+    const i = x.indexOf(':');
+    return i < 0 ? { id: x, opis: '' } : { id: x.slice(0, i).trim(), opis: x.slice(i + 1).trim() };
+  }).filter(e => e.id);
+}
+
 function projekt_(kod) {
   const p = aktywne_().find(x => x.kod === kod);
   if (!p) throw new Error('Budowa nieaktywna lub nieznana');
@@ -145,8 +154,17 @@ function project_(kod) {
   const ss = SpreadsheetApp.openById(p.lista);
   const urz = rows_(ss.getSheetByName('Urządzenia')).filter(r => txt_(r[0])).map(r => ({
     id: txt_(r[0]), grupa: txt_(r[1]), typ: txt_(r[2]), zasilanie: txt_(r[3]), kond: txt_(r[4]), arkusz: txt_(r[5]),
-    uwagi: txt_(r[6]), x: num_(r[7]), y: num_(r[8]), sn: txt_(r[9]), status: txt_(r[10])
+    uwagi: txt_(r[6]), x: num_(r[7]), y: num_(r[8]), sn: txt_(r[9]), status: txt_(r[10]), etap: txt_(r[11])
   }));
+  // zgodność etapów urządzeń z listą etapów budowy (fundamenty 2.4)
+  const ostrzezenia = [];
+  if (p.etapy.length) {
+    const ids = p.etapy.map(e => e.id);
+    const bez = urz.filter(u => !u.etap).map(u => u.id);
+    const obce = urz.filter(u => u.etap && ids.indexOf(u.etap) < 0).map(u => u.id + ' (' + u.etap + ')');
+    if (bez.length) ostrzezenia.push('Urządzenia bez etapu: ' + bez.slice(0, 20).join(', ') + (bez.length > 20 ? ' …' : ''));
+    if (obce.length) ostrzezenia.push('Etap spoza listy budowy: ' + obce.slice(0, 20).join(', ') + (obce.length > 20 ? ' …' : ''));
+  }
   const tsh = ss.getSheetByName('Tematy');
   const tem = tsh ? rows_(tsh).filter(r => txt_(r[0])).map(r => ({ id: txt_(r[0]), urz: txt_(r[1]), kat: txt_(r[2]), opis: txt_(r[3]), status: txt_(r[4]) })) : [];
   const pliki = [], rzuty = {};
@@ -161,7 +179,7 @@ function project_(kod) {
       else pliki.push({ id: f.getId(), name: name, mime: f.getMimeType(), size: f.getSize() });
     }
   }
-  return { ok: true, kod: kod, urzadzenia: urz, tematy: tem, pliki: pliki, rzuty: rzuty };
+  return { ok: true, kod: kod, etapy: p.etapy, urzadzenia: urz, tematy: tem, pliki: pliki, rzuty: rzuty, ostrzezenia: ostrzezenia };
 }
 
 function file_(id) {

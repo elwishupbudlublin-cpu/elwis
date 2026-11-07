@@ -10,7 +10,7 @@ Wszystkie kroki wykonuje się **raz**, zalogowanym na konto ELWIS.
 5. **Wdróż → Nowe wdrożenie → Aplikacja internetowa**: Wykonaj jako **Ja**, Dostęp: **Każdy**. Skopiuj adres kończący się na `/exec`.
 6. Dla każdego tabletu uruchom raz funkcję `dodajTablet` – w zakładce **Tablety** pojawi się wiersz z kluczem. Zmień nazwę tabletu w kolumnie A.
 
-Aktualizacja serwera: wklej nowy kod → Wdróż → Zarządzaj wdrożeniami → edytuj → Wersja: nowa. Adres się nie zmienia.
+Aktualizacja serwera: wklej nowy kod → Wdróż → Zarządzaj wdrożeniami → ołówek → Wersja: **Nowa wersja** → Wdróż. Adres `/exec` się nie zmienia. Funkcji `instalacja` nie trzeba uruchamiać ponownie.
 
 ## 2. Aplikacja (GitHub Pages)
 1. Repozytorium `elwis` → Settings → General → Danger Zone → **Change visibility → Public**.
@@ -27,6 +27,9 @@ Tablet **nie loguje się** na konto Google ELWIS.
 ## 4. Budowa w aplikacji
 Budowa pojawia się, gdy w Bazie projektów ma: kod, `Aktywna = tak`, wypełnione „Obiekt wojskowy”, link do folderu i listy urządzeń.
 Rzuty: pliki `<Arkusz>.jpg` w folderze budowy **Do wglądu** (nazwa = wartość z kolumny Arkusz). Pozostałe pliki z „Do wglądu” są dokumentami.
+
+## 4a. Etapy budowy (schemat 1.3)
+Budowa z kilkoma budynkami / częściami: w Bazie projektów kolumna „Etap Budowy” (np. `A: Budynek A; B: Budynek B`), w liście urządzeń kolumna „Etap Budowy” z oznaczeniem (`A`, `B`). Przy co najmniej dwóch etapach aplikacja pokazuje przełącznik etapu.
 
 ## 5. Gdy coś nie działa
 | Komunikat | Co zrobić |

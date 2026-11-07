@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.1.0 – 2026-11-07 (aplikacja i serwer, schemat 1.3)
+- Etapy budowy: przełącznik „Wszystkie / A / B…” z opisem etapu na karcie budowy, w podłączeniach, brakach i postępie – tylko przy budowach z co najmniej dwoma etapami.
+- Wybrany etap filtruje listę urządzeń, zakładki rzutów, znaczniki, legendę, braki i tematy; wybór zapamiętany na tablecie osobno dla każdej budowy.
+- Postęp: kafelki etapów na karcie budowy; w widoku Postęp – podział na etapy i łącznie.
+- Karta urządzenia pokazuje etap. Brak zgłoszony bez urządzenia w wybranym etapie zapisuje etap (pole `etap` w danych zdarzenia).
+- Serwer: etapy budowy z kolumny „Etap Budowy” (Projekty, kol. M), etap urządzenia z kolumny „Etap Budowy” (Urządzenia, kol. L); ostrzeżenia o niezgodnych etapach (widoczne dla roli biuro).
+- Zgodność: aplikacja 1.0.x działa z serwerem 1.1.0 (ignoruje etapy); aplikacja 1.1.0 ze starym serwerem traktuje budowy jako bez podziału.
+
 ## 1.0.6 – 2026-11-07
 - Rzut: krótkie dotknięcie znacznika otwiera okno urządzenia (wcześniej kliknięcie generowane przez Androida od razu zamykało okno; działało tylko dłuższe przytrzymanie).
 

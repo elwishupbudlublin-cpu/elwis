@@ -3,6 +3,7 @@ const S = {
   boot: null,        // dane z bootstrap (pracownicy, budowy, słowniki, konfiguracja)
   user: null,        // {name, rola, ekipa, exp}
   kod: null,         // bieżąca budowa
+  etap: '',          // wybrany etap budowy ('' = wszystkie)
   proj: null,        // dane budowy (urządzenia, tematy, pliki, rzuty)
   ev: [],            // zdarzenia bieżącej budowy
   syncing: false, lastSync: null, syncErr: null, pending: 0
@@ -44,7 +45,7 @@ function fold(events) {
       case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); break;
-      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], kto: e.kto, ts: e.ts, zamk: null }; break;
+      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null }; break;
       case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
       case 'notatka': notes.push(e); break;
     }
@@ -150,3 +151,20 @@ function verLess(a, b) {
   for (let i = 0; i < 3; i++) { if ((pa[i] || 0) < (pb[i] || 0)) return true; if ((pa[i] || 0) > (pb[i] || 0)) return false; }
   return false;
 }
+
+/* Etapy budowy (schemat 1.3) */
+function etapyOf() { const p = ((S.boot && S.boot.projekty) || []).find(x => x.kod === S.kod); return (p && p.etapy) || []; }
+function maEtapy() { return etapyOf().length > 1; }
+function etapOpis(id) { const e = etapyOf().find(x => x.id === id); return e ? (e.opis ? e.id + ' – ' + e.opis : e.id) : id; }
+function wEtapie(u) { return !maEtapy() || !S.etap || u.etap === S.etap; }
+function urzE() { return ((S.proj || {}).urzadzenia || []).filter(wEtapie); }
+function brakWEtapie(b) {
+  if (!maEtapy() || !S.etap) return true;
+  if (b.urz) { const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz); return !u || u.etap === S.etap; }
+  return !b.etap || b.etap === S.etap;   // brak całej budowy: widoczny w swoim etapie albo wszędzie
+}
+async function wczytajEtap(kod) {
+  const e = await DB.get('etap:' + kod) || '';
+  S.etap = etapyOf().some(x => x.id === e) ? e : '';
+}
+async function ustawEtap(e) { S.etap = e; await DB.set('etap:' + S.kod, e); }

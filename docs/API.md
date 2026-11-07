@@ -6,8 +6,8 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 
 | Operacja | Metoda | Parametry | Zwraca |
 |---|---|---|---|
-| `bootstrap` | GET | – | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}` |
-| `project` | GET | `kod` | `urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}` |
+| `bootstrap` | GET | – | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy,etapy[{id,opis}]}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}` |
+| `project` | GET | `kod` | `etapy[{id,opis}], urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status,etap}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}, ostrzezenia[]` |
 | `file` | GET | `id` | `name, mime, b64` – tylko pliki z „Do wglądu” aktywnej budowy |
 | `events` | GET | `kod, since` | `events[], last, more` – maks. 500 na raz |
 | `push` | POST (text/plain) | `kod, events[], photos[{id,name,b64}]` | `accepted[]` – ID przyjęte (także duplikaty) |
@@ -20,11 +20,16 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `krok` | `{krok: nr, nazwa, wart: true/false}` |
 | `nr` | `{sn}` |
 | `foto` | `{fid, rodzaj: "zdjęcie"/"tabliczka"}` |
-| `brak` | `{kat, opis, blokuje, foto[]}` |
+| `brak` | `{kat, opis, blokuje, foto[], etap?}` – `etap` tylko dla braku bez urządzenia zgłoszonego w wybranym etapie |
 | `brak_zamk` | `{bid, opis}` |
 | `notatka` | `{tekst, foto[]}` |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).
+
+## Etapy budowy (od 1.1.0, schemat 1.3)
+- Projekty, kol. M „Etap Budowy”: `A: opis; B: opis` → `etapy`. Puste = bez podziału.
+- Urządzenia, kol. L „Etap Budowy”: oznaczenie etapu → `etap`.
+- `ostrzezenia`: urządzenia bez etapu lub z etapem spoza listy budowy (gdy budowa ma etapy).
 
 ## Zasady
 - PIN nigdy nie trafia do tabletu – tylko `SHA-256(salt + ":" + PIN)`.

@@ -21,9 +21,9 @@ const UI = {
   go(v, par = {}) { this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0); },
   refresh() {
     if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box)) {   // bez przeładowania rzutu (zachowuje powiększenie)
-      const F = fold(S.ev); const urz = (S.proj || {}).urzadzenia || [];
+      const F = fold(S.ev); const urz = urzE();
       this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; return { cls: ST[st], label: id + ' – ' + st }; });
-      const side = $('.planbox .side'); const ark = this.par.ark || (urz[0] || {}).arkusz;
+      const side = $('.planbox .side'); const ark = this.pv.ark;
       if (side) { const a = urz.filter(u => u.arkusz === ark); side.innerHTML = legend(a, F) + attention(a, F); side.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u)); }
       this.net(); return;
     }
@@ -149,16 +149,16 @@ const Views = {
     UI.header(p.nazwa, () => UI.go('home'));
     const pd = S.proj || {};
     const F = fold(S.ev);
-    const urz = pd.urzadzenia || [];
-    const cnt = { czeka: 0, 'w toku': 0, gotowe: 0, brak: 0 };
-    urz.forEach(u => cnt[devStatus(u, F)]++);
-    const openB = Object.values(F.braki).filter(b => !b.zamk).length;
+    const urz = urzE();
+    const cnt = liczStatusy(urz, F);
+    const openB = Object.values(F.braki).filter(b => !b.zamk && brakWEtapie(b)).length;
     const openT = (pd.tematy || []).filter(t => t.status !== 'zamknięty').length;
     const zakres = (p.zakres || []);
     const has = k => zakres.some(z => U.norm(z).startsWith(U.norm(k)));
     const maps = p.lokalizacja ? (/^https?:/.test(p.lokalizacja) ? p.lokalizacja : 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.lokalizacja)) : (p.adres ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.adres) : '');
     const pct = urz.length ? Math.round(cnt.gotowe / urz.length * 100) : 0;
-    view.innerHTML = `
+    const sheetsN = new Set(urz.map(u => u.arkusz).filter(a => a && (pd.rzuty || {})[a])).size;
+    view.innerHTML = etapSwitch() + `
       <div class="grid2" style="grid-template-columns:minmax(280px,380px) 1fr">
         <div class="stack">
           ${p.wojskowy === 'tak' ? '<div class="badbox"><b>Obiekt wojskowy</b> – praca tylko dla osób z uprawnieniem M.</div>' : ''}
@@ -168,6 +168,7 @@ const Views = {
             <div><div class="mute">Uwagi dla ekip</div>${U.esc(p.uwagi || '—')}</div>
             ${maps ? `<a class="btn pri" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${U.esc(maps)}" target="_blank" rel="noopener">Nawiguj</a>` : ''}
           </div>
+          ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
           <div class="card"><div class="lbl">Do wglądu (offline)</div>
             <div class="stack" style="margin-top:8px">${(pd.pliki || []).map(f => `<button class="btn sm" data-f="${U.esc(f.id)}" style="text-align:left">${U.esc(f.name)}</button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
         </div>
@@ -175,16 +176,18 @@ const Views = {
           <h1 style="margin:0">Co dziś robisz?</h1>
           <div class="grid2">
             <button class="tile main" id="tPodl" ${has('podłącz') || !zakres.length ? '' : 'disabled'}><b>Podłączenia wg listy</b>
-              <span class="mute">${urz.length} urządzeń · ${Object.keys(pd.rzuty || {}).length} rzutów</span>
+              <span class="mute">${urz.length} urządzeń · ${sheetsN} rzutów${S.etap ? ' · etap ' + U.esc(S.etap) : ''}</span>
               <div class="bar"><i style="width:${pct}%;background:var(--ok)"></i></div>
               <span class="mute">${cnt.gotowe} gotowe · ${cnt['w toku']} w toku · ${cnt.brak} z brakiem</span></button>
             <button class="tile" id="tBraki"><b>Braki i tematy</b><span class="mute">${openB} otwartych braków · ${openT} tematów</span></button>
             <button class="tile" id="tPostep"><b>Postęp budowy</b><span class="mute">${pct}% urządzeń gotowe</span></button>
             ${zakres.filter(z => !U.norm(z).startsWith('podlacz')).map(z => `<button class="tile" disabled><b>${U.esc(z)}</b><span class="mute">w kolejnej wersji aplikacji</span></button>`).join('')}
           </div>
+          ${maEtapy() ? `<h2 style="margin:6px 0 0">Postęp etapów</h2><div class="grid2">${etapyOf().map(e => etapTile(e, F)).join('')}</div>` : ''}
           <div class="row"><button class="btn bad grow" id="bBrak">Zgłoś brak</button><button class="btn grow" id="bNote">Notatka z budowy</button></div>
         </div>
       </div>`;
+    bindEtap();
     $('#tPodl').onclick = () => UI.go('rzut', {});
     $('#tBraki').onclick = () => UI.go('braki');
     $('#tPostep').onclick = () => UI.go('postep');
@@ -198,15 +201,15 @@ const Views = {
     const p = curProj(); if (!p) return UI.go('home');
     UI.header(p.nazwa + ' · podłączenia', () => UI.go('budowa'));
     const pd = S.proj || {}; const F = fold(S.ev);
-    const urz = pd.urzadzenia || [];
+    const urz = urzE();
     const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))];
     const mode = par.mode || 'rzut';
-    const ark = par.ark || sheets[0] || '';
+    const ark = sheets.includes(par.ark) ? par.ark : sheets[0] || '';
     const filt = par.f || 'all';
     const sOf = u => devStatus(u, F);
     const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : U.prefix(u.id) === filt));
     const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
-    view.innerHTML = `
+    view.innerHTML = etapSwitch() + `
       <div class="row" style="margin-bottom:10px">
         <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
         <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
@@ -217,7 +220,9 @@ const Views = {
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
         : `<div class="list">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li" style="background:#eef1f5;font-weight:600">${U.esc(g)}</div>` + arr.map(u => `
-            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span><span class="mute">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}`;
+            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span><span class="mute">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
+      ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`;
+    bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null }));
@@ -228,7 +233,7 @@ const Views = {
       if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
       $('#noplan').remove();
       const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: u.id + ' – ' + sOf(u) }));
-      const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); UI.pv = pv;
+      const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); pv.ark = ark; UI.pv = pv;
       $('#zin').onclick = () => pv.zoomIn(); $('#zout').onclick = () => pv.zoomOut(); $('#zfit').onclick = () => pv.fit();
       if (par.focus) setTimeout(() => pv.focus(par.focus), 300);
     }
@@ -239,15 +244,17 @@ const Views = {
     const p = curProj(); if (!p) return UI.go('home');
     UI.header(p.nazwa + ' · braki', () => UI.go('budowa'));
     const F = fold(S.ev); const showClosed = par.closed;
-    const br = Object.values(F.braki).filter(b => showClosed ? b.zamk : !b.zamk).sort((a, b) => a.ts < b.ts ? 1 : -1);
-    const tem = ((S.proj || {}).tematy || []).filter(t => showClosed ? t.status === 'zamknięty' : t.status !== 'zamknięty');
-    view.innerHTML = `
+    const br = Object.values(F.braki).filter(b => (showClosed ? b.zamk : !b.zamk) && brakWEtapie(b)).sort((a, b) => a.ts < b.ts ? 1 : -1);
+    const temE = t => { if (!maEtapy() || !S.etap || !t.urz) return true; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === t.urz); return !u || u.etap === S.etap; };
+    const tem = ((S.proj || {}).tematy || []).filter(t => (showClosed ? t.status === 'zamknięty' : t.status !== 'zamknięty') && temE(t));
+    view.innerHTML = etapSwitch() + `
       <div class="row"><div class="tabs grow" style="margin:0"><button class="tab ${!showClosed ? 'on' : ''}" data-c="0">Otwarte</button><button class="tab ${showClosed ? 'on' : ''}" data-c="1">Zamknięte</button></div>
         <button class="btn bad" id="nb">+ Zgłoś brak</button></div>
       <div class="grid2" style="margin-top:12px">
         <div class="stack"><h2>Braki z budowy (${br.length})</h2>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
         <div class="stack"><h2>Tematy do wyjaśnienia (${tem.length})</h2>${tem.map(t => `<div class="card"><div class="row"><b>${U.esc(t.urz || t.id)}</b><span class="chip">${U.esc(t.kat || 'Do wyjaśnienia')}</span></div><div>${U.esc(t.opis)}</div></div>`).join('') || '<p class="mute">Brak.</p>'}<p class="mute">Tematy prowadzi biuro (lista urządzeń → Tematy).</p></div>
       </div>`;
+    bindEtap();
     view.querySelectorAll('[data-c]').forEach(b => b.onclick = () => UI.go('braki', { closed: b.dataset.c === '1' }));
     $('#nb').onclick = () => Dialogs.brak('');
     bindIssue(view);
@@ -257,23 +264,25 @@ const Views = {
   postep() {
     const p = curProj(); if (!p) return UI.go('home');
     UI.header(p.nazwa + ' · postęp', () => UI.go('budowa'));
-    const pd = S.proj || {}; const F = fold(S.ev); const urz = pd.urzadzenia || [];
+    const F = fold(S.ev); const urz = urzE(); const all = (S.proj || {}).urzadzenia || [];
     const groups = groupBy(urz, u => U.prefix(u.id));
     const today = U.day();
     const todayEv = S.ev.filter(e => U.day(e.ts) === today);
     const who = [...new Set(todayEv.map(e => e.kto))];
-    view.innerHTML = `
+    view.innerHTML = etapSwitch() + `
       <div class="grid2">
-        <div class="card stack"><h2 style="margin:0">Według typu urządzeń</h2>
-          ${groups.map(([pre, arr]) => { const c = arr.map(u => devStatus(u, F)); const ok = c.filter(x => x === 'gotowe').length, w = c.filter(x => x === 'w toku').length, b = c.filter(x => x === 'brak').length;
-            return `<div><div class="row"><span class="grow">${U.esc(typOf(arr[0].id).nazwa)}</span><b>${ok} / ${arr.length}</b></div>
-              <div class="bar"><i style="width:${ok / arr.length * 100}%;background:var(--ok)"></i><i style="width:${w / arr.length * 100}%;background:var(--wip)"></i><i style="width:${b / arr.length * 100}%;background:var(--bad)"></i></div></div>`; }).join('') || '<p class="mute">Brak urządzeń.</p>'}
+        ${maEtapy() ? `<div class="card stack"><h2 style="margin:0">Według etapów</h2>
+          ${etapyOf().map(e => barRow(etapOpis(e.id), all.filter(u => u.etap === e.id), F)).join('')}
+          ${barRow('Łącznie', all, F, true)}</div>` : ''}
+        <div class="card stack"><h2 style="margin:0">Według typu urządzeń${S.etap ? ' · etap ' + U.esc(S.etap) : ''}</h2>
+          ${groups.map(([pre, arr]) => barRow(typOf(arr[0].id).nazwa, arr, F)).join('') || '<p class="mute">Brak urządzeń.</p>'}
         </div>
         <div class="card stack"><h2 style="margin:0">Dziś na budowie</h2>
           <div>${who.length ? U.esc(who.join(', ')) : 'Brak wpisów z dzisiaj.'}</div>
           <div class="mute">${todayEv.filter(e => e.typ === 'krok' && e.d.wart).length} zaliczonych kroków · ${todayEv.filter(e => e.typ === 'brak').length} nowych braków · ${todayEv.filter(e => e.typ === 'foto').length} zdjęć</div>
         </div>
       </div>`;
+    bindEtap();
   }
 };
 
@@ -293,6 +302,7 @@ const Dialogs = {
         <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
           <div><div class="mute">Typ</div>${U.esc(u.typ)}</div><div><div class="mute">Zasilanie</div>${U.esc(u.zasilanie || '—')}</div>
           <div><div class="mute">Kondygnacja</div>${U.esc(u.kond || '—')}</div><div><div class="mute">Arkusz</div>${U.esc(u.arkusz || '—')}</div>
+          ${maEtapy() || u.etap ? `<div style="grid-column:1/3"><div class="mute">Etap budowy</div>${U.esc(u.etap ? etapOpis(u.etap) : '— (brak przypisania)')}</div>` : ''}
           ${u.uwagi ? `<div style="grid-column:1/3"><div class="mute">Uwagi</div>${U.esc(u.uwagi)}</div>` : ''}
         </div>
         <div class="card stack"><div class="row"><b class="grow">Nr seryjny</b>${t.sn ? '<span class="chip warn">wymagany</span>' : ''}</div>
@@ -322,7 +332,7 @@ const Dialogs = {
     $('#tab').onclick = () => pickPhoto(id, 'tabliczka');
     $('#dFoto').onclick = () => pickPhoto(id, 'zdjecie');
     $('#dBrak').onclick = () => Dialogs.brak(id);
-    $('#dPlan').onclick = () => { UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }); };
+    $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }); };
     bindIssue(modal, () => Dialogs.device(id));
     thumbs($('#thumbs'), st.foto);
   },
@@ -333,7 +343,7 @@ const Dialogs = {
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zgłoś brak">
       <div class="shead"><h3>Zgłoś brak</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody">
-        <div><div class="mute">Dotyczy</div><b>${urz ? U.esc(urz) : 'Cała budowa'}</b></div>
+        <div><div class="mute">Dotyczy</div><b>${urz ? U.esc(urz) : (maEtapy() && S.etap ? 'Etap ' + U.esc(etapOpis(S.etap)) : 'Cała budowa')}</b></div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
         <label><span class="f" style="display:block">Opis – co jest nie tak i co jest potrzebne</span><textarea id="bo"></textarea></label>
         <div class="row"><button class="btn" id="bf">+ Zdjęcie</button><span class="mute" id="bfc"></span>
@@ -345,7 +355,9 @@ const Dialogs = {
     $('#bx').onclick = () => urz ? Dialogs.device(urz) : UI.close();
     $('#bs').onclick = async () => {
       const opis = $('#bo').value.trim(); if (!opis) { UI.toast('Dodaj krótki opis.'); return; }
-      await addEvent('brak', urz, { kat, opis, blokuje: $('#bb').checked, foto: photos });
+      const d = { kat, opis, blokuje: $('#bb').checked, foto: photos };
+      if (!urz && maEtapy() && S.etap) d.etap = S.etap;
+      await addEvent('brak', urz, d);
       UI.toast('Brak zapisany'); urz ? Dialogs.device(urz) : UI.close(); UI.refresh();
     };
   },
@@ -388,6 +400,33 @@ const Dialogs = {
   }
 };
 
+/* ---------- Etapy budowy ---------- */
+function etapSwitch() {
+  if (!maEtapy()) return '';
+  const opt = [['', 'Wszystkie', 'cała budowa'], ...etapyOf().map(e => [e.id, e.id, e.opis])];
+  return `<div class="etapy" role="tablist" aria-label="Etap budowy">${opt.map(([id, l, o]) => `<button class="etap ${id === S.etap ? 'on' : ''}" data-e="${U.esc(id)}" role="tab" aria-selected="${id === S.etap}"><b>${U.esc(l)}</b>${o ? `<span>${U.esc(o)}</span>` : ''}</button>`).join('')}</div>`;
+}
+function bindEtap() {
+  view.querySelectorAll('[data-e]').forEach(b => b.onclick = async () => {
+    await ustawEtap(b.dataset.e);
+    const par = { ...UI.par }; delete par.ark; delete par.focus;
+    UI.go(UI.cur, par);
+  });
+}
+function liczStatusy(arr, F) { const c = { czeka: 0, 'w toku': 0, gotowe: 0, brak: 0 }; arr.forEach(u => c[devStatus(u, F)]++); return c; }
+function barRow(label, arr, F, bold) {
+  const c = liczStatusy(arr, F), n = arr.length || 1;
+  return `<div><div class="row"><span class="grow">${bold ? '<b>' + U.esc(label) + '</b>' : U.esc(label)}</span><b>${c.gotowe} / ${arr.length}</b></div>
+    <div class="bar"><i style="width:${c.gotowe / n * 100}%;background:var(--ok)"></i><i style="width:${c['w toku'] / n * 100}%;background:var(--wip)"></i><i style="width:${c.brak / n * 100}%;background:var(--bad)"></i></div></div>`;
+}
+function etapTile(e, F) {
+  const arr = ((S.proj || {}).urzadzenia || []).filter(u => u.etap === e.id);
+  const c = liczStatusy(arr, F), pct = arr.length ? Math.round(c.gotowe / arr.length * 100) : 0;
+  return `<button class="tile ${S.etap === e.id ? 'main' : ''}" data-e="${U.esc(e.id)}"><b>Etap ${U.esc(e.id)}</b><span class="mute">${U.esc(e.opis || '')}</span>
+    <div class="bar"><i style="width:${pct}%;background:var(--ok)"></i></div>
+    <span class="mute">${pct}% · ${c.gotowe} gotowe · ${c['w toku']} w toku · ${c.brak} z brakiem · ${arr.length} urządzeń</span></button>`;
+}
+
 /* ---------- Pomocnicze widoków ---------- */
 function curProj() { return ((S.boot && S.boot.projekty) || []).find(p => p.kod === S.kod); }
 function groupBy(arr, f) { const m = new Map(); arr.forEach(x => { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return [...m.entries()]; }
@@ -405,7 +444,7 @@ function attention(arr, F) {
 }
 function issueHtml(b) {
   const canClose = !b.zamk && (Session.isBiuro() || b.kto === S.user.name);
-  return `<div class="issue ${b.zamk ? 'closed' : ''}"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
+  return `<div class="issue ${b.zamk ? 'closed' : ''}"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
     <div>${U.esc(b.opis)}</div><div class="mute">Zgłosił: ${U.esc(b.kto)}${b.foto && b.foto.length ? ' · ' + b.foto.length + ' zdjęć' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
     ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
 }
@@ -459,6 +498,7 @@ async function openProject(kod) {
   S.kod = kod;
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
+  await wczytajEtap(kod);
   const r = ((await DB.get('recent')) || []).filter(k => k !== kod); r.unshift(kod); await DB.set('recent', r.slice(0, 6));
   UI.go('budowa');
   if (navigator.onLine) Sync.run();
