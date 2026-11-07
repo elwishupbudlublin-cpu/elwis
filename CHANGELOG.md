@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.0.5 – 2026-11-07
+- Ekran logowania: dopisek o autorze aplikacji.
+
 ## 1.0.4 – 2026-11-07
 - Przycisk pracownika w prawym górnym rogu szerszy (min. 160 px), większa czcionka, ikona osoby; nie zwęża się przy długiej nazwie budowy.
 

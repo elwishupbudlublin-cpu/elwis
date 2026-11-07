@@ -117,3 +117,5 @@ label.f{display:block;font-size:14px;color:var(--mute);margin:12px 0 6px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#17212b;color:#fff;padding:12px 20px;border-radius:24px;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:90vw}
 .toast.show{opacity:.96}
 video.scan{width:100%;max-height:50vh;background:#000;border-radius:12px}
+
+.credit{display:inline-block;margin-top:10px;font-size:12px;opacity:.8}

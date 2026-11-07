@@ -76,7 +76,7 @@ const Views = {
         <div class="side">
           <div class="big">ELWIS</div>
           <div>Elektryczne Wsparcie<br>Instalatora i Serwisu</div>
-          <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}</div>
+          <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}<br><span class="credit">Aplikacja stworzona dla HUP-BUD przez Łukasza Pomarańskiego</span></div>
         </div>
         <div class="body">
           <div class="grow" style="min-width:300px"><h1>Kto pracuje?</h1>
