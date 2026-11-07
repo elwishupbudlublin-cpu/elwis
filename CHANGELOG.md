@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.0.1 – 2026-11-07
+- Rzut: dotknięcie znacznika działa pewniej – drżenie palca do 12 px nie przesuwa rzutu, a dotknięcie wybiera najbliższy znacznik w promieniu 28 px.
+
 ## Serwer 1.0.1 – 2026-11-07
 - Odczyt Konfiguracji, Tabletów, Pracowników, Projektów i Słowników jako tekst (arkusz zamieniał „1.2” na datę; PIN z zerem na początku).
 - Zakładka Zdarzenia oraz kolumny Nr seryjny / Status zapisywane w formacie tekstowym (czas zdarzenia i długie numery seryjne bez przeróbek arkusza).

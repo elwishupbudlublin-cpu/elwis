@@ -4,7 +4,9 @@ function PlanView(box, imgUrl, markers, onTap) {
   const img = new Image(); img.src = imgUrl; img.alt = 'Rzut';
   layer.appendChild(img); box.appendChild(layer);
   let s = 1, tx = 0, ty = 0, W = 1, H = 1, minS = 0.1;
-  const pts = new Map(); let last = null, moved = false;
+  const pts = new Map(); let last = null, moved = false, start = null;
+  const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
+  const HIT = 28;       // px – promień trafienia znacznika na ekranie
 
   function apply() {
     layer.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
@@ -33,14 +35,15 @@ function PlanView(box, imgUrl, markers, onTap) {
   };
   box.addEventListener('pointerdown', e => {
     if (e.target.closest('.planctl')) return; // przyciski powiększenia działają zwykłym kliknięciem
-    box.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = false; last = null; });
+    box.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { moved = false; start = { x: e.clientX, y: e.clientY }; }
+    last = null; });
   box.addEventListener('pointermove', e => {
     if (!pts.has(e.pointerId)) return;
     const prev = pts.get(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) {
-      const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
-      if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
-      tx += dx; ty += dy; apply();
+      if (!moved && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) moved = true;
+      if (moved) { tx += e.clientX - prev.x; ty += e.clientY - prev.y; apply(); }
     } else if (pts.size === 2) {
       const [a, b] = [...pts.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -56,8 +59,14 @@ function PlanView(box, imgUrl, markers, onTap) {
     pts.delete(e.pointerId); if (pts.size < 2) last = null;
     // dotknięcie bez przesunięcia = wybór znacznika (przechwycenie wskaźnika kieruje zdarzenie do ramki, więc szukamy znacznika pod palcem)
     if (single && !moved && e.type === 'pointerup') {
-      const el = document.elementsFromPoint(e.clientX, e.clientY).find(x => x.classList && x.classList.contains('mk') && layer.contains(x));
-      if (el) onTap(el.dataset.id);
+      // najbliższy znacznik w promieniu HIT px od miejsca dotknięcia
+      const r = box.getBoundingClientRect();
+      let best = null, bd = HIT;
+      for (const m of markers) {
+        const d = Math.hypot(r.left + tx + m.x * W * s - e.clientX, r.top + ty + m.y * H * s - e.clientY);
+        if (d < bd) { bd = d; best = m; }
+      }
+      if (best) onTap(best.id);
     }
   };
   box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
