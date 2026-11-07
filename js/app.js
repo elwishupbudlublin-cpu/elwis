@@ -570,6 +570,7 @@ function settings() {
   await API.load();
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
   S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+  $('#topVer').textContent = 'v' + APP_VERSION;
   $('#btnSync').onclick = () => Sync.run();
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });

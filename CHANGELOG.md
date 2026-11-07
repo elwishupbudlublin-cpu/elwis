@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.3.2 – 2026-11-08
+- Nagłówek: numer wersji aplikacji małą czcionką pod napisem ELWIS.
+
 ## 1.3.1 – 2026-11-08
 - Braki: dotknięcie kafelka braku przypisanego do urządzenia otwiera kartę tego urządzenia.
 - Poprawka: „Anuluj” w oknie zamykania braku zostawia brak otwarty (wcześniej brak był zamykany).
