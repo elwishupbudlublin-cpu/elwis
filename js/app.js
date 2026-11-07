@@ -447,15 +447,21 @@ function attention(arr, F) {
 }
 function issueHtml(b) {
   const canClose = !b.zamk && (Session.isBiuro() || b.kto === S.user.name);
-  return `<div class="issue ${b.zamk ? 'closed' : ''}"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
+  return `<div class="issue ${b.zamk ? 'closed' : ''}${b.urz ? ' link' : ''}" ${b.urz ? `data-iu="${U.esc(b.urz)}" role="button" tabindex="0" aria-label="Otwórz urządzenie ${U.esc(b.urz)}"` : ''}><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
     <div>${U.esc(b.opis)}</div><div class="mute">Zgłosił: ${U.esc(b.kto)}${b.foto && b.foto.length ? ' · ' + b.foto.length + ' zdjęć' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
     ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
 }
 function bindIssue(root, after) {
+  // dotknięcie kafelka braku urządzenia → karta urządzenia (nie w samej karcie tego urządzenia)
+  root.querySelectorAll('[data-iu]').forEach(el => {
+    const open = e => { if (e.target.closest('button')) return; const id = el.dataset.iu; if ($('.sheet[aria-label="Urządzenie ' + id + '"]')) return; Dialogs.device(id); };
+    el.onclick = open; el.onkeydown = e => { if (e.key === 'Enter') open(e); };
+  });
   root.querySelectorAll('[data-close]').forEach(btn => btn.onclick = async () => {
-    const opis = prompt('Jak usunięto brak? (opcjonalnie)') || '';
+    const opis = prompt('Jak usunięto brak? (opcjonalnie)');
+    if (opis === null) return;   // Anuluj – brak zostaje otwarty
     const b = fold(S.ev).braki[btn.dataset.close];
-    await addEvent('brak_zamk', b ? b.urz : '', { bid: btn.dataset.close, opis });
+    await addEvent('brak_zamk', b ? b.urz : '', { bid: btn.dataset.close, opis: opis.trim() });
     UI.toast('Brak zamknięty'); if (after) after(); UI.refresh();
   });
 }
