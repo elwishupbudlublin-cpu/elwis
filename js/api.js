@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -38,7 +38,18 @@ const API = (() => {
     cfg: () => cfg,
     bootstrap: () => get('bootstrap'),
     project: (kod) => get('project', { kod }),
-    file: (id) => get('file', { id }),
+    file: (id, part) => get('file', part === undefined ? { id } : { id, part }),
+    /* Plik w częściach (serwer 1.2+); stary serwer zwraca od razu cały plik. */
+    async fileFull(id, onProgress) {
+      const first = await get('file', { id, part: 0 });
+      const parts = first.parts || 1, chunks = [U.b64ToBlob(first.b64, first.mime)];
+      for (let i = 1; i < parts; i++) {
+        if (onProgress) onProgress(i, parts);
+        const r = await get('file', { id, part: i });
+        chunks.push(U.b64ToBlob(r.b64, first.mime));
+      }
+      return { name: first.name, mime: first.mime, blob: new Blob(chunks, { type: first.mime }) };
+    },
     events: (kod, since) => get('events', { kod, since: String(since || 0) }),
     push: (kod, events, photos) => post({ action: 'push', kod, events, photos })
   };

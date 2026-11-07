@@ -5,7 +5,7 @@
  * Wersja: 1.1.0 (schemat danych 1.x, etapy budowy od 1.3). Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.1.0';
+const SCRIPT_VERSION = '1.2.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -53,7 +53,7 @@ function handle_(p, body) {
     switch (body ? body.action : p.action) {
       case 'bootstrap': return out_(bootstrap_(tablet));
       case 'project': return out_(project_(String(p.kod || '')));
-      case 'file': return out_(file_(String(p.id || '')));
+      case 'file': return out_(file_(String(p.id || ''), p.part));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'push': return out_(push_(body, tablet));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
@@ -182,7 +182,10 @@ function project_(kod) {
   return { ok: true, kod: kod, etapy: p.etapy, urzadzenia: urz, tematy: tem, pliki: pliki, rzuty: rzuty, ostrzezenia: ostrzezenia };
 }
 
-function file_(id) {
+const PART_BYTES = 6 * 1024 * 1024;   // część pliku w jednej odpowiedzi
+const MAX_FILE = 60e6;                // największy plik dla tabletu
+
+function file_(id, part) {
   if (!id) throw new Error('Brak pliku');
   const f = DriveApp.getFileById(id);
   // tylko pliki z folderu „Do wglądu” aktywnej budowy
@@ -197,10 +200,21 @@ function file_(id) {
     while (gp.hasNext()) if (allowed[gp.next().getId()]) ok = true;
   }
   if (!ok) throw new Error('Brak dostępu do pliku');
-  if (f.getSize() > 20e6) throw new Error('Plik zbyt duży dla tabletu');
+  if (f.getSize() > MAX_FILE) throw new Error('Plik zbyt duży dla tabletu (ponad 60 MB)');
   let blob = f.getBlob();
   if (f.getMimeType().indexOf('application/vnd.google-apps') === 0) blob = f.getAs('application/pdf');
-  return { ok: true, id: id, name: f.getName(), mime: blob.getContentType(), b64: Utilities.base64Encode(blob.getBytes()) };
+  const bytes = blob.getBytes();
+  const head = { ok: true, id: id, name: f.getName(), mime: blob.getContentType(), size: bytes.length };
+  // bez numeru części – cały plik (aplikacje 1.0–1.1, pliki do 20 MB)
+  if (part === undefined || part === null || part === '') {
+    if (bytes.length > 20e6) throw new Error('Plik zbyt duży – zaktualizuj aplikację');
+    head.b64 = Utilities.base64Encode(bytes); return head;
+  }
+  const n = Math.max(1, Math.ceil(bytes.length / PART_BYTES)), i = Number(part);
+  if (!(i >= 0 && i < n)) throw new Error('Zły numer części pliku');
+  head.parts = n; head.part = i;
+  head.b64 = Utilities.base64Encode(bytes.slice(i * PART_BYTES, (i + 1) * PART_BYTES));
+  return head;
 }
 
 function zdarzeniaSheet_(p) {

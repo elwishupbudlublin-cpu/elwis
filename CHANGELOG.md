@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.2.0 – 2026-11-07 (aplikacja i serwer)
+- Dokumenty pomocnicze do 60 MB: serwer wysyła duże pliki w częściach po 6 MB, aplikacja składa je i trzyma offline (wcześniej limit 15 MB w aplikacji / 20 MB na serwerze).
+- Dotknięcie dokumentu, którego jeszcze nie ma w tablecie, pobiera go od razu (przy internecie) z postępem w procentach.
+- Przy dokumentach rozmiar pliku i ✓, gdy plik jest w pamięci tabletu.
+- Zgodność: aplikacja 1.2.0 ze starym serwerem pobiera pliki jak dotąd (do 20 MB); stara aplikacja z nowym serwerem – bez zmian.
+
 ## 1.1.1 – 2026-11-07
 - Karta budowy: sekcja „Do wglądu (offline)” nazywa się „Dokumenty pomocnicze” (folder na Dysku bez zmian: „Do wglądu”).
 

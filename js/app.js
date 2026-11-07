@@ -170,7 +170,7 @@ const Views = {
           </div>
           ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
           <div class="card"><div class="lbl">Dokumenty pomocnicze</div>
-            <div class="stack" style="margin-top:8px">${(pd.pliki || []).map(f => `<button class="btn sm" data-f="${U.esc(f.id)}" style="text-align:left">${U.esc(f.name)}</button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
+            <div class="stack" style="margin-top:8px" id="docs">${(pd.pliki || []).map(f => `<button class="btn sm doc" data-f="${U.esc(f.id)}" style="text-align:left"><span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
         </div>
         <div class="stack">
           <h1 style="margin:0">Co dziś robisz?</h1>
@@ -194,6 +194,7 @@ const Views = {
     $('#bBrak').onclick = () => Dialogs.brak('');
     $('#bNote').onclick = () => Dialogs.notatka('');
     view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => openFile(b.dataset.f));
+    (pd.pliki || []).forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.getFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
   },
 
   /* Rzuty + lista urządzeń */
@@ -504,9 +505,23 @@ async function openProject(kod) {
   if (navigator.onLine) Sync.run();
   else if (!S.proj) UI.toast('Dane tej budowy nie są jeszcze w tablecie – połącz się z WiFi.');
 }
+function mb(b) { return b ? (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB' : ''; }
+let pobieranie = null;
 async function openFile(id) {
-  const f = await DB.getFile(id);
-  if (!f) { UI.toast('Plik nie jest jeszcze w pamięci tabletu.'); return; }
+  let f = await DB.getFile(id);
+  if (!f) {
+    if (!navigator.onLine) { UI.toast('Plik nie jest jeszcze w pamięci tabletu – połącz się z WiFi.'); return; }
+    if (pobieranie) { UI.toast('Trwa pobieranie pliku…'); return; }
+    // okno otwieramy od razu (inaczej przeglądarka zablokuje je po pobraniu)
+    const w = window.open('', '_blank');
+    if (w) w.document.write('<p style="font:18px sans-serif;padding:24px">Pobieram plik…</p>');
+    pobieranie = id; UI.toast('Pobieram plik…');
+    try { f = await pobierzPlik(id, (i, n) => UI.toast('Pobieram plik… ' + Math.round(i / n * 100) + '%')); }
+    catch (e) { if (w) w.close(); UI.toast('Nie udało się pobrać: ' + e.message); return; }
+    finally { pobieranie = null; }
+    if (UI.cur === 'budowa') UI.refresh();
+    if (w) { w.location.href = URL.createObjectURL(f.blob); return; }
+  }
   window.open(URL.createObjectURL(f.blob), '_blank');
 }
 function settings() {

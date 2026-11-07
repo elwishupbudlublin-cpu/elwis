@@ -125,11 +125,11 @@ const Sync = {
     const p = await API.project(kod);
     await DB.set('proj:' + kod, p);
     // rzuty i dokumenty do wglądu – do pamięci tabletu (raz, potem z pamięci)
-    const ids = [...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size < 15e6).map(f => f.id)];
+    const ids = [...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size <= 60e6).map(f => f.id)];
     for (const id of [...new Set(ids)]) {
       const have = await DB.getFile(id);
       if (have && !full) continue;
-      try { const f = await API.file(id); await DB.putFile(id, { blob: U.b64ToBlob(f.b64, f.mime), mime: f.mime, name: f.name }); } catch (e) { console.warn('file', id, e); }
+      try { await pobierzPlik(id); } catch (e) { console.warn('file', id, e); }
     }
     // zdarzenia z innych tabletów
     let since = (await DB.get('seq:' + kod)) || 0;
@@ -168,3 +168,10 @@ async function wczytajEtap(kod) {
   S.etap = etapyOf().some(x => x.id === e) ? e : '';
 }
 async function ustawEtap(e) { S.etap = e; await DB.set('etap:' + S.kod, e); }
+
+/* Pobranie pliku z serwera (w częściach) do pamięci tabletu */
+async function pobierzPlik(id, onProgress) {
+  const f = await API.fileFull(id, onProgress);
+  await DB.putFile(id, { blob: f.blob, mime: f.mime, name: f.name });
+  return f;
+}

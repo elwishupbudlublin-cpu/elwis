@@ -8,7 +8,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 |---|---|---|---|
 | `bootstrap` | GET | – | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy,etapy[{id,opis}]}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}` |
 | `project` | GET | `kod` | `etapy[{id,opis}], urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status,etap}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}, ostrzezenia[]` |
-| `file` | GET | `id` | `name, mime, b64` – tylko pliki z „Do wglądu” aktywnej budowy |
+| `file` | GET | `id`, `part?` | `name, mime, size, b64` – tylko pliki z „Do wglądu” aktywnej budowy. Z `part` (od 1.2.0): część nr `part` po 6 MB + `parts` (liczba części), pliki do 60 MB; bez `part`: cały plik do 20 MB |
 | `events` | GET | `kod, since` | `events[], last, more` – maks. 500 na raz |
 | `push` | POST (text/plain) | `kod, events[], photos[{id,name,b64}]` | `accepted[]` – ID przyjęte (także duplikaty) |
 
