@@ -8,7 +8,16 @@ function PlanView(box, imgUrl, markers, onTap) {
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
 
+  const M = 40; // px marginesu przy krawędzi
+  function clamp() {
+    const r = box.getBoundingClientRect();
+    const cw = W * s, ch = H * s;
+    // mniejszy niż okno → zostaje w oknie; większy → krawędź rzutu nie odjedzie dalej niż margines
+    const lim = (t, c, v) => c <= v ? Math.min(Math.max(t, Math.min(0, v - c) - M), Math.max(0, v - c) + M) : Math.min(Math.max(t, v - c - M), M);
+    tx = lim(tx, cw, r.width); ty = lim(ty, ch, r.height);
+  }
   function apply() {
+    clamp();
     layer.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
     layer.style.setProperty('--inv', String(1 / s));
   }

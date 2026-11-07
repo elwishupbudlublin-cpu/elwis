@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.0.2 – 2026-11-07
+- Rzut nie da się odsunąć poza ekran – przesuwanie zatrzymuje się na krawędziach arkusza (margines 40 px).
+
 ## 1.0.1 – 2026-11-07
 - Rzut: dotknięcie znacznika działa pewniej – drżenie palca do 12 px nie przesuwa rzutu, a dotknięcie wybiera najbliższy znacznik w promieniu 28 px.
 
