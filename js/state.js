@@ -1,0 +1,152 @@
+/* ELWIS – stan aplikacji: sesja, budowy, zdarzenia, synchronizacja. */
+const S = {
+  boot: null,        // dane z bootstrap (pracownicy, budowy, słowniki, konfiguracja)
+  user: null,        // {name, rola, ekipa, exp}
+  kod: null,         // bieżąca budowa
+  proj: null,        // dane budowy (urządzenia, tematy, pliki, rzuty)
+  ev: [],            // zdarzenia bieżącej budowy
+  syncing: false, lastSync: null, syncErr: null, pending: 0
+};
+
+const Session = {
+  async load() {
+    const s = await DB.get('session');
+    if (s && s.exp > Date.now()) { S.user = s; return s; }
+    S.user = null; return null;
+  },
+  async login(u) {
+    const h = (S.boot && S.boot.sesjaGodziny) || 12;
+    S.user = { name: u.name, rola: u.rola, ekipa: u.ekipa, exp: Date.now() + h * 3600e3 };
+    await DB.set('session', S.user);
+  },
+  async logout() { S.user = null; await DB.del('session'); },
+  isBiuro: () => S.user && S.user.rola === 'biuro'
+};
+
+/* Słowniki */
+function typOf(id) {
+  const p = U.prefix(id);
+  const t = (S.boot && S.boot.slowniki.typy || []).find(x => x.prefix === p);
+  return t || { prefix: p, nazwa: 'Typ ' + p, kroki: ['Podłączony'], sn: false };
+}
+
+/* Złożenie zdarzeń w stan urządzeń i braków */
+function fold(events) {
+  const ev = [...events].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1)));
+  const dev = {};      // id -> {kroki:{i:{val,kto,ts}}, sn, foto:[], hist:[]}
+  const braki = {};    // bid -> {...}
+  const notes = [];
+  const D = id => (dev[id] = dev[id] || { kroki: {}, sn: '', snKto: '', foto: [], hist: [] });
+  for (const e of ev) {
+    const d = e.d || {};
+    if (e.urz) D(e.urz).hist.push(e);
+    switch (e.typ) {
+      case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
+      case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
+      case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); break;
+      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], kto: e.kto, ts: e.ts, zamk: null }; break;
+      case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
+      case 'notatka': notes.push(e); break;
+    }
+  }
+  return { dev, braki, notes };
+}
+
+function devStatus(u, F) {
+  const st = F.dev[u.id];
+  const open = Object.values(F.braki).some(b => b.urz === u.id && !b.zamk);
+  if (open) return 'brak';
+  const kroki = typOf(u.id).kroki;
+  if (!st) return 'czeka';
+  const done = kroki.filter((k, i) => st.kroki[i] && st.kroki[i].val).length;
+  if (done === kroki.length && kroki.length) return 'gotowe';
+  return done ? 'w toku' : 'czeka';
+}
+
+/* Dodanie zdarzenia (offline) */
+async function addEvent(typ, urz, d) {
+  const e = { id: U.uid('e'), ts: U.now(), kto: S.user.name, tablet: (API.cfg() || {}).tablet || '', kod: S.kod, urz: urz || '', typ, d, synced: 0 };
+  await DB.putEvent(e);
+  S.ev.push(e);
+  S.pending++;
+  Sync.soon();
+  return e;
+}
+
+/* Synchronizacja */
+const Sync = {
+  timer: null,
+  soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 1500); },
+  async run(full) {
+    if (S.syncing || !API.ready()) return;
+    if (!navigator.onLine) { UI.net(); return; }
+    S.syncing = true; S.syncErr = null; UI.net();
+    try {
+      // 1. konfiguracja i słowniki
+      const b = await API.bootstrap();
+      if (String(b.schema).split('.')[0] !== '1') throw new Error('Nieznana wersja schematu danych: ' + b.schema + '. Zaktualizuj aplikację.');
+      if (verLess(APP_VERSION, b.minApp)) throw new Error('Wymagana nowsza wersja aplikacji (' + b.minApp + '). Odśwież aplikację przy WiFi.');
+      S.boot = b; await DB.set('boot', b);
+      // 2. zdjęcia (pojedynczo – mniejsze paczki)
+      for (const p of await DB.unsentPhotos()) {
+        const b64 = await U.blobToB64(p.blob);
+        await API.push(p.kod, [], [{ id: p.id, name: p.name, b64 }]);
+        p.sent = 1; await DB.putPhoto(p);
+      }
+      // 3. zdarzenia – paczkami po budowie
+      const un = await DB.unsynced();
+      const byKod = {};
+      un.forEach(e => (byKod[e.kod] = byKod[e.kod] || []).push(e));
+      for (const kod of Object.keys(byKod)) {
+        const all = byKod[kod];
+        for (let i = 0; i < all.length; i += 100) {
+          const part = all.slice(i, i + 100).map(({ synced, ...e }) => e);
+          const r = await API.push(kod, part, []);
+          const ok = new Set(r.accepted || []);
+          const marked = all.slice(i, i + 100).filter(e => ok.has(e.id)).map(e => ({ ...e, synced: 1 }));
+          await DB.putEvents(marked);
+        }
+      }
+      // 4. dane budów: bieżąca + ostatnio używane
+      const recent = (await DB.get('recent')) || [];
+      const kody = [...new Set([S.kod, ...recent].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
+      for (const kod of kody) await this.pullProject(kod, full);
+      S.lastSync = Date.now(); await DB.set('lastSync', S.lastSync);
+    } catch (err) {
+      S.syncErr = err.message; console.warn('sync', err);
+    } finally {
+      S.syncing = false;
+      S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+      UI.net(); if (!['login', 'setup'].includes(UI.cur)) UI.refresh();
+    }
+  },
+  async pullProject(kod, full) {
+    const p = await API.project(kod);
+    await DB.set('proj:' + kod, p);
+    // rzuty i dokumenty do wglądu – do pamięci tabletu (raz, potem z pamięci)
+    const ids = [...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size < 15e6).map(f => f.id)];
+    for (const id of [...new Set(ids)]) {
+      const have = await DB.getFile(id);
+      if (have && !full) continue;
+      try { const f = await API.file(id); await DB.putFile(id, { blob: U.b64ToBlob(f.b64, f.mime), mime: f.mime, name: f.name }); } catch (e) { console.warn('file', id, e); }
+    }
+    // zdarzenia z innych tabletów
+    let since = (await DB.get('seq:' + kod)) || 0;
+    for (let guard = 0; guard < 50; guard++) {
+      const r = await API.events(kod, since);
+      if (r.events.length) {
+        const local = new Set((await DB.eventsFor(kod)).map(e => e.id));
+        await DB.putEvents(r.events.filter(e => !local.has(e.id)).map(e => ({ ...e, kod, synced: 1 })));
+      }
+      since = r.last; await DB.set('seq:' + kod, since);
+      if (!r.more) break;
+    }
+    if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); }
+  }
+};
+
+function verLess(a, b) {
+  const pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) < (pb[i] || 0)) return true; if ((pa[i] || 0) > (pb[i] || 0)) return false; }
+  return false;
+}

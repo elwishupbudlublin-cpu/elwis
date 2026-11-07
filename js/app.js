@@ -1,0 +1,511 @@
+/* ELWIS – widoki aplikacji. */
+const $ = (s, r = document) => r.querySelector(s);
+const view = $('#view'), modal = $('#modal');
+const ST = { 'czeka': 'czeka', 'w toku': 'wtoku', 'gotowe': 'gotowe', 'brak': 'brak' };
+
+const UI = {
+  cur: 'home', par: {},
+  toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(this._t); this._t = setTimeout(() => el.classList.remove('show'), 2600); },
+  net() {
+    const n = $('#net'), t = $('#netText');
+    n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '');
+    const p = S.pending ? ` · ${S.pending} do wysłania` : '';
+    t.textContent = S.syncing ? 'Synchronizuję…' : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
+    $('#btnSync').classList.toggle('spin', S.syncing);
+  },
+  header(sub, back) {
+    $('#top').hidden = false; $('#topSub').textContent = sub || '';
+    $('#btnBack').hidden = !back; $('#btnBack').onclick = back || null;
+    $('#btnUser').textContent = S.user ? S.user.name : '';
+  },
+  go(v, par = {}) { this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0); },
+  refresh() {
+    if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box)) {   // bez przeładowania rzutu (zachowuje powiększenie)
+      const F = fold(S.ev); const urz = (S.proj || {}).urzadzenia || [];
+      this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; return { cls: ST[st], label: id + ' – ' + st }; });
+      const side = $('.planbox .side'); const ark = this.par.ark || (urz[0] || {}).arkusz;
+      if (side) { const a = urz.filter(u => u.arkusz === ark); side.innerHTML = legend(a, F) + attention(a, F); side.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u)); }
+      this.net(); return;
+    }
+    const f = Views[this.cur]; if (f) f(this.par); this.net();
+  },
+  close() { modal.innerHTML = ''; }
+};
+
+/* ---------- Widoki ---------- */
+const Views = {
+  /* Pierwsze uruchomienie tabletu */
+  setup() {
+    $('#top').hidden = true;
+    view.innerHTML = `
+      <div style="max-width:560px;margin:40px auto" class="stack">
+        <h1>ELWIS – konfiguracja tabletu</h1>
+        <p class="mute">Jednorazowo, przy WiFi. Adres i klucz tabletu podaje biuro (zakładka Tablety w Bazie projektów).</p>
+        <div class="card">
+          <label class="f" for="cUrl">Adres serwera ELWIS</label>
+          <input id="cUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+          <label class="f" for="cKey">Klucz tabletu</label>
+          <input id="cKey" type="text" autocomplete="off" placeholder="np. T2-…">
+          <label class="f" for="cName">Nazwa tabletu</label>
+          <input id="cName" type="text" placeholder="np. Tablet 2 – ekipa 2">
+          <div class="row" style="margin-top:16px"><button class="btn pri grow" id="cGo">Połącz i pobierz dane</button></div>
+          <p class="mute" id="cMsg"></p>
+        </div>
+        <p class="mute">Wersja aplikacji ${APP_VERSION}</p>
+      </div>`;
+    $('#cGo').onclick = async () => {
+      const url = $('#cUrl').value.trim(), key = $('#cKey').value.trim(), tablet = $('#cName').value.trim();
+      if (!/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(url) || !key) { $('#cMsg').textContent = 'Podaj adres (https://…) i klucz.'; return; }
+      $('#cMsg').textContent = 'Łączę…';
+      try {
+        const b = await API.test(url, key);
+        await API.setCfg({ url, key, tablet: tablet || b.tablet || 'Tablet' });
+        S.boot = b; await DB.set('boot', b);
+        UI.toast('Tablet skonfigurowany'); UI.go('login');
+      } catch (e) { $('#cMsg').textContent = 'Nie udało się połączyć: ' + e.message; }
+    };
+  },
+
+  /* Logowanie PIN-em */
+  login() {
+    $('#top').hidden = true;
+    const users = (S.boot && S.boot.pracownicy) || [];
+    let sel = null, pin = '';
+    view.innerHTML = `
+      <div class="login">
+        <div class="side">
+          <div class="big">ELWIS</div>
+          <div>Elektryczne Wsparcie<br>Instalatora i Serwisu</div>
+          <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}</div>
+        </div>
+        <div class="body">
+          <div class="grow" style="min-width:300px"><h1>Kto pracuje?</h1>
+            <div class="users" id="users">${users.length ? users.map((u, i) => `
+              <button class="user" data-i="${i}"><span class="av">${U.esc(u.name.split(' ').map(w => w[0]).join(''))}</span>
+              <span><b>${U.esc(u.name)}</b><br><span class="mute">${U.esc(u.ekipa || '')}</span></span></button>`).join('') : '<p class="mute">Brak pracowników – połącz tablet z siecią i zsynchronizuj.</p>'}</div>
+          </div>
+          <div class="pin">
+            <div class="mute">PIN dla</div><b id="pinWho" style="font-size:20px">wybierz osobę</b>
+            <div class="dots" id="dots">${'<span></span>'.repeat(6)}</div>
+            <div class="keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(k => `<button data-k="${k}" aria-label="${k === 'C' ? 'Wyczyść' : k === '⌫' ? 'Usuń' : 'Cyfra ' + k}">${k}</button>`).join('')}</div>
+            <button class="btn pri" style="width:100%" id="pinGo">Zaloguj</button>
+            <div class="mute" id="pinMsg" style="text-align:center">Tablet pamięta logowanie ${S.boot ? S.boot.sesjaGodziny : 12} h albo do wylogowania.</div>
+            ${!navigator.onLine ? '' : '<button class="btn sm" id="pinSync">Odśwież listę pracowników</button>'}
+          </div>
+        </div>
+      </div>`;
+    const dots = () => [...$('#dots').children].forEach((d, i) => { d.className = i < pin.length ? 'f' : ''; d.hidden = i >= Math.max(4, pin.length); });
+    dots();
+    view.querySelectorAll('.user').forEach(b => b.onclick = () => {
+      view.querySelectorAll('.user').forEach(x => x.classList.remove('on')); b.classList.add('on');
+      sel = users[+b.dataset.i]; pin = ''; dots(); $('#pinWho').textContent = sel.name;
+    });
+    view.querySelectorAll('.keys button').forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      if (k === 'C') pin = ''; else if (k === '⌫') pin = pin.slice(0, -1); else if (pin.length < 6) pin += k;
+      dots();
+    });
+    if ($('#pinSync')) $('#pinSync').onclick = async () => { await Sync.run(); UI.go('login'); };
+    $('#pinGo').onclick = async () => {
+      if (!sel) { $('#pinMsg').textContent = 'Wybierz osobę.'; return; }
+      const lock = (await DB.get('lock')) || { n: 0, until: 0 };
+      if (lock.until > Date.now()) { $('#pinMsg').textContent = 'Za dużo prób. Spróbuj za ' + Math.ceil((lock.until - Date.now()) / 60000) + ' min.'; return; }
+      const h = await U.sha256(S.boot.salt + ':' + pin);
+      if (h === sel.hash) {
+        await DB.set('lock', { n: 0, until: 0 }); await Session.login(sel); UI.go('home');
+      } else {
+        lock.n++; if (lock.n >= 5) { lock.until = Date.now() + 5 * 60e3; lock.n = 0; }
+        await DB.set('lock', lock); pin = ''; dots(); $('#pinMsg').textContent = 'Błędny PIN.';
+      }
+    };
+  },
+
+  /* Lista budów */
+  async home() {
+    UI.header('wybór budowy', null);
+    const all = (S.boot && S.boot.projekty) || [];
+    const recent = (await DB.get('recent')) || [];
+    const q = UI.par.q || '';
+    const rec = recent.map(k => all.find(p => p.kod === k)).filter(Boolean).slice(0, 3);
+    const nq = U.norm(q);
+    const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
+    view.innerHTML = `
+      <h1>Na której budowie dziś pracujesz?</h1>
+      <label class="search"><span aria-hidden="true">🔎</span><span hidden>Szukaj budowy</span>
+        <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
+      ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(card).join('')}</div>` : ''}
+      <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
+      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b>${U.esc(p.kod)}</b><span class="grow">${U.esc(p.nazwa.replace(p.kod, '').trim())}</span>
+        ${p.wojskowy === 'tak' ? '<span class="chip warn">obiekt wojskowy</span>' : ''}<span class="mute">${U.esc(p.adres || '')}</span></button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
+    function card(p) { return `<button class="tile" data-k="${U.esc(p.kod)}"><b>${U.esc(p.nazwa)}</b><span class="mute">${U.esc(p.adres || '')}</span></button>`; }
+    const inp = $('#q');
+    inp.oninput = () => { UI.par.q = inp.value; Views.home(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+    view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
+  },
+
+  /* Karta budowy */
+  async budowa() {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.nazwa, () => UI.go('home'));
+    const pd = S.proj || {};
+    const F = fold(S.ev);
+    const urz = pd.urzadzenia || [];
+    const cnt = { czeka: 0, 'w toku': 0, gotowe: 0, brak: 0 };
+    urz.forEach(u => cnt[devStatus(u, F)]++);
+    const openB = Object.values(F.braki).filter(b => !b.zamk).length;
+    const openT = (pd.tematy || []).filter(t => t.status !== 'zamknięty').length;
+    const zakres = (p.zakres || []);
+    const has = k => zakres.some(z => U.norm(z).startsWith(U.norm(k)));
+    const maps = p.lokalizacja ? (/^https?:/.test(p.lokalizacja) ? p.lokalizacja : 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.lokalizacja)) : (p.adres ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.adres) : '');
+    const pct = urz.length ? Math.round(cnt.gotowe / urz.length * 100) : 0;
+    view.innerHTML = `
+      <div class="grid2" style="grid-template-columns:minmax(280px,380px) 1fr">
+        <div class="stack">
+          ${p.wojskowy === 'tak' ? '<div class="badbox"><b>Obiekt wojskowy</b> – praca tylko dla osób z uprawnieniem M.</div>' : ''}
+          <div class="card stack">
+            <div><div class="mute">Adres</div>${U.esc(p.adres || '—')}</div>
+            <div><div class="mute">Kontakt na budowie</div>${U.esc(p.kontakt || '—')}</div>
+            <div><div class="mute">Uwagi dla ekip</div>${U.esc(p.uwagi || '—')}</div>
+            ${maps ? `<a class="btn pri" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${U.esc(maps)}" target="_blank" rel="noopener">Nawiguj</a>` : ''}
+          </div>
+          <div class="card"><div class="lbl">Do wglądu (offline)</div>
+            <div class="stack" style="margin-top:8px">${(pd.pliki || []).map(f => `<button class="btn sm" data-f="${U.esc(f.id)}" style="text-align:left">${U.esc(f.name)}</button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
+        </div>
+        <div class="stack">
+          <h1 style="margin:0">Co dziś robisz?</h1>
+          <div class="grid2">
+            <button class="tile main" id="tPodl" ${has('podłącz') || !zakres.length ? '' : 'disabled'}><b>Podłączenia wg listy</b>
+              <span class="mute">${urz.length} urządzeń · ${Object.keys(pd.rzuty || {}).length} rzutów</span>
+              <div class="bar"><i style="width:${pct}%;background:var(--ok)"></i></div>
+              <span class="mute">${cnt.gotowe} gotowe · ${cnt['w toku']} w toku · ${cnt.brak} z brakiem</span></button>
+            <button class="tile" id="tBraki"><b>Braki i tematy</b><span class="mute">${openB} otwartych braków · ${openT} tematów</span></button>
+            <button class="tile" id="tPostep"><b>Postęp budowy</b><span class="mute">${pct}% urządzeń gotowe</span></button>
+            ${zakres.filter(z => !U.norm(z).startsWith('podlacz')).map(z => `<button class="tile" disabled><b>${U.esc(z)}</b><span class="mute">w kolejnej wersji aplikacji</span></button>`).join('')}
+          </div>
+          <div class="row"><button class="btn bad grow" id="bBrak">Zgłoś brak</button><button class="btn grow" id="bNote">Notatka z budowy</button></div>
+        </div>
+      </div>`;
+    $('#tPodl').onclick = () => UI.go('rzut', {});
+    $('#tBraki').onclick = () => UI.go('braki');
+    $('#tPostep').onclick = () => UI.go('postep');
+    $('#bBrak').onclick = () => Dialogs.brak('');
+    $('#bNote').onclick = () => Dialogs.notatka('');
+    view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => openFile(b.dataset.f));
+  },
+
+  /* Rzuty + lista urządzeń */
+  async rzut(par) {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.nazwa + ' · podłączenia', () => UI.go('budowa'));
+    const pd = S.proj || {}; const F = fold(S.ev);
+    const urz = pd.urzadzenia || [];
+    const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))];
+    const mode = par.mode || 'rzut';
+    const ark = par.ark || sheets[0] || '';
+    const filt = par.f || 'all';
+    const sOf = u => devStatus(u, F);
+    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : U.prefix(u.id) === filt));
+    const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
+    view.innerHTML = `
+      <div class="row" style="margin-bottom:10px">
+        <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
+        <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
+      </div>
+      ${mode === 'rzut' ? `
+        <div class="tabs">${sheets.map(s => `<button class="tab ${s === ark ? 'on' : ''}" data-a="${U.esc(s)}">${U.esc(s)} · ${U.esc((urz.find(u => u.arkusz === s) || {}).kond || '')}</button>`).join('')}</div>
+        <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
+          <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
+          <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
+        : `<div class="list">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li" style="background:#eef1f5;font-weight:600">${U.esc(g)}</div>` + arr.map(u => `
+            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span><span class="mute">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}`;
+    view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
+    view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
+    view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null }));
+    view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
+    if (mode === 'rzut' && ark) {
+      const fid = (pd.rzuty || {})[ark];
+      const f = fid && await DB.getFile(fid);
+      if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
+      $('#noplan').remove();
+      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: u.id + ' – ' + sOf(u) }));
+      const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); UI.pv = pv;
+      $('#zin').onclick = () => pv.zoomIn(); $('#zout').onclick = () => pv.zoomOut(); $('#zfit').onclick = () => pv.fit();
+      if (par.focus) setTimeout(() => pv.focus(par.focus), 300);
+    }
+  },
+
+  /* Braki i tematy */
+  braki(par) {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.nazwa + ' · braki', () => UI.go('budowa'));
+    const F = fold(S.ev); const showClosed = par.closed;
+    const br = Object.values(F.braki).filter(b => showClosed ? b.zamk : !b.zamk).sort((a, b) => a.ts < b.ts ? 1 : -1);
+    const tem = ((S.proj || {}).tematy || []).filter(t => showClosed ? t.status === 'zamknięty' : t.status !== 'zamknięty');
+    view.innerHTML = `
+      <div class="row"><div class="tabs grow" style="margin:0"><button class="tab ${!showClosed ? 'on' : ''}" data-c="0">Otwarte</button><button class="tab ${showClosed ? 'on' : ''}" data-c="1">Zamknięte</button></div>
+        <button class="btn bad" id="nb">+ Zgłoś brak</button></div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="stack"><h2>Braki z budowy (${br.length})</h2>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
+        <div class="stack"><h2>Tematy do wyjaśnienia (${tem.length})</h2>${tem.map(t => `<div class="card"><div class="row"><b>${U.esc(t.urz || t.id)}</b><span class="chip">${U.esc(t.kat || 'Do wyjaśnienia')}</span></div><div>${U.esc(t.opis)}</div></div>`).join('') || '<p class="mute">Brak.</p>'}<p class="mute">Tematy prowadzi biuro (lista urządzeń → Tematy).</p></div>
+      </div>`;
+    view.querySelectorAll('[data-c]').forEach(b => b.onclick = () => UI.go('braki', { closed: b.dataset.c === '1' }));
+    $('#nb').onclick = () => Dialogs.brak('');
+    bindIssue(view);
+  },
+
+  /* Postęp */
+  postep() {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.nazwa + ' · postęp', () => UI.go('budowa'));
+    const pd = S.proj || {}; const F = fold(S.ev); const urz = pd.urzadzenia || [];
+    const groups = groupBy(urz, u => U.prefix(u.id));
+    const today = U.day();
+    const todayEv = S.ev.filter(e => U.day(e.ts) === today);
+    const who = [...new Set(todayEv.map(e => e.kto))];
+    view.innerHTML = `
+      <div class="grid2">
+        <div class="card stack"><h2 style="margin:0">Według typu urządzeń</h2>
+          ${groups.map(([pre, arr]) => { const c = arr.map(u => devStatus(u, F)); const ok = c.filter(x => x === 'gotowe').length, w = c.filter(x => x === 'w toku').length, b = c.filter(x => x === 'brak').length;
+            return `<div><div class="row"><span class="grow">${U.esc(typOf(arr[0].id).nazwa)}</span><b>${ok} / ${arr.length}</b></div>
+              <div class="bar"><i style="width:${ok / arr.length * 100}%;background:var(--ok)"></i><i style="width:${w / arr.length * 100}%;background:var(--wip)"></i><i style="width:${b / arr.length * 100}%;background:var(--bad)"></i></div></div>`; }).join('') || '<p class="mute">Brak urządzeń.</p>'}
+        </div>
+        <div class="card stack"><h2 style="margin:0">Dziś na budowie</h2>
+          <div>${who.length ? U.esc(who.join(', ')) : 'Brak wpisów z dzisiaj.'}</div>
+          <div class="mute">${todayEv.filter(e => e.typ === 'krok' && e.d.wart).length} zaliczonych kroków · ${todayEv.filter(e => e.typ === 'brak').length} nowych braków · ${todayEv.filter(e => e.typ === 'foto').length} zdjęć</div>
+        </div>
+      </div>`;
+  }
+};
+
+/* ---------- Okna ---------- */
+const Dialogs = {
+  device(id) {
+    const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u) return;
+    const F = fold(S.ev); const st = F.dev[id] || { kroki: {}, sn: '', foto: [], hist: [] };
+    const t = typOf(id); const status = devStatus(u, F);
+    const sn = st.sn || u.sn || '';
+    const hasTab = st.foto.some(f => f.rodzaj === 'tabliczka');
+    const br = Object.values(F.braki).filter(b => b.urz === id);
+    const blocked = br.some(b => !b.zamk && b.blokuje);
+    modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(id)}">
+      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
+      <div class="sbody">
+        <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
+          <div><div class="mute">Typ</div>${U.esc(u.typ)}</div><div><div class="mute">Zasilanie</div>${U.esc(u.zasilanie || '—')}</div>
+          <div><div class="mute">Kondygnacja</div>${U.esc(u.kond || '—')}</div><div><div class="mute">Arkusz</div>${U.esc(u.arkusz || '—')}</div>
+          ${u.uwagi ? `<div style="grid-column:1/3"><div class="mute">Uwagi</div>${U.esc(u.uwagi)}</div>` : ''}
+        </div>
+        <div class="card stack"><div class="row"><b class="grow">Nr seryjny</b>${t.sn ? '<span class="chip warn">wymagany</span>' : ''}</div>
+          <div class="row"><input type="text" id="sn" value="${U.esc(sn)}" placeholder="zeskanuj kod lub wpisz" class="grow" style="flex:1"><button class="btn sm" id="snSave">Zapisz</button></div>
+          <div class="row"><button class="btn sm pri" id="scan">Skanuj kod</button><button class="btn sm" id="tab">Zdjęcie tabliczki${hasTab ? ' ✓' : ''}</button></div></div>
+        <div><div class="lbl">Kroki</div><div class="stack" style="margin-top:8px">${t.kroki.map((k, i) => {
+          const s = st.kroki[i]; const done = s && s.val;
+          const last = i === t.kroki.length - 1;
+          const needSn = last && t.sn && !sn && !hasTab && !done;
+          const dis = (!done && (blocked || needSn));
+          return `<button class="step ${done ? 'done' : ''}" data-k="${i}" ${dis ? 'disabled' : ''}><span class="box">${done ? '✓' : ''}</span><span class="grow"><b>${U.esc(k)}</b><br><span class="mute">${done ? U.esc(s.kto) + ' · ' + U.fmt(s.ts) : blocked ? 'Zablokowane: otwarty brak' : needSn ? 'Wymaga nr seryjnego lub zdjęcia tabliczki' : 'do zrobienia'}</span></span></button>`;
+        }).join('')}</div></div>
+        <div><div class="lbl">Braki (${br.filter(b => !b.zamk).length} otwartych)</div><div class="stack" style="margin-top:8px">${br.map(issueHtml).join('') || '<span class="mute">Brak.</span>'}</div></div>
+        <div><div class="lbl">Zdjęcia</div><div class="thumbs" id="thumbs" style="margin-top:8px"></div></div>
+        <div><div class="lbl">Historia</div><div class="hist" style="margin-top:8px">${st.hist.slice().reverse().slice(0, 30).map(e => `<div><b>${U.fmt(e.ts)}</b> ${U.esc(e.kto)} – ${U.esc(histTxt(e))}</div>`).join('') || '<span class="mute">Brak wpisów.</span>'}</div></div>
+      </div>
+      <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan">Na rzucie</button></div>
+    </div></div>`;
+    $('#dx').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
+    modal.querySelectorAll('.step').forEach(b => b.onclick = async () => {
+      const i = +b.dataset.k; const s = st.kroki[i];
+      await addEvent('krok', id, { krok: i, nazwa: t.kroki[i], wart: !(s && s.val) });
+      Dialogs.device(id); UI.refresh();
+    });
+    $('#snSave').onclick = async () => { const v = $('#sn').value.trim(); if (!v) return; await saveSn(id, v); };
+    $('#scan').onclick = () => Dialogs.scan(v => saveSn(id, v));
+    $('#tab').onclick = () => pickPhoto(id, 'tabliczka');
+    $('#dFoto').onclick = () => pickPhoto(id, 'zdjecie');
+    $('#dBrak').onclick = () => Dialogs.brak(id);
+    $('#dPlan').onclick = () => { UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }); };
+    bindIssue(modal, () => Dialogs.device(id));
+    thumbs($('#thumbs'), st.foto);
+  },
+
+  brak(urz) {
+    const kats = (S.boot.slowniki.kategorie || []);
+    let kat = kats[0] || 'Inne'; let photos = [];
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zgłoś brak">
+      <div class="shead"><h3>Zgłoś brak</h3><span class="mute">${U.esc(S.user.name)}</span></div>
+      <div class="sbody">
+        <div><div class="mute">Dotyczy</div><b>${urz ? U.esc(urz) : 'Cała budowa'}</b></div>
+        <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
+        <label><span class="f" style="display:block">Opis – co jest nie tak i co jest potrzebne</span><textarea id="bo"></textarea></label>
+        <div class="row"><button class="btn" id="bf">+ Zdjęcie</button><span class="mute" id="bfc"></span>
+          <label class="row" style="margin-left:auto"><input type="checkbox" id="bb" style="width:24px;height:24px"> Blokuje dalszą pracę</label></div>
+      </div>
+      <div class="sfoot"><button class="btn" id="bx">Anuluj</button><button class="btn bad" id="bs">Zapisz brak</button></div></div></div>`;
+    modal.querySelectorAll('.cats button').forEach(b => b.onclick = () => { kat = b.dataset.k; modal.querySelectorAll('.cats button').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#bf').onclick = () => pickFile(async f => { const id = await storePhoto(f, urz || 'BUDOWA', 'brak'); photos.push(id); $('#bfc').textContent = photos.length + ' zdjęć'; });
+    $('#bx').onclick = () => urz ? Dialogs.device(urz) : UI.close();
+    $('#bs').onclick = async () => {
+      const opis = $('#bo').value.trim(); if (!opis) { UI.toast('Dodaj krótki opis.'); return; }
+      await addEvent('brak', urz, { kat, opis, blokuje: $('#bb').checked, foto: photos });
+      UI.toast('Brak zapisany'); urz ? Dialogs.device(urz) : UI.close(); UI.refresh();
+    };
+  },
+
+  notatka(urz) {
+    let photos = [];
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Notatka">
+      <div class="shead"><h3>Notatka z budowy</h3></div>
+      <div class="sbody"><textarea id="nt" placeholder="Co ustalono, co zrobiono, co trzeba przekazać do biura"></textarea>
+        <div class="row"><button class="btn" id="nf">+ Zdjęcie</button><span class="mute" id="nfc"></span></div></div>
+      <div class="sfoot"><button class="btn" id="nx">Anuluj</button><button class="btn pri" id="ns">Zapisz</button></div></div></div>`;
+    $('#nf').onclick = () => pickFile(async f => { photos.push(await storePhoto(f, urz || 'BUDOWA', 'notatka')); $('#nfc').textContent = photos.length + ' zdjęć'; });
+    $('#nx').onclick = UI.close;
+    $('#ns').onclick = async () => { const t = $('#nt').value.trim(); if (!t) return; await addEvent('notatka', urz, { tekst: t, foto: photos }); UI.toast('Notatka zapisana'); UI.close(); };
+  },
+
+  async scan(onCode) {
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices) {
+      UI.toast('Ten tablet nie ma czytnika kodów – wpisz numer albo zrób zdjęcie tabliczki.'); return;
+    }
+    let stream, stop = false;
+    const back = modal.innerHTML;
+    const div = document.createElement('div');
+    div.innerHTML = `<div class="ov center" id="ovs" style="z-index:60"><div class="dialog"><div class="shead"><h3>Skanuj kod</h3><button class="btn sm" id="sx">Zamknij</button></div>
+      <div class="sbody"><video class="scan" id="vid" playsinline muted></video><p class="mute">Nakieruj aparat na kod kreskowy lub QR z tabliczki.</p></div></div></div>`;
+    document.body.appendChild(div);
+    const end = () => { stop = true; if (stream) stream.getTracks().forEach(t => t.stop()); div.remove(); };
+    $('#sx').onclick = end;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const v = $('#vid'); v.srcObject = stream; await v.play();
+      const det = new BarcodeDetector();
+      const loop = async () => {
+        if (stop) return;
+        try { const r = await det.detect(v); if (r.length) { end(); onCode(r[0].rawValue); return; } } catch (e) { }
+        requestAnimationFrame(loop);
+      };
+      loop();
+    } catch (e) { end(); UI.toast('Brak dostępu do aparatu.'); }
+  }
+};
+
+/* ---------- Pomocnicze widoków ---------- */
+function curProj() { return ((S.boot && S.boot.projekty) || []).find(p => p.kod === S.kod); }
+function groupBy(arr, f) { const m = new Map(); arr.forEach(x => { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return [...m.entries()]; }
+function progress(u, F) { const t = typOf(u.id); const st = F.dev[u.id]; const d = st ? t.kroki.filter((k, i) => st.kroki[i] && st.kroki[i].val).length : 0; return d + '/' + t.kroki.length; }
+function legend(arr, F) {
+  const c = { czeka: 0, 'w toku': 0, gotowe: 0, brak: 0 }; arr.forEach(u => c[devStatus(u, F)]++);
+  return `<div class="card"><div class="mute">${arr.length} urządzeń na arkuszu</div><div class="stack" style="margin-top:8px;font-size:14px">
+    ${[['gotowe', 'gotowe'], ['w toku', 'w toku'], ['brak', 'z brakiem'], ['czeka', 'czeka']].map(([k, l]) => `<span class="row"><span class="st ${ST[k]}"></span>${l}: <b>${c[k]}</b></span>`).join('')}</div></div>`;
+}
+function attention(arr, F) {
+  const b = arr.filter(u => devStatus(u, F) === 'brak');
+  if (!b.length) return '';
+  return `<div class="lbl">Wymaga uwagi</div><div class="list">${b.map(u => { const x = Object.values(F.braki).find(q => q.urz === u.id && !q.zamk);
+    return `<button class="li" data-u="${U.esc(u.id)}"><span class="st brak"></span><span class="grow"><b>${U.esc(u.id)}</b> ${U.esc(u.typ)}<br><span class="mute">${U.esc(x ? x.kat : '')}</span></span></button>`; }).join('')}</div>`;
+}
+function issueHtml(b) {
+  const canClose = !b.zamk && (Session.isBiuro() || b.kto === S.user.name);
+  return `<div class="issue ${b.zamk ? 'closed' : ''}"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
+    <div>${U.esc(b.opis)}</div><div class="mute">Zgłosił: ${U.esc(b.kto)}${b.foto && b.foto.length ? ' · ' + b.foto.length + ' zdjęć' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
+    ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
+}
+function bindIssue(root, after) {
+  root.querySelectorAll('[data-close]').forEach(btn => btn.onclick = async () => {
+    const opis = prompt('Jak usunięto brak? (opcjonalnie)') || '';
+    const b = fold(S.ev).braki[btn.dataset.close];
+    await addEvent('brak_zamk', b ? b.urz : '', { bid: btn.dataset.close, opis });
+    UI.toast('Brak zamknięty'); if (after) after(); UI.refresh();
+  });
+}
+function histTxt(e) {
+  const d = e.d || {};
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ;
+}
+async function thumbs(el, foto) {
+  if (!foto.length) { el.innerHTML = '<span class="mute">Brak zdjęć.</span>'; return; }
+  for (const f of foto.slice(-12)) {
+    const p = await DB.getPhoto(f.fid);
+    if (p) { const i = new Image(); i.src = URL.createObjectURL(p.blob); i.alt = f.rodzaj; el.appendChild(i); }
+    else { const s = document.createElement('span'); s.className = 'chip'; s.textContent = f.rodzaj + ' (na Dysku)'; el.appendChild(s); }
+  }
+}
+async function saveSn(id, v) {
+  const urz = (S.proj.urzadzenia || []);
+  const F = fold(S.ev);
+  const dup = urz.find(u => u.id !== id && ((F.dev[u.id] && F.dev[u.id].sn) || u.sn) === v);
+  if (dup && !confirm('Ten numer jest już przypisany do ' + dup.id + '. Zapisać mimo to?')) return;
+  await addEvent('nr', id, { sn: v }); UI.toast('Nr seryjny zapisany'); Dialogs.device(id); UI.refresh();
+}
+function pickFile(cb) {
+  const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
+  i.onchange = () => { if (i.files[0]) cb(i.files[0]); }; i.click();
+}
+async function storePhoto(file, urz, rodzaj) {
+  const blob = await U.compress(file);
+  const id = U.uid('f');
+  const n = (await DB.eventsFor(S.kod)).filter(e => e.typ === 'foto' && e.urz === urz).length + 1;
+  const name = rodzaj === 'tabliczka' ? `${urz}_tabliczka.jpg` : `${urz}_${U.day()}_${n}_${id.slice(-4)}.jpg`;
+  await DB.putPhoto({ id, kod: S.kod, name, blob, sent: 0 });
+  return id;
+}
+function pickPhoto(urz, rodzaj) {
+  pickFile(async f => {
+    const fid = await storePhoto(f, urz, rodzaj);
+    await addEvent('foto', urz, { fid, rodzaj });
+    UI.toast(rodzaj === 'tabliczka' ? 'Zdjęcie tabliczki zapisane' : 'Zdjęcie zapisane'); Dialogs.device(urz); UI.refresh();
+  });
+}
+async function openProject(kod) {
+  S.kod = kod;
+  S.proj = await DB.get('proj:' + kod) || null;
+  S.ev = await DB.eventsFor(kod);
+  const r = ((await DB.get('recent')) || []).filter(k => k !== kod); r.unshift(kod); await DB.set('recent', r.slice(0, 6));
+  UI.go('budowa');
+  if (navigator.onLine) Sync.run();
+  else if (!S.proj) UI.toast('Dane tej budowy nie są jeszcze w tablecie – połącz się z WiFi.');
+}
+async function openFile(id) {
+  const f = await DB.getFile(id);
+  if (!f) { UI.toast('Plik nie jest jeszcze w pamięci tabletu.'); return; }
+  window.open(URL.createObjectURL(f.blob), '_blank');
+}
+function settings() {
+  const c = API.cfg() || {};
+  modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog"><div class="shead"><h3>${U.esc(S.user ? S.user.name : '')}</h3><button class="btn sm" id="sx">✕</button></div>
+    <div class="sbody">
+      <div class="card stack" style="font-size:14px"><div>Tablet: <b>${U.esc(c.tablet || '')}</b></div><div>Wersja aplikacji: <b>${APP_VERSION}</b></div>
+        <div>Sesja do: <b>${S.user ? new Date(S.user.exp).toLocaleString('pl-PL') : ''}</b></div>
+        <div>Ostatnia synchronizacja: <b>${S.lastSync ? new Date(S.lastSync).toLocaleString('pl-PL') : '—'}</b></div>
+        <div>Do wysłania: <b>${S.pending}</b></div>${S.syncErr ? `<div class="badbox">${U.esc(S.syncErr)}</div>` : ''}</div>
+      <button class="btn pri" id="sLogout">Wyloguj</button>
+      <button class="btn" id="sFull">Pobierz wszystko ponownie (WiFi)</button>
+      ${Session.isBiuro() ? '<button class="btn bad" id="sReset">Resetuj tablet (usuwa dane z tego urządzenia)</button>' : ''}
+    </div></div></div>`;
+  $('#sx').onclick = UI.close;
+  $('#sLogout').onclick = async () => { await Session.logout(); UI.close(); UI.go('login'); };
+  $('#sFull').onclick = () => { UI.close(); Sync.run(true); };
+  if ($('#sReset')) $('#sReset').onclick = async () => {
+    if ((await DB.unsynced()).length && !confirm('Na tablecie są niewysłane wpisy. Na pewno usunąć?')) return;
+    if (!confirm('Usunąć konfigurację i dane z tego tabletu?')) return;
+    await DB.clearAll(); location.reload();
+  };
+}
+
+/* ---------- Start ---------- */
+(async function start() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+  await API.load();
+  S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
+  S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+  $('#btnSync').onclick = () => Sync.run();
+  $('#btnUser').onclick = settings;
+  window.addEventListener('online', () => { UI.net(); Sync.run(); });
+  window.addEventListener('offline', () => UI.net());
+  setInterval(() => { if (navigator.onLine && S.user) Sync.run(); }, 3 * 60e3);
+  setInterval(async () => { if (S.user && S.user.exp < Date.now()) { await Session.logout(); UI.close(); UI.toast('Sesja wygasła – zaloguj się ponownie.'); UI.go('login'); } }, 60e3);
+  if (!API.ready()) return UI.go('setup');
+  await Session.load();
+  if (!S.user) { UI.go('login'); if (navigator.onLine) Sync.run(); return; }
+  UI.go('home');
+  if (navigator.onLine) Sync.run();
+})();
