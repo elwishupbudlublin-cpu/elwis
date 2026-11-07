@@ -169,7 +169,7 @@ const Views = {
             ${maps ? `<a class="btn pri" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${U.esc(maps)}" target="_blank" rel="noopener">Nawiguj</a>` : ''}
           </div>
           ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
-          <div class="card"><div class="lbl">Do wglądu (offline)</div>
+          <div class="card"><div class="lbl">Dokumenty pomocnicze</div>
             <div class="stack" style="margin-top:8px">${(pd.pliki || []).map(f => `<button class="btn sm" data-f="${U.esc(f.id)}" style="text-align:left">${U.esc(f.name)}</button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
         </div>
         <div class="stack">

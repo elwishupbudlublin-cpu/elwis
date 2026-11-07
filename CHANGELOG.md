@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.1.1 – 2026-11-07
+- Karta budowy: sekcja „Do wglądu (offline)” nazywa się „Dokumenty pomocnicze” (folder na Dysku bez zmian: „Do wglądu”).
+
 ## 1.1.0 – 2026-11-07 (aplikacja i serwer, schemat 1.3)
 - Etapy budowy: przełącznik „Wszystkie / A / B…” z opisem etapu na karcie budowy, w podłączeniach, brakach i postępie – tylko przy budowach z co najmniej dwoma etapami.
 - Wybrany etap filtruje listę urządzeń, zakładki rzutów, znaczniki, legendę, braki i tematy; wybór zapamiętany na tablecie osobno dla każdej budowy.
