@@ -4,7 +4,7 @@ function PlanView(box, imgUrl, markers, onTap) {
   const img = new Image(); img.src = imgUrl; img.alt = 'Rzut';
   layer.appendChild(img); box.appendChild(layer);
   let s = 1, tx = 0, ty = 0, W = 1, H = 1, minS = 0.1;
-  const pts = new Map(); let last = null, moved = false, start = null;
+  const pts = new Map(); let last = null, moved = false, start = null, tap = false, tapTimer = 0;
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
 
@@ -66,18 +66,28 @@ function PlanView(box, imgUrl, markers, onTap) {
     if (!pts.has(e.pointerId)) return;
     const single = pts.size === 1;
     pts.delete(e.pointerId); if (pts.size < 2) last = null;
-    // dotknięcie bez przesunięcia = wybór znacznika (przechwycenie wskaźnika kieruje zdarzenie do ramki, więc szukamy znacznika pod palcem)
-    if (single && !moved && e.type === 'pointerup') {
-      // najbliższy znacznik w promieniu HIT px od miejsca dotknięcia
-      const r = box.getBoundingClientRect();
-      let best = null, bd = HIT;
-      for (const m of markers) {
-        const d = Math.hypot(r.left + tx + m.x * W * s - e.clientX, r.top + ty + m.y * H * s - e.clientY);
-        if (d < bd) { bd = d; best = m; }
-      }
-      if (best) onTap(best.id);
-    }
+    tap = single && !moved && e.type === 'pointerup';
+    // długie przytrzymanie: Android nie wysyła wtedy „click” – otwieramy sami po chwili
+    clearTimeout(tapTimer);
+    if (tap) { const x = e.clientX, y = e.clientY; tapTimer = setTimeout(() => { if (tap) { tap = false; pick(x, y); } }, 450); }
   };
+  function pick(x, y) {
+    const r = box.getBoundingClientRect();
+    let best = null, bd = HIT;
+    for (const m of markers) {
+      const d = Math.hypot(r.left + tx + m.x * W * s - x, r.top + ty + m.y * H * s - y);
+      if (d < bd) { bd = d; best = m; }
+    }
+    if (best) onTap(best.id);
+  }
+  // Wybór znacznika dopiero na zdarzeniu „click” (po pointerup). Otwarcie okna wcześniej powodowało,
+  // że kliknięcie generowane przez Androida trafiało w tło nowego okna i od razu je zamykało.
+  box.addEventListener('click', e => {
+    if (e.target.closest('.planctl')) return;
+    if (e.detail === 0 && e.target.classList.contains('mk')) { onTap(e.target.dataset.id); return; } // klawiatura
+    const ok = tap; tap = false; clearTimeout(tapTimer);
+    if (ok) pick(e.clientX, e.clientY);
+  });
   box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
   box.addEventListener('wheel', e => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   return {

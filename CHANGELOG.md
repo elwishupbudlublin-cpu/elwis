@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.0.6 – 2026-11-07
+- Rzut: krótkie dotknięcie znacznika otwiera okno urządzenia (wcześniej kliknięcie generowane przez Androida od razu zamykało okno; działało tylko dłuższe przytrzymanie).
+
 ## 1.0.5 – 2026-11-07
 - Ekran logowania: dopisek o autorze aplikacji.
 
