@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.0.3 – 2026-11-07
+- Logowanie: szersze pola pracowników (min. 230 px, większa czcionka); na tablecie w pionie pasek ELWIS u góry zamiast kolumny z boku.
+
 ## 1.0.2 – 2026-11-07
 - Rzut nie da się odsunąć poza ekran – przesuwanie zatrzymuje się na krawędziach arkusza (margines 40 px).
 
