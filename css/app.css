@@ -19,7 +19,9 @@ button{cursor:pointer}
 .icon{width:44px;height:44px;border:0;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-size:22px}
 .icon.spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.who{height:44px;border:0;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;padding:0 12px;font-size:14px;white-space:nowrap}
+.who{flex:none;min-width:160px;height:48px;border:0;border-radius:12px;background:rgba(255,255,255,.18);color:#fff;padding:0 18px;font-size:16px;font-weight:600;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:8px}
+.who::before{content:'';width:22px;height:22px;flex:none;background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z'/%3E%3C/svg%3E")}
+.top .net,.top .icon{flex:none}
 main{max-width:1280px;margin:0 auto;padding:16px}
 h1{font-size:24px;margin:4px 0 14px}
 h2{font-size:17px;margin:18px 0 8px}
