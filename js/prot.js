@@ -248,6 +248,7 @@ ProtViews.protokol = async function (par) {
     <form class="stack" id="pform" onsubmit="return false">${def.sekcje.map(sekcja).join('')}</form>
     <div class="pfoot">
       ${tylkoOdczyt ? '' : '<button class="btn" id="pSave">Zapisz</button><button class="btn pri" id="pDone">Zakończ</button>'}
+      ${Session.isBiuro() || (rec.stan === 'roboczy' && !nr) ? '<button class="btn bad" id="pDel">Usuń protokół</button>' : ''}
       ${Session.isBiuro() && rec.stan !== 'roboczy' ? `<button class="btn" id="pLock">${rec.stan === 'zablokowany' ? 'Odblokuj' : 'Zablokuj'}</button><button class="btn" id="pWord">Generuj Word</button>` : ''}
     </div>
     <p class="mute" id="pInfo"></p>`;
@@ -319,6 +320,12 @@ ProtViews.protokol = async function (par) {
     const b = brakiProtokolu(def, dane); if (b.length) return pokazBraki(b);
     rec.stan = rec.stan === 'zablokowany' ? 'zablokowany' : 'gotowy';
     await zapisz(rec.stan); UI.toast(nr ? 'Protokół zapisany' : 'Protokół zakończony – numer nada serwer przy synchronizacji'); UI.go('protokoly');
+  };
+  if ($('#pDel')) $('#pDel').onclick = async () => {
+    if (!confirm('Usunąć protokół' + (nr ? ' ' + nr : '') + '? Zniknie z list' + (nr ? '; numer nie zostanie użyty ponownie, plik Word trafi do kosza' : '') + '.')) return;
+    if (zapisany) await addEvent('protokol', urzId, { pid: rec.pid, def: rec.def, wersja: rec.wersja, prefiks: rec.prefiks || def.prefiks_nr || '', stan: 'usuniety', dane: {} });
+    await DB.del('draft:' + rec.pid); zmiana = false;
+    UI.toast('Protokół usunięty'); UI.go('protokoly');
   };
   if ($('#pLock')) $('#pLock').onclick = async () => { rec.stan = rec.stan === 'zablokowany' ? 'gotowy' : 'zablokowany'; await zapisz(rec.stan); ProtViews.protokol({ pid: rec.pid }); };
   if ($('#pWord')) $('#pWord').onclick = async () => {

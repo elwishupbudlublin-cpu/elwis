@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.6.1 – 2026-11-08 (aplikacja i serwer)
+- Usuwanie protokołu: przycisk „Usuń protokół” w formularzu (z potwierdzeniem). Rola biuro – każdy protokół; pracownik – tylko szkic bez numeru.
+- Usunięcie = zdarzenie `protokol` ze stanem `usuniety` (historia zostaje); protokół znika z list, „Do wykonania” wraca. Numer nie jest nadawany ponownie.
+- Serwer: usuniętemu protokołowi nie nadaje numeru; wygenerowany Word przenosi do kosza; usunięcie protokołu z numerem przez pracownika jest ignorowane; „Generuj Word” dla usuniętego – odmowa.
+
 ## 1.6.0 – 2026-11-08 (aplikacja i serwer)
 - Powiązanie protokołu z kilkoma typami urządzeń: Baza → Protokoły, kolumna E, np. `SZ; SP` (tekst w nawiasie = opis, pusto = każde urządzenie). Bootstrap zwraca `powiazania[]` (oraz `powiazanie` = pierwszy prefiks, dla zgodności).
 - Lista protokołów budowy: najpierw **dedykowane** (rodzaj pracy w zakresie prac i typ urządzenia obecny na budowie, kolejność jak w zakładce Protokoły), niżej zwinięte **pozostałe** aktywne protokoły (alfabetycznie) z wyborem urządzenia z listy budowy lub „bez urządzenia”.

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.6.0';
+const SCRIPT_VERSION = '1.6.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -361,15 +361,24 @@ function push_(b, tablet) {
       const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', "yyyy-MM-dd'T'HH:mm:ss");
       const rows = [], touched = {};
       numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
+      const usuniete = [];
+      let biuro = null;
       evs.forEach(e => {
         accepted.push(e.id);
         if (have[e.id]) return;
+        if (e.typ === 'protokol' && e.d && e.d.stan === 'usuniety') {
+          // pracownik usuwa tylko szkic bez numeru; protokół z numerem – tylko rola biuro (od 1.6.1)
+          if (biuro === null) biuro = rolaBiuro_();
+          if (numery[e.d.pid] && !biuro[txt_(e.kto)]) return;
+          usuniete.push(e.d.pid);
+        }
         have[e.id] = true;
         rows.push([e.id, txt_(e.ts), txt_(e.kto).slice(0, 80), tablet, txt_(e.urz).slice(0, 20), e.typ, JSON.stringify(e.d || {}).slice(0, 45000), now]);
         if (e.urz) touched[e.urz] = true;
       });
       if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
       przelicz_(p, Object.keys(touched));
+      if (usuniete.length) koszWord_(p, usuniete);
     }
     return { ok: true, accepted: accepted, numery: numery };
   } finally { lock.releaseLock(); }
@@ -443,7 +452,7 @@ function numeruj_(sh, nowe) {
   nowe.slice().sort((a, b) => txt_(a.ts) < txt_(b.ts) ? -1 : 1).forEach(e => {
     const d = e.d = e.d || {}; if (!d.pid) return;
     if (numery[d.pid]) { d.nr = numery[d.pid]; return; }
-    if (!d.stan || d.stan === 'roboczy') { delete d.nr; return; }
+    if (!d.stan || d.stan === 'roboczy' || d.stan === 'usuniety') { delete d.nr; return; }   // usunięty bez numeru – numer nie jest nadawany
     const pf = String(d.prefiks || 'P').replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'P';
     const n = (max[pf] || 0) + 1; max[pf] = n;
     d.nr = pf + (n < 10 ? '0' : '') + n; numery[d.pid] = d.nr;
@@ -454,6 +463,16 @@ function numeruj_(sh, nowe) {
 }
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 /** Word protokołu na żądanie (tylko rola biuro) → folder budowy / Protokoły. */
+/** Osoby z rolą biuro (aktywne) – { nazwa: true } */
+function rolaBiuro_() {
+  const o = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (txt_(r[2]) === 'biuro' && tak_(r[4])) o[txt_(r[0])] = true; }); return o;
+}
+/** Usunięty protokół: wygenerowany Word (opis „ELWIS <pid> …”) z folderu budowy → Protokoły do kosza. */
+function koszWord_(p, pids) {
+  const folder = sub_(DriveApp.getFolderById(p.folder), 'Protokoły', false); if (!folder) return;
+  const it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); const opis = f.getDescription() || ''; if (pids.some(pid => opis.indexOf('ELWIS ' + pid + ' ') === 0)) f.setTrashed(true); }
+}
 function docx_(b) {
   const kto = txt_(b.kto);
   const prac = rowsT_(baza_().getSheetByName('Pracownicy')).find(r => txt_(r[0]) === kto && tak_(r[4]));
@@ -464,6 +483,7 @@ function docx_(b) {
     .sort((x, y) => x.ts < y.ts ? -1 : x.ts > y.ts ? 1 : 0);
   if (!ev.length) throw new Error('Protokół nie dotarł jeszcze na serwer – zsynchronizuj tablet');
   const e = ev[ev.length - 1], d = e.d;
+  if (d.stan === 'usuniety') throw new Error('Protokół został usunięty');
   if (!d.nr) throw new Error('Protokół nie ma numeru – najpierw „Zakończ” i synchronizacja');
   const pr = protokolyBaza_().find(x => x.id === d.def && x.wersja === String(d.wersja));
   if (!pr || !pr.szablonId || !pr.defId) throw new Error('Brak szablonu lub definicji: ' + d.def + ' v' + d.wersja);

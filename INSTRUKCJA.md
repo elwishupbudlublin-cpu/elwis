@@ -51,7 +51,8 @@ Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ o
 4. Na tablecie: synchronizacja → na karcie budowy kafelek „… – protokoły” (najpierw dedykowane, niżej „Pozostałe protokoły” z wyborem urządzenia); w karcie urządzenia przycisk „Do wykonania: …” dla protokołu dedykowanego jego typowi.
    - Powiązanie z typami urządzeń: zakładka Protokoły, kolumna E, kilka prefiksów rozdzielonych średnikiem (np. `SZ; SP`).
    - W tabelach (np. wentylatory) wybierz urządzenie z listy budowy albo „Dodaj wszystkie” – nr seryjny spisany przy podłączeniu wpisze się sam.
-5. Word: zaloguj się kontem z rolą biuro → protokół → **Generuj Word** → plik w folderze budowy → Protokoły. PDF – na żądanie przez Claude.
+5. Usunięcie: w protokole przycisk **Usuń protokół** – rola biuro każdy, pracownik tylko szkic bez numeru; numer nie wraca do puli, Word trafia do kosza.
+6. Word: zaloguj się kontem z rolą biuro → protokół → **Generuj Word** → plik w folderze budowy → Protokoły. PDF – na żądanie przez Claude.
 
 ## 4e. Obiekty wojskowe
 Kolumna „Uprawnienie M” (tak/nie) w zakładce Pracownicy. Budowę z „Obiekt wojskowy = tak” otwiera tylko osoba z M = tak lub rola biuro.

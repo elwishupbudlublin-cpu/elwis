@@ -26,7 +26,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `brak` | `{kat, opis, blokuje, foto[], etap?}` – `etap` tylko dla braku bez urządzenia zgłoszonego w wybranym etapie |
 | `brak_zamk` | `{bid, opis}` |
 | `notatka` | `{tekst, foto[]}` |
-| `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0) |
+| `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).
 
@@ -48,7 +48,7 @@ Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urzą
 - `zapisz_do_urzadzenia`: pole poza tabelą → numer do urządzenia protokołu; w wierszu tabeli → do wybranego urządzenia, gdy nie ma ono jeszcze numeru.
 - Wzory: `{pole}` – wartość z danych lub kontekstu (`kod, nazwa_budowy, adres, inwestor, zamawiajacy, nr, dd, mm, etap_urzadzenia, kondygnacja_urzadzenia, zalogowany, lp`); `{pole=X:A|B}` – A gdy pole = X, inaczej B.
 - Szablon Word: `{{pole}}` – wartość; pola `taknie/wybor` z mapą `word` → znaczniki opcji (☒/☐); `znacznik` → ☒/☐; wiersz tabeli z `{{#petla}} … {{/petla}}` powielany dla każdej pozycji. Daty w Word: dd/mm/rrrr.
-- Numer: przy pierwszym zapisie ze stanem innym niż `roboczy` serwer nadaje `<prefiks><nr 2 cyfry>` (kolejny w budowie dla prefiksu); kolejne zapisy tego `pid` dostają ten sam numer.
+- Numer: przy pierwszym zapisie ze stanem `gotowy` lub `zablokowany` serwer nadaje `<prefiks><nr 2 cyfry>` (kolejny w budowie dla prefiksu); kolejne zapisy tego `pid` dostają ten sam numer.
 
 ## Zasady
 - PIN nigdy nie trafia do tabletu – tylko `SHA-256(salt + ":" + PIN)`.
