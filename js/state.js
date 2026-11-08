@@ -144,6 +144,7 @@ const Sync = {
       // plan dnia z ClickUp (±7 dni) – przed plikami, żeby był od razu po zalogowaniu
       this.prog(0.26, 'Plan dnia');
       await this.pullPlan();
+      await this.pullPogoda();
       if (UI.cur === 'plan') UI.refresh();
       // bieżąca + 5 ostatnich (pozostałe z 30 – przy otwarciu albo „Pobierz wszystko ponownie”)
       const recent = (await DB.get('recent')) || [];
@@ -200,6 +201,29 @@ const Sync = {
     const od = U.day(new Date(Date.now() - 7 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));
     try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
+  },
+  /* Prognoza Open-Meteo (od 1.11.0): godziny 7–16 dla Lublina i budów z lokalizacją z planu; tylko odczyt, bez danych budowy */
+  async pullPogoda() {
+    try {
+      const pl = (await DB.get('plan')) || { zadania: [] }; const proj = (S.boot && S.boot.projekty) || [];
+      const miejsca = new Map([[POGODA_DOM.klucz, POGODA_DOM]]);
+      pl.zadania.forEach(t => { const b = proj.find(p => p.listaCU && p.listaCU === t.lista); const w = b && wspolrzedne(b.lokalizacja); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
+      const wynik = {};
+      for (const [klucz, w] of miejsca) {
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&hourly=temperature_2m,precipitation,precipitation_probability&timezone=Europe%2FWarsaw&past_days=7&forecast_days=16`);
+        if (!r.ok) continue;
+        const j = await r.json(), h = j.hourly || {}, dni = {};
+        (h.time || []).forEach((t, i) => {
+          const g = +t.slice(11, 13); if (g < 7 || g > 16) return;
+          const k = t.slice(0, 10), d = dni[k] = dni[k] || { tmin: 99, tmax: -99, opad: 0, szansa: 0 };
+          const temp = h.temperature_2m[i]; if (temp != null) { d.tmin = Math.min(d.tmin, temp); d.tmax = Math.max(d.tmax, temp); }
+          d.opad += h.precipitation[i] || 0; d.szansa = Math.max(d.szansa, h.precipitation_probability[i] || 0);
+        });
+        Object.keys(dni).forEach(k => { if (dni[k].tmax === -99) delete dni[k]; });
+        wynik[klucz] = dni;
+      }
+      if (Object.keys(wynik).length) { S.pogoda = wynik; await DB.set('pogoda', wynik); }
+    } catch (e) { console.warn('pogoda', e); }   // brak prognozy nie blokuje synchronizacji
   },
   async pullTech(full, onProg) {
     const pr = onProg || (() => { });

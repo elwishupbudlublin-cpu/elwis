@@ -152,6 +152,8 @@ const Views = {
     const zad = wszystkieZad.filter(t => naDzien(t, dzien));
     const proj = (S.boot && S.boot.projekty) || [];
     const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    // miejsce prognozy: budowa z lokalizacją, na której zalogowany ma zadania tego dnia; inaczej Lublin
+    const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(b.lokalizacja)); return b2 ? { klucz: wspolrzedne(b2.lokalizacja).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
     const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
     // zadania bez godzin z „Estimated Time” → wolne miejsca od 7:00 (osobno w każdej kolumnie; od 1.10.0)
@@ -209,9 +211,9 @@ const Views = {
           <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
         </div>
         <div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby zmienić tydzień">
-          ${tydzien.map(x => `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i></button>`).join('')}
+          ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i>${w ? `<span class="pw">${w.tmin}°/${w.tmax}°</span><span class="pr ${w.pada ? 'mokro' : ''}">${w.pada ? '☔ pada' : '—'}</span>` : ''}</button>`; }).join('')}
         </div>
-        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span><span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
+        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}">7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
       ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
@@ -615,6 +617,17 @@ function planWiek(t) {
   const d = new Date(t);
   return d.toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + hm(d);
 }
+/* Prognoza pogody (od 1.11.0) – tylko godziny 7–16: temperatura min/maks i czy będzie padać. S.pogoda = { 'lat,lon': { 'rrrr-mm-dd': {tmin,tmax,opad,szansa} } } */
+const POGODA_DOM = { lat: 51.2465, lon: 22.5684, klucz: '51.25,22.57', miejsce: 'Lublin' };
+function wspolrzedne(v) {
+  const m = String(v || '').match(/(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)/); if (!m) return null;
+  const lat = +m[1].replace(',', '.'), lon = +m[2].replace(',', '.');
+  return { lat, lon, klucz: lat.toFixed(2) + ',' + lon.toFixed(2) };
+}
+function pogodaDnia(k, lok) {
+  const d = S.pogoda && lok && S.pogoda[lok.klucz] && S.pogoda[lok.klucz][k]; if (!d) return null;
+  return { tmin: Math.round(d.tmin), tmax: Math.round(d.tmax), pada: d.opad >= 0.2 || d.szansa >= 60, szansa: d.szansa, miejsce: lok.miejsce };
+}
 function odm(n, a, b, c) { return n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c; }
 function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }
 function maGodziny(t) { return t.start && t.koniec && t.godzStart && t.godzKoniec && U.day(new Date(t.start)) === U.day(new Date(t.koniec)); }
@@ -851,6 +864,7 @@ function settings() {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
   await API.load();
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
+  S.pogoda = await DB.get('pogoda');
   S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
   try { await Pamiec.limit(); } catch (e) { }
   $('#topVer').textContent = 'v' + APP_VERSION;

@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.11.0 – 2026-11-08 (aplikacja)
+- Pogoda w planie: na kafelkach dni temperatura min/maks w godzinach 7–16 i „☔ pada” / „—”; w podsumowaniu dnia „7–16: 6°…9° · bez opadów / będzie padać (do 70%)” i miejsce prognozy (żółte tło, gdy pada).
+- Miejsce prognozy: budowa z kolumną „Lokalizacja” (współrzędne), na której zalogowany ma zadania tego dnia; inaczej Lublin.
+- Prognoza z Open-Meteo (bez konta i klucza; wysyłane tylko współrzędne) pobierana przy synchronizacji, 7 dni wstecz i 16 naprzód, zapamiętana na tablecie (działa offline). „Pada” = opad ≥ 0,2 mm lub prawdopodobieństwo ≥ 60% w godzinach 7–16.
+
 ## 1.10.2 – 2026-11-08 (aplikacja)
 - Pasek dni: 7 kolejnych dni przesuwanych o pojedyncze dni – przeciągnięcie o jeden kafelek = jeden dzień (o kilka kafelków = kilka dni); domyślnie wybrany dzień w środku; „↺ dziś” wraca do bieżącego dnia.
 

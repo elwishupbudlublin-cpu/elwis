@@ -212,3 +212,7 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .pblk.pauto{border:2px dashed var(--c);border-left:5px dashed var(--c);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 10%,#fff) 0 8px,#fff 8px 16px)}
 .pauton{font-size:11px;font-weight:700;color:#a3561b}
 #btnBack{width:88px;font-size:30px;line-height:1}
+.pday .pw{font-size:11px;font-weight:600;white-space:nowrap}.pday .pr{font-size:10px;opacity:.85;white-space:nowrap}.pday .pr.mokro{font-weight:700}
+.pday.on .pr.mokro{color:#0b5fb0}
+.pchip.pwarn{background:#ffd54a;color:#4a3500}
+.pday .pw,.pday .pr{text-transform:none}
