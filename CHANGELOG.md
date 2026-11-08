@@ -1,5 +1,15 @@
 # Zmiany
 
+## 1.5.0 – 2026-11-08 (aplikacja i serwer)
+- Protokoły na tablecie: formularz budowany z pliku definicji (`_Szablony/szablon_konfig`), bez zmiany aplikacji przy nowych protokołach. Dostępne, gdy protokół ma w Bazie „Aktywny = tak”, a budowa ma jego rodzaj pracy w zakresie prac.
+- Wejście: kafelek „<rodzaj pracy> – protokoły” na karcie budowy (lista urządzeń danego typu ze stanem protokołów) oraz sekcja „Protokoły” w karcie urządzenia.
+- Formularz: wartości domyślne (np. harmonogram przewietrzania), pola automatyczne (nr seryjny szafy, uruchamiający), sekcje zależne (LPG tylko przy „CO / LPG”), wentylatory dodawane i usuwane w trakcie, skanowanie numerów seryjnych. Pola „pamiętaj dla budowy” (inwestor, obiekt, zamawiający…) przechodzą z poprzedniego protokołu budowy.
+- Praca z przerwami: każda zmiana zapisuje się od razu na tablecie (szkic); „Zapisz” / wyjście – zapis do synchronizacji; „Zakończ” sprawdza pola wymagane i zaznacza braki.
+- Numer protokołu nadaje serwer przy pierwszej synchronizacji po „Zakończ”: prefiks z definicji (PU, PR, PP…) + numer kolejny w budowie, dwie cyfry (PU01, PU02…) – bez kolizji między tabletami.
+- Nr seryjny z protokołu trafia do karty urządzenia i listy urządzeń (zdarzenie `nr`).
+- Rola biuro: „Zablokuj / Odblokuj” protokół, „Generuj Word” – serwer wypełnia szablon Word i zapisuje plik w folderze budowy → Protokoły (ponowne wygenerowanie zastępuje plik).
+- Serwer: bootstrap zwraca aktywne protokoły z definicjami; zdarzenie `protokol`; operacja `docx`. Skrypt czyta tylko pliki wskazane w zakładce Protokoły i zapisuje Word tylko do folderu Protokoły budowy.
+
 ## 1.4.1 – 2026-11-08
 - Mój plan: pod datą „Plan z: <dzień, godzina>” – czas ostatniego pobrania planu; plan starszy niż 12 h wyróżniony, offline – informacja, że zmiany z ClickUp pojawią się po połączeniu.
 

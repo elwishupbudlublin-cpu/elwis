@@ -37,6 +37,7 @@ function fold(events) {
   const dev = {};      // id -> {kroki:{i:{val,kto,ts}}, sn, foto:[], hist:[]}
   const braki = {};    // bid -> {...}
   const notes = [];
+  const prot = {};     // pid -> ostatni zapis protokołu
   const D = id => (dev[id] = dev[id] || { kroki: {}, sn: '', snKto: '', foto: [], hist: [] });
   for (const e of ev) {
     const d = e.d || {};
@@ -48,9 +49,10 @@ function fold(events) {
       case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null }; break;
       case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
       case 'notatka': notes.push(e); break;
+      case 'protokol': if (d.pid) prot[d.pid] = { pid: d.pid, def: d.def, wersja: d.wersja, prefiks: d.prefiks, stan: d.stan || 'roboczy', nr: d.nr || (prot[d.pid] && prot[d.pid].nr) || '', dane: d.dane || {}, urz: e.urz, kto: e.kto, ts: e.ts }; break;
     }
   }
-  return { dev, braki, notes };
+  return { dev, braki, notes, prot };
 }
 
 function devStatus(u, F) {
@@ -104,7 +106,8 @@ const Sync = {
           const part = all.slice(i, i + 100).map(({ synced, ...e }) => e);
           const r = await API.push(kod, part, []);
           const ok = new Set(r.accepted || []);
-          const marked = all.slice(i, i + 100).filter(e => ok.has(e.id)).map(e => ({ ...e, synced: 1 }));
+          const num = r.numery || {};   // numery protokołów nadane przez serwer
+          const marked = all.slice(i, i + 100).filter(e => ok.has(e.id)).map(e => (e.typ === 'protokol' && e.d && num[e.d.pid] ? { ...e, d: { ...e.d, nr: num[e.d.pid] }, synced: 1 } : { ...e, synced: 1 }));
           await DB.putEvents(marked);
         }
       }
@@ -126,7 +129,7 @@ const Sync = {
     } finally {
       S.syncing = false;
       S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
-      UI.net(); if (!['login', 'setup'].includes(UI.cur)) UI.refresh();
+      UI.net(); if (!['login', 'setup', 'protokol'].includes(UI.cur)) UI.refresh();   // formularza protokołu nie przerysowujemy w trakcie pisania
     }
   },
   async pullProject(kod, full) {
@@ -145,7 +148,8 @@ const Sync = {
       const r = await API.events(kod, since);
       if (r.events.length) {
         const local = new Set((await DB.eventsFor(kod)).map(e => e.id));
-        await DB.putEvents(r.events.filter(e => !local.has(e.id)).map(e => ({ ...e, kod, synced: 1 })));
+        // protokoły: wersja z serwera (z numerem nadanym przez serwer) zastępuje kopię z tabletu
+        await DB.putEvents(r.events.filter(e => !local.has(e.id) || e.typ === 'protokol').map(e => ({ ...e, kod, synced: 1 })));
       }
       since = r.last; await DB.set('seq:' + kod, since);
       if (!r.more) break;

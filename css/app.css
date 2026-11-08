@@ -147,3 +147,20 @@ video.scan{width:100%;max-height:50vh;background:#000;border-radius:12px}
 .pli{border-left:5px solid var(--c)}.pli .dot{display:none}
 
 .planage{margin:-4px 0 10px;font-size:13px;color:var(--mute)}.planage.old{color:#a3561b;font-weight:600}
+/* Protokoły (1.5.0) */
+.psek{display:flex;flex-direction:column;gap:10px}
+.pgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px 16px}
+.pf{display:flex;flex-direction:column;gap:6px}
+.pf.wide{grid-column:1/-1}
+.pf .f{font-size:14px;color:var(--mute)}
+.pf.err input,.pf.err textarea,.pf.err .seg{outline:3px solid var(--bad);border-radius:12px}
+.pf.err .f{color:var(--bad);font-weight:600}
+.req{color:var(--bad)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{min-height:48px;min-width:64px;padding:0 14px;border-radius:12px;border:1px solid #c3cad3;background:#fff;font-weight:600}
+.seg button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.auto{min-height:48px;display:flex;align-items:center;padding:0 14px;border-radius:12px;background:var(--pri2);font-weight:600}
+input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;border:1px solid #c3cad3;border-radius:12px;background:#fff}
+.pwiersz{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:#fafbfc}
+.pfoot{position:sticky;bottom:0;display:flex;gap:10px;flex-wrap:wrap;padding:12px 0;background:var(--bg)}
+.pfoot .btn{flex:1;min-width:140px}

@@ -1,11 +1,11 @@
 /**
  * ELWIS – serwer synchronizacji (Google Apps Script, konto ELWIS).
- * Zamknięta lista operacji: bootstrap, project, file, techniczne, plan, events, push. Wszystko inne → odmowa.
+ * Zamknięta lista operacji: bootstrap, project, file, techniczne, plan, events, push, docx. Wszystko inne → odmowa.
  * Bez danych budów i kluczy w kodzie – konfiguracja w Bazie projektów i we właściwościach skryptu.
- * Wersja: 1.1.0 (schemat danych 1.x, etapy budowy od 1.3). Opis API: docs/API.md.
+ * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.4.0';
+const SCRIPT_VERSION = '1.5.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -58,6 +58,7 @@ function handle_(p, body) {
       case 'plan': return out_(plan_(String(p.od || ''), String(p.do || '')));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'push': return out_(push_(body, tablet));
+      case 'docx': return out_(docx_(body || {}));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
   } catch (err) {
@@ -148,7 +149,7 @@ function bootstrap_(tablet) {
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
-    pracownicy: pr, projekty: projekty, slowniki: slowniki_()
+    pracownicy: pr, projekty: projekty, slowniki: slowniki_(), protokoly: protokolyAktywne_()
   };
 }
 
@@ -332,11 +333,12 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol'];
 
 function push_(b, tablet) {
   const p = projekt_(String(b.kod || ''));
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
+  let numery = {};
   try {
     // zdjęcia → Zdjęcia/rrrr-mm-dd/
     (b.photos || []).forEach(ph => {
@@ -357,6 +359,7 @@ function push_(b, tablet) {
       if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(r => { have[txt_(r[0])] = true; });
       const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', "yyyy-MM-dd'T'HH:mm:ss");
       const rows = [], touched = {};
+      numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
       evs.forEach(e => {
         accepted.push(e.id);
         if (have[e.id]) return;
@@ -367,7 +370,7 @@ function push_(b, tablet) {
       if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
       przelicz_(p, Object.keys(touched));
     }
-    return { ok: true, accepted: accepted };
+    return { ok: true, accepted: accepted, numery: numery };
   } finally { lock.releaseLock(); }
 }
 
@@ -391,6 +394,153 @@ function przelicz_(p, ids) {
     const status = open ? 'brak' : (done === kroki.length && kroki.length ? 'gotowe' : done ? 'w toku' : 'czeka');
     sh.getRange(i + 2, 10, 1, 2).setNumberFormat(TEXT).setValues([[sn, status]]);
   });
+}
+
+/* ===================== Protokoły (od 1.5.0) =====================
+ * Zakładka Protokoły: ID | Nazwa | Wersja | Rodzaj pracy | Powiązanie | Definicja (link) | Szablon Word (link) | Aktywny.
+ * Skrypt czyta wyłącznie pliki wskazane w tej zakładce; Word zapisuje tylko do folderu budowy → Protokoły. */
+function protokolyBaza_() {
+  const sh = baza_().getSheetByName('Protokoły'); if (!sh) return [];
+  return rowsT_(sh).filter(r => txt_(r[0])).map(r => ({
+    id: txt_(r[0]), nazwa: txt_(r[1]), wersja: txt_(r[2]).replace(/^v/i, ''), rodzaj: txt_(r[3]),
+    powiazanie: (txt_(r[4]).match(/^[A-Za-z]+/) || [''])[0].toUpperCase(),
+    defId: idFromUrl_(r[5]), szablonId: idFromUrl_(r[6]), aktywny: tak_(r[7])
+  }));
+}
+function definicja_(fileId) {
+  const c = CacheService.getScriptCache(), k = 'def:' + fileId, hit = c.get(k);
+  if (hit) return JSON.parse(hit);
+  const s = DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
+  const d = JSON.parse(s);
+  if (s.length < 90000) c.put(k, s, 600);
+  return d;
+}
+function protokolyAktywne_() {
+  return protokolyBaza_().filter(p => p.aktywny && p.defId && p.szablonId).map(p => {
+    let def = null, blad = '';
+    try { def = definicja_(p.defId); } catch (e) { blad = 'Błąd pliku definicji: ' + (e.message || e); }
+    return { id: p.id, nazwa: p.nazwa, wersja: p.wersja, rodzaj: p.rodzaj, powiazanie: p.powiazanie, def: def, blad: blad };
+  });
+}
+/** Numer protokołu nadaje serwer (bez kolizji między tabletami): <prefiks><nr 2 cyfry>, kolejno w budowie dla prefiksu.
+ *  Nadawany przy pierwszym zapisie ze stanem innym niż „roboczy”; kolejne zapisy tego protokołu dostają ten sam numer. */
+function numeruj_(sh, nowe) {
+  const numery = {};
+  if (!nowe.length) return {};
+  const max = {};
+  if (sh.getLastRow() > 1) sh.getRange(2, 6, sh.getLastRow() - 1, 2).getDisplayValues().forEach(r => {
+    if (txt_(r[0]) !== 'protokol') return;
+    const d = safeJson_(r[1]); if (!d.pid || !d.nr) return;
+    numery[d.pid] = d.nr;
+    const m = String(d.nr).match(/^([A-Z]+)(\d+)$/); if (m) max[m[1]] = Math.max(max[m[1]] || 0, Number(m[2]));
+  });
+  nowe.slice().sort((a, b) => txt_(a.ts) < txt_(b.ts) ? -1 : 1).forEach(e => {
+    const d = e.d = e.d || {}; if (!d.pid) return;
+    if (numery[d.pid]) { d.nr = numery[d.pid]; return; }
+    if (!d.stan || d.stan === 'roboczy') { delete d.nr; return; }
+    const pf = String(d.prefiks || 'P').replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'P';
+    const n = (max[pf] || 0) + 1; max[pf] = n;
+    d.nr = pf + (n < 10 ? '0' : '') + n; numery[d.pid] = d.nr;
+  });
+  const wynik = {};
+  nowe.forEach(e => { if (e.d && e.d.pid && numery[e.d.pid]) wynik[e.d.pid] = numery[e.d.pid]; });
+  return wynik;
+}
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+/** Word protokołu na żądanie (tylko rola biuro) → folder budowy / Protokoły. */
+function docx_(b) {
+  const kto = txt_(b.kto);
+  const prac = rowsT_(baza_().getSheetByName('Pracownicy')).find(r => txt_(r[0]) === kto && tak_(r[4]));
+  if (!prac || txt_(prac[2]) !== 'biuro') throw new Error('Generowanie Word – tylko rola biuro');
+  const p = projekt_(String(b.kod || ''));
+  const ev = rowsT_(zdarzeniaSheet_(p)).filter(r => txt_(r[5]) === 'protokol')
+    .map(r => ({ ts: txt_(r[1]), urz: txt_(r[4]), d: safeJson_(r[6]) })).filter(e => e.d.pid === b.pid)
+    .sort((x, y) => x.ts < y.ts ? -1 : x.ts > y.ts ? 1 : 0);
+  if (!ev.length) throw new Error('Protokół nie dotarł jeszcze na serwer – zsynchronizuj tablet');
+  const e = ev[ev.length - 1], d = e.d;
+  if (!d.nr) throw new Error('Protokół nie ma numeru – najpierw „Zakończ” i synchronizacja');
+  const pr = protokolyBaza_().find(x => x.id === d.def && x.wersja === String(d.wersja));
+  if (!pr || !pr.szablonId || !pr.defId) throw new Error('Brak szablonu lub definicji: ' + d.def + ' v' + d.wersja);
+  const def = definicja_(pr.defId);
+  const ctx = kontekst_(p, d);
+  const parts = Utilities.unzip(DriveApp.getFileById(pr.szablonId).getBlob().setContentType('application/zip'));
+  const out = parts.map(f => f.getName() === 'word/document.xml'
+    ? Utilities.newBlob(wypelnijXml_(f.getDataAsString('UTF-8'), def, d.dane || {}, ctx), 'application/xml', f.getName()) : f);
+  const name = ocen_(def.nazwa_pliku || '{nazwa_budowy} - protokół {nr}', ctx, d.dane || {}).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 150) + '.docx';
+  const zip = Utilities.zip(out, name).setContentType(DOCX_MIME);
+  const folder = sub_(DriveApp.getFolderById(p.folder), 'Protokoły', true);
+  const old = folder.getFilesByName(name); while (old.hasNext()) old.next().setTrashed(true);   // ponowne wygenerowanie zastępuje plik
+  const f = folder.createFile(zip);
+  f.setDescription('ELWIS ' + d.pid + ' · ' + d.def + ' v' + d.wersja + ' · ' + d.nr);
+  return { ok: true, name: name, url: f.getUrl(), nr: ctx.nr_protokolu };
+}
+function kontekst_(p, d) {
+  const dane = d.dane || {}, dt = String(dane.data || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const ctx = {
+    kod: p.kod, nazwa_budowy: p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + p.nazwa, adres: p.adres,
+    nr: d.nr || '', prefiks_nr: d.prefiks || '', dd: dt ? dt[3] : '', mm: dt ? dt[2] : '', rrrr: dt ? dt[1] : ''
+  };
+  return ctx;
+}
+
+/* ----- Wypełnianie szablonu Word (czysty tekst XML – bez usług Google, testowalne poza Apps Script) ----- */
+/** Wzór: {pole} – wartość z danych lub kontekstu; {pole=X:A|B} – A gdy pole = X, inaczej B. */
+function ocen_(w, ctx, dane) {
+  const val = k => (dane && dane[k] != null && dane[k] !== '') ? dane[k] : (ctx && ctx[k] != null ? ctx[k] : '');
+  return String(w || '').replace(/\{([^{}]+)\}/g, (m, e) => {
+    const c = e.match(/^(\w+)=([^:]*):([^|]*)\|(.*)$/);
+    if (c) return String(val(c[1])) === c[2] ? c[3] : c[4];
+    return String(val(e.trim()));
+  });
+}
+function xmlEsc_(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/\r?\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
+}
+function widoczna_(sek, dane) {
+  if (!sek.pokaz_gdy) return true;
+  return Object.keys(sek.pokaz_gdy).every(k => String(dane[k] == null ? '' : dane[k]) === String(sek.pokaz_gdy[k]));
+}
+function mapaPol_(pola, dane, ctx, def, widoczne) {
+  const T = def.znak_tak || '☒', N = def.znak_nie || '☐', m = {};
+  pola.forEach(f => {
+    let v = widoczne ? dane[f.id] : '';
+    if (f.typ === 'auto' && (v == null || v === '')) v = ocen_(f.wzor, Object.assign({}, ctx, dane), {});
+    if (f.word) { Object.keys(f.word).forEach(opt => { m[f.word[opt]] = String(v) === opt ? T : N; }); return; }
+    if (f.typ === 'znacznik') { m[f.id] = v === true || v === 'tak' ? T : N; return; }
+    if (f.typ === 'data' && /^\d{4}-\d{2}-\d{2}/.test(String(v || ''))) { const x = String(v); v = x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4); }
+    m[f.id] = v == null ? '' : String(v);
+  });
+  return m;
+}
+function wstaw_(xml, m) {
+  return xml.replace(/\{\{([^{}#\/]+)\}\}/g, (a, k) => xmlEsc_(m[k.trim()] != null ? m[k.trim()] : ''));
+}
+function wypelnijXml_(xml, def, dane, ctx) {
+  const scal = {};
+  const kontekstPol = {};
+  (def.sekcje || []).forEach(sek => {
+    if (sek.typ === 'tabela') return;
+    Object.assign(scal, mapaPol_(sek.pola || [], dane, Object.assign({}, ctx), def, widoczna_(sek, dane)));
+  });
+  Object.assign(kontekstPol, ctx, dane);
+  scal.nr_protokolu = ocen_(((def.sekcje || []).reduce((w, s) => w || (s.pola || []).find(f => f.id === 'nr_protokolu'), null) || {}).wzor || '{kod}-{dd}/{mm}-{nr}', kontekstPol, {});
+  // tabele powtarzalne: wiersz z {{#nazwa}} … {{/nazwa}} powielany dla każdej pozycji
+  (def.sekcje || []).filter(s => s.typ === 'tabela').forEach(sek => {
+    const nazwa = sek.word_petla || sek.id, otw = '{{#' + nazwa + '}}', zam = '{{/' + nazwa + '}}';
+    let guard = 0;
+    while (xml.indexOf(otw) >= 0 && guard++ < 20) {
+      const i = xml.indexOf(otw);
+      const a = Math.max(xml.lastIndexOf('<w:tr ', i), xml.lastIndexOf('<w:tr>', i));
+      const j = xml.indexOf(zam, i), b = xml.indexOf('</w:tr>', j) + 7;
+      if (a < 0 || j < 0 || b < 7) break;
+      const wiersz = xml.slice(a, b).replace(otw, '').replace(zam, '');
+      const pozycje = widoczna_(sek, dane) && Array.isArray(dane[sek.id]) ? dane[sek.id] : [];
+      const txt = pozycje.map((poz, lp) => wstaw_(wiersz, mapaPol_(sek.pola || [], poz || {}, Object.assign({ lp: lp + 1 }, ctx), def, true))).join('');
+      xml = xml.slice(0, a) + txt + xml.slice(b);
+    }
+  });
+  return wstaw_(xml, scal);
 }
 
 function sub_(folder, name, create) {

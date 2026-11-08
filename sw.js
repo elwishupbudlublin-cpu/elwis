@@ -1,6 +1,6 @@
 /* ELWIS – service worker: aplikacja działa offline. Zmiana wersji = odświeżenie plików na tabletach. */
-const CACHE = 'elwis-1.4.1';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/db.js', 'js/api.js', 'js/state.js', 'js/plan.js', 'js/app.js', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'elwis-1.5.0';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/db.js', 'js/api.js', 'js/state.js', 'js/plan.js', 'js/prot.js', 'js/app.js', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
