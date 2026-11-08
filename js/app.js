@@ -159,11 +159,12 @@ const Views = {
     kolumny.forEach(k => {
       const zajete = k.z.filter(maGodziny).map(t => { const a = new Date(t.start), b = new Date(t.koniec); return [a.getHours() * 60 + a.getMinutes(), b.getHours() * 60 + b.getMinutes()]; });
       k.auto = [];
-      k.z.filter(t => !maGodziny(t) && t.est > 0).forEach(t => {
-        const dl = Math.max(15, Math.round(t.est / 60000));
+      // najpierw zadania z szacowanym czasem, potem bez – te dostają czas dobrany do wielkości kafelka (1,5 h)
+      k.z.filter(t => !maGodziny(t)).sort((a, b) => (b.est > 0) - (a.est > 0)).forEach(t => {
+        const dl = t.est > 0 ? Math.max(15, Math.round(t.est / 60000)) : 90;
         let od = 7 * 60;
         for (let i = 0; i < 200; i++) { const kol = zajete.find(([a, b]) => od < b && od + dl > a); if (!kol) break; od = kol[1]; }
-        zajete.push([od, od + dl]); k.auto.push({ t, od, dl }); wpasowane.add(t.id);
+        zajete.push([od, od + dl]); k.auto.push({ t, od, dl, bezEst: !(t.est > 0) }); wpasowane.add(t.id);
       });
     });
     let h0 = 6, h1 = 18;
@@ -189,10 +190,10 @@ const Views = {
         <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : `<span class="pl">${U.esc(t.listaNazwa || '')}</span>`}</button>`;
     };
     const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    const blokAuto = ({ t, od, dl }) => {
+    const blokAuto = ({ t, od, dl, bezEst }) => {
       const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3), bud = budowaZ(t);
       return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
-        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${Math.round(dl / 6) / 10} h${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : ''}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : ''}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
     };
     const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}"><b>${U.esc(t.nazwa)}</b>
       <span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span>${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
@@ -206,10 +207,8 @@ const Views = {
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
           <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
         </div>
-        <div class="pweek">
-          <button class="pwnav" data-w="-7" aria-label="Poprzedni tydzień">‹</button>
+        <div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby zmienić tydzień">
           ${tydzien.map(x => `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i></button>`).join('')}
-          <button class="pwnav" data-w="7" aria-label="Następny tydzień">›</button>
         </div>
         <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span><span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
@@ -225,11 +224,21 @@ const Views = {
           ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${k.z.filter(maGodziny).map(blok).join('')}${k.auto.map(blokAuto).join('')}</div>`).join('') || '<div class="pcol"></div>'}
         </div>
       </div>
-      <h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2>
-      <div class="pcards">${bezGodz.map(karta).join('') || '<div class="mute">Brak zadań bez godziny.</div>'}</div>`;
+      ${bezGodz.length ? `<h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2><div class="pcards">${bezGodz.map(karta).join('')}</div>` : ''}`;
     const idz = o => UI.go('plan', { ...par, ...o });
     view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, ukryj: undefined }));
-    view.querySelectorAll('[data-w]').forEach(b => b.onclick = () => idz({ d: przesun(+b.dataset.w), ukryj: undefined }));
+    // przeciąganie paska tygodnia w lewo / prawo = następny / poprzedni tydzień
+    (() => {
+      const w = $('#pWeek'); let x0 = null, dx = 0, przeciagniete = false;
+      const ruch = e => { if (x0 === null) return; dx = e.clientX - x0; if (Math.abs(dx) > 10) przeciagniete = true; if (przeciagniete) w.style.transform = `translateX(${dx}px)`; };
+      const koniec = () => {
+        if (x0 === null) return; x0 = null; window.removeEventListener('pointermove', ruch);
+        w.style.transition = 'transform .2s'; w.style.transform = '';
+        if (Math.abs(dx) > 60) idz({ d: przesun(dx < 0 ? 7 : -7), ukryj: undefined });
+      };
+      w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
+      w.addEventListener('click', e => { if (przeciagniete) { e.stopPropagation(); e.preventDefault(); przeciagniete = false; } }, true);
+    })();
     $('#pAll').onclick = () => idz({ all: true, ukryj: undefined });
     $('#pMy').onclick = () => idz({ all: false });
     $('#pBud').onclick = () => UI.go('home');

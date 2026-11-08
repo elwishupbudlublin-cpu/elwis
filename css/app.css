@@ -142,7 +142,7 @@ video.scan{width:100%;max-height:50vh;background:#000;border-radius:12px}
 .phero .pseg button{border:0;background:transparent;color:#fff;font-weight:600;padding:10px 16px;border-radius:10px;min-height:44px;font-size:15px}
 .phero .pseg button.on{background:#fff;color:var(--pri)}
 .pbudbtn{background:#fff;color:var(--pri);border:0;font-weight:700;min-height:48px}
-.pweek{display:flex;gap:6px;margin-top:14px;align-items:stretch}
+.pweek{display:flex;gap:6px;margin-top:14px;align-items:stretch;touch-action:pan-y;user-select:none;cursor:grab}
 .pwnav{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:10px;width:40px;font-size:24px}
 .pday{flex:1;border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:6px 0 4px;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:64px}
 .pday span{font-size:12px;opacity:.85;text-transform:capitalize}.pday b{font-size:20px}.pday i{font-style:normal;font-size:11px;letter-spacing:1px;line-height:1;opacity:.9}

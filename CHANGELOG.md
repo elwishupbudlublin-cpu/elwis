@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.10.1 – 2026-11-08 (aplikacja)
+- Plan: zadania bez godzin i bez „Estimated Time” też trafiają na oś (po zadaniach z szacowanym czasem), z czasem 1,5 h dobranym do wielkości kafelka i opisem „czas nieokreślony”; lista „Bez godziny” znika, gdy pusta.
+- Pasek tygodnia: zmiana tygodnia przeciągnięciem kafelków dni w lewo / prawo (bez strzałek); dotknięcie dnia – jak dotąd.
+
 ## 1.10.0 – 2026-11-08 (aplikacja i serwer)
 - Nowy wygląd ekranu „Mój plan”: karta z powitaniem, przełącznik Mój plan / Wszyscy i „Wszystkie budowy” u góry, pasek tygodnia (pn–nd, kropki = liczba zadań), podsumowanie dnia, linia „teraz”, plakietki z kodem budowy, zadania bez godziny jako kafelki.
 - „Wszyscy”: kolumna zalogowanej osoby pierwsza; domyślnie tylko osoby z zadaniami w danym dniu (wcześniej np. kolumna biura była poza ekranem); pasek osób z liczbą zadań – dotknięcie pokazuje / ukrywa kolumnę; nazwiska przyklejone przy przewijaniu.
