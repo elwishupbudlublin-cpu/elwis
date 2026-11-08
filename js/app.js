@@ -157,7 +157,7 @@ const Views = {
         <button class="btn" id="pBud">Wszystkie budowy</button>
       </div>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
-      ${S.planErr && pl ? `<p class="mute">${U.esc(S.planErr)} Pokazuję plan z ${new Date(pl.pobrano).toLocaleString('pl-PL')}.</p>` : ''}
+      ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
       ${!ja && !wszyscy ? '<p class="mute">Twoje konto nie ma wpisanego ID ClickUp – poproś biuro o uzupełnienie.</p>' : ''}
       <div class="ptime" style="--n:${kolumny.length || 1}">
         <div class="pgrid" style="height:${(h1 - h0) * PX}px">
@@ -463,6 +463,10 @@ const Dialogs = {
 
 /* ---------- Plan dnia ---------- */
 const PLAN_KOLORY = ['#0b4f8a', '#1f7a4d', '#a3561b', '#6b3fa0', '#b02e4c', '#0e7c86', '#5a6b1e', '#8a5a0b'];
+function planWiek(t) {
+  const d = new Date(t);
+  return d.toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + hm(d);
+}
 function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }
 function maGodziny(t) { return t.start && t.koniec && t.godzStart && t.godzKoniec && U.day(new Date(t.start)) === U.day(new Date(t.koniec)); }
 function naDzien(t, dzien) {

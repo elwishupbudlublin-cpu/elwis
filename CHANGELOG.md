@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.4.1 – 2026-11-08
+- Mój plan: pod datą „Plan z: <dzień, godzina>” – czas ostatniego pobrania planu; plan starszy niż 12 h wyróżniony, offline – informacja, że zmiany z ClickUp pojawią się po połączeniu.
+
 ## 1.4.0 – 2026-11-08 (aplikacja i serwer, schemat 1.4)
 - „Mój plan” – pierwszy ekran po zalogowaniu: zadania z ClickUp przypisane do zalogowanej osoby na wybrany dzień; zadania z godziną startu i końca jako bloki na osi dnia, pozostałe na liście „Bez godziny”; przełączanie dni; „Pokaż wszystkich” – osie dnia wszystkich pracowników obok siebie; dotknięcie zadania otwiera kartę budowy (lista ClickUp ↔ „ID listy ClickUp”). Plan ±7 dni dostępny offline.
 - Obiekty wojskowe: budowę z „Obiekt wojskowy = tak” otwiera tylko osoba z uprawnieniem M (kolumna „Uprawnienie M” w zakładce Pracownicy) lub rola biuro; pozostali widzą okno „Brak dostępu”. Na liście budów 🔒 przy takich budowach.
