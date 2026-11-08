@@ -112,7 +112,7 @@ const Views = {
       if (lock.until > Date.now()) { $('#pinMsg').textContent = 'Za dużo prób. Spróbuj za ' + Math.ceil((lock.until - Date.now()) / 60000) + ' min.'; return; }
       const h = await U.sha256(S.boot.salt + ':' + pin);
       if (h === sel.hash) {
-        await DB.set('lock', { n: 0, until: 0 }); await Session.login(sel); UI.go('home');
+        await DB.set('lock', { n: 0, until: 0 }); await Session.login(sel); UI.go('plan'); if (navigator.onLine) Sync.run();
       } else {
         lock.n++; if (lock.n >= 5) { lock.until = Date.now() + 5 * 60e3; lock.n = 0; }
         await DB.set('lock', lock); pin = ''; dots(); $('#pinMsg').textContent = 'Błędny PIN.';
@@ -120,9 +120,66 @@ const Views = {
     };
   },
 
+  /* Mój plan – zadania z ClickUp na dzień */
+  async plan(par) {
+    UI.header('mój plan', null);
+    const pl = (await DB.get('plan')) || null;
+    const dzien = par.d || U.day(new Date());
+    const wszyscy = !!par.all;
+    const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu);
+    const ja = prac.find(x => S.user && x.name === S.user.name);
+    const osoby = wszyscy ? prac : (ja ? [ja] : []);
+    const zad = ((pl && pl.zadania) || []).filter(t => naDzien(t, dzien));
+    const proj = (S.boot && S.boot.projekty) || [];
+    const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
+    const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
+    // oś godzin: 6–18, rozszerzana o zadania spoza
+    let h0 = 6, h1 = 18;
+    kolumny.forEach(k => k.z.filter(maGodziny).forEach(t => { h0 = Math.min(h0, new Date(t.start).getHours()); h1 = Math.max(h1, Math.ceil((new Date(t.koniec).getHours() * 60 + new Date(t.koniec).getMinutes()) / 60)); }));
+    const PX = 64; // px na godzinę
+    const dzienTxt = new Date(dzien + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    const blok = t => {
+      const a = new Date(t.start), b = new Date(t.koniec);
+      const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(28, (b - a) / 36e5 * PX - 2);
+      const bud = budowaZ(t);
+      return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
+        <span class="pt">${hm(a)}–${hm(b)}</span><b>${U.esc(t.nazwa)}</b><span class="pl">${U.esc(bud ? bud.kod : t.listaNazwa || '')}${bud && bud.wojskowy === 'tak' ? ' · wojskowy' : ''}</span></button>`;
+    };
+    const wiersz = t => { const bud = budowaZ(t); return `<button class="li pli ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}"><span class="dot"></span><span class="grow"><b>${U.esc(t.nazwa)}</b><br><span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span></span>${wszyscy ? `<span class="mute">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
+    const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t))))];
+    view.innerHTML = `
+      <div class="row planbar">
+        <button class="btn" data-d="-1" aria-label="Poprzedni dzień">‹</button>
+        <button class="btn grow" data-d="0"><b>${U.esc(dzienTxt)}</b>${dzien === U.day(new Date()) ? ' · dziś' : ''}</button>
+        <button class="btn" data-d="1" aria-label="Następny dzień">›</button>
+        <button class="btn ${wszyscy ? 'pri' : ''}" id="pAll">${wszyscy ? 'Tylko mój plan' : 'Pokaż wszystkich'}</button>
+        <button class="btn" id="pBud">Wszystkie budowy</button>
+      </div>
+      ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
+      ${S.planErr && pl ? `<p class="mute">${U.esc(S.planErr)} Pokazuję plan z ${new Date(pl.pobrano).toLocaleString('pl-PL')}.</p>` : ''}
+      ${!ja && !wszyscy ? '<p class="mute">Twoje konto nie ma wpisanego ID ClickUp – poproś biuro o uzupełnienie.</p>' : ''}
+      <div class="ptime" style="--n:${kolumny.length || 1}">
+        <div class="pgrid" style="height:${(h1 - h0) * PX}px">
+          <div class="phours">${Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * PX}px">${h0 + i}:00</span>`).join('')}</div>
+          ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${wszyscy ? `<div class="phead">${U.esc(k.o.name)}</div>` : ''}${k.z.filter(maGodziny).map(blok).join('')}</div>`).join('') || '<div class="pcol"></div>'}
+        </div>
+      </div>
+      <h2>Bez godziny (${bezGodz.length})</h2>
+      <div class="list">${bezGodz.map(wiersz).join('') || '<div class="li mute">Brak zadań bez godziny.</div>'}</div>`;
+    view.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const n = +b.dataset.d; UI.go('plan', { ...par, d: n ? U.day(new Date(new Date(dzien + 'T12:00').getTime() + n * 864e5)) : U.day(new Date()) }); });
+    $('#pAll').onclick = () => UI.go('plan', { ...par, all: !wszyscy });
+    $('#pBud').onclick = () => UI.go('home');
+    view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
+      const t = zad.find(x => x.id === b.dataset.t); const bud = t && budowaZ(t);
+      if (!bud) return UI.toast('To zadanie nie jest przypisane do budowy w ELWIS.');
+      openProject(bud.kod);
+    });
+  },
+
   /* Lista budów */
   async home() {
-    UI.header('wybór budowy', null);
+    UI.header('wybór budowy', () => UI.go('plan'));
     const all = (S.boot && S.boot.projekty) || [];
     const recent = (await DB.get('recent')) || [];
     const q = UI.par.q || '';
@@ -137,7 +194,7 @@ const Views = {
       ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(card).join('')}</div>` : ''}
       <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
       <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b>${U.esc(p.kod)}</b><span class="grow">${U.esc(p.nazwa.replace(p.kod, '').trim())}</span>
-        ${p.wojskowy === 'tak' ? '<span class="chip warn">obiekt wojskowy</span>' : ''}<span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" title="Dane w pamięci tabletu">✓ offline</span>' : ''}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
+        ${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}<span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" title="Dane w pamięci tabletu">✓ offline</span>' : ''}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
     function card(p) { return `<button class="tile" data-k="${U.esc(p.kod)}"><b>${U.esc(p.nazwa)}</b><span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" style="align-self:flex-start">✓ offline</span>' : ''}</button>`; }
     const inp = $('#q');
     inp.oninput = () => { UI.par.q = inp.value; Views.home(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
@@ -147,6 +204,7 @@ const Views = {
   /* Karta budowy */
   async budowa() {
     const p = curProj(); if (!p) return UI.go('home');
+    if (!dostepDoBudowy(p)) { S.kod = null; UI.go('home'); return brakDostepu(p); }
     UI.header(p.nazwa, () => UI.go('home'));
     const pd = S.proj || {};
     const F = fold(S.ev);
@@ -403,6 +461,16 @@ const Dialogs = {
   }
 };
 
+/* ---------- Plan dnia ---------- */
+const PLAN_KOLORY = ['#0b4f8a', '#1f7a4d', '#a3561b', '#6b3fa0', '#b02e4c', '#0e7c86', '#5a6b1e', '#8a5a0b'];
+function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }
+function maGodziny(t) { return t.start && t.koniec && t.godzStart && t.godzKoniec && U.day(new Date(t.start)) === U.day(new Date(t.koniec)); }
+function naDzien(t, dzien) {
+  const k = t.koniec ? U.day(new Date(t.koniec)) : null, s0 = t.start ? U.day(new Date(t.start)) : k;
+  return !!k && s0 <= dzien && dzien <= k;
+}
+function osobyTxt(t, prac) { return t.osoby.map(i => (prac.find(p => String(p.cu) === i) || {}).name).filter(Boolean).join(', '); }
+
 /* ---------- Etapy budowy ---------- */
 function etapSwitch() {
   if (!maEtapy()) return '';
@@ -503,7 +571,16 @@ function pickPhoto(urz, rodzaj) {
     UI.toast(rodzaj === 'tabliczka' ? 'Zdjęcie tabliczki zapisane' : 'Zdjęcie zapisane'); Dialogs.device(urz); UI.refresh();
   });
 }
+function brakDostepu(p) {
+  modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="alertdialog" aria-label="Brak dostępu">
+    <div class="shead"><h3>🔒 Brak dostępu</h3></div>
+    <div class="sbody"><p><b>${U.esc(p.nazwa)}</b> to <b>obiekt wojskowy</b>.</p><p>Wejście na budowę i jej dane wymaga uprawnienia M. Twoje konto go nie ma – skontaktuj się z biurem.</p></div>
+    <div class="sfoot"><button class="btn pri" id="bdOk">Rozumiem</button></div></div></div>`;
+  $('#bdOk').onclick = UI.close; $('#bdOk').focus();
+}
 async function openProject(kod) {
+  const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
+  if (!dostepDoBudowy(pp)) return brakDostepu(pp);
   S.kod = kod;
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
@@ -580,6 +657,6 @@ function settings() {
   if (!API.ready()) return UI.go('setup');
   await Session.load();
   if (!S.user) { UI.go('login'); if (navigator.onLine) Sync.run(); return; }
-  UI.go('home');
+  UI.go('plan');
   if (navigator.onLine) Sync.run();
 })();

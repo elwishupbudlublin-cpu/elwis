@@ -109,6 +109,9 @@ const Sync = {
         }
       }
       // 4. dane budów: bieżąca + ostatnio używane
+      // plan dnia z ClickUp (±7 dni) – przed plikami, żeby był od razu po zalogowaniu
+      await this.pullPlan();
+      if (UI.cur === 'plan') UI.refresh();
       // bieżąca + 5 ostatnich (pozostałe z 30 – przy otwarciu albo „Pobierz wszystko ponownie”)
       const recent = (await DB.get('recent')) || [];
       const ile = full ? PAMIEC_BUDOW : 6;
@@ -149,6 +152,11 @@ const Sync = {
     }
     if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); }
     await Pamiec.oznacz(kod);
+  },
+  async pullPlan() {
+    const od = U.day(new Date(Date.now() - 7 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));
+    try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
+    catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
   },
   async pullTech(full) {
     let r;
@@ -238,3 +246,11 @@ async function pobierzPlik(id, onProgress) {
   await DB.putFile(id, { blob: f.blob, mime: f.mime, name: f.name });
   return f;
 }
+
+/* Uprawnienie M (obiekty wojskowe) – z zakładki Pracownicy (od schematu 1.4) */
+function maM() {
+  if (Session.isBiuro()) return true;
+  const u = ((S.boot && S.boot.pracownicy) || []).find(x => S.user && x.name === S.user.name);
+  return !!(u && u.m);
+}
+function dostepDoBudowy(p) { return !p || p.wojskowy !== 'tak' || maM(); }

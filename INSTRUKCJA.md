@@ -37,6 +37,15 @@ Folder `_Budowy/_Techniczne` – DTR wszystkich urządzeń, wrzucane ręcznie (m
 ## 4c. Pamięć tabletu
 Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ offline”). Starsze są usuwane i pobierane ponownie przy otwarciu (wymaga internetu).
 
+## 4d. Plan dnia z ClickUp (od 1.4.0)
+1. W ClickUp: awatar → **Settings → Apps → API Token → Generate** – skopiuj klucz (zaczyna się od `pk_`). Nie wysyłaj go nikomu.
+2. W Apps Script (projekt „ELWIS serwer”): ikona koła zębatego **Ustawienia projektu → Właściwości skryptu → Dodaj właściwość**: nazwa `CLICKUP_TOKEN`, wartość – klucz z punktu 1 → Zapisz.
+3. Przy aktualizacji do 1.4.0 wklej też nowy `appsscript.json` (dochodzi uprawnienie połączeń zewnętrznych), uruchom raz funkcję `instalacja` i zatwierdź nowe uprawnienie, potem Wdróż → Zarządzaj wdrożeniami → Nowa wersja.
+4. Pracownicy muszą mieć wpisane „ID ClickUp” (zakładka Pracownicy), a budowy „ID listy ClickUp” (zakładka Projekty) – wtedy dotknięcie zadania otwiera budowę.
+
+## 4e. Obiekty wojskowe
+Kolumna „Uprawnienie M” (tak/nie) w zakładce Pracownicy. Budowę z „Obiekt wojskowy = tak” otwiera tylko osoba z M = tak lub rola biuro.
+
 ## 5. Gdy coś nie działa
 | Komunikat | Co zrobić |
 |---|---|
@@ -44,3 +53,4 @@ Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ o
 | Skrypt nie jest zainstalowany | Uruchom `instalacja` |
 | Wymagana nowsza wersja aplikacji | Otwórz aplikację przy WiFi, przeciągnij w dół, uruchom ponownie |
 | Budowa nieaktywna lub nieznana | Sprawdź wiersz budowy w Bazie projektów |
+| ClickUp: zły klucz API | Sprawdź właściwość CLICKUP_TOKEN w ustawieniach skryptu |

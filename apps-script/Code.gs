@@ -1,11 +1,11 @@
 /**
  * ELWIS – serwer synchronizacji (Google Apps Script, konto ELWIS).
- * Zamknięta lista operacji: bootstrap, project, file, techniczne, events, push. Wszystko inne → odmowa.
+ * Zamknięta lista operacji: bootstrap, project, file, techniczne, plan, events, push. Wszystko inne → odmowa.
  * Bez danych budów i kluczy w kodzie – konfiguracja w Bazie projektów i we właściwościach skryptu.
  * Wersja: 1.1.0 (schemat danych 1.x, etapy budowy od 1.3). Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.3.0';
+const SCRIPT_VERSION = '1.4.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -55,6 +55,7 @@ function handle_(p, body) {
       case 'project': return out_(project_(String(p.kod || '')));
       case 'file': return out_(file_(String(p.id || ''), p.part));
       case 'techniczne': return out_(techniczne_());
+      case 'plan': return out_(plan_(String(p.od || ''), String(p.do || '')));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'push': return out_(push_(body, tablet));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
@@ -107,7 +108,7 @@ function aktywne_() {
       kod: txt_(r[0]), nazwa: txt_(r[1]), adres: txt_(r[2]), lokalizacja: txt_(r[3]), kontakt: txt_(r[4]),
       zakres: txt_(r[6]).split(/[;,]/).map(s => s.trim()).filter(String), uwagi: txt_(r[7]),
       folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase(),
-      etapy: etapy_(r[12])
+      etapy: etapy_(r[12]), listaCU: txt_(r[9])
     }));
 }
 /** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
@@ -141,7 +142,8 @@ function bootstrap_(tablet) {
   const salt = P.getProperty('SALT');
   const pr = rowsT_(baza_().getSheetByName('Pracownicy'))
     .filter(r => txt_(r[0]) && tak_(r[4]) && txt_(r[3]))
-    .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])) }));
+    .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])),
+      cu: txt_(r[5]), m: tak_(r[7]) || txt_(r[2]) === 'biuro' }));
   const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; return o; });
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
@@ -217,6 +219,54 @@ function file_(id, part) {
   head.parts = n; head.part = i;
   head.b64 = Utilities.base64Encode(bytes.slice(i * PART_BYTES, (i + 1) * PART_BYTES));
   return head;
+}
+
+/* ===== Plan dnia z ClickUp (od 1.4.0) =====
+ * Klucz API ClickUp: właściwość skryptu CLICKUP_TOKEN (wpisuje Łukasz – nigdy w kodzie).
+ * Zwraca zadania przypisane do pracowników z kolumną „ID ClickUp”, z terminem w zakresie dni [od, do]. */
+function plan_(od, doDnia) {
+  const token = P.getProperty('CLICKUP_TOKEN');
+  if (!token) return { ok: true, zadania: [], brakKlucza: true };
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (!re.test(od) || !re.test(doDnia)) throw new Error('Zły zakres dat');
+  const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doDnia + 'T23:59:59').getTime();
+  if (t1 < t0 || t1 - t0 > 31 * 864e5) throw new Error('Zakres dat do 31 dni');
+  const cacheKey = 'plan:' + od + ':' + doDnia;
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(cacheKey);
+  if (hit) return JSON.parse(hit);
+  const ids = rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => tak_(r[4]) && txt_(r[5])).map(r => txt_(r[5]));
+  if (!ids.length) return { ok: true, zadania: [] };
+  const H = { headers: { Authorization: token }, muteHttpExceptions: true };
+  let team = P.getProperty('CLICKUP_TEAM');
+  if (!team) {
+    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team', H);
+    if (r.getResponseCode() !== 200) throw new Error('ClickUp: zły klucz API (' + r.getResponseCode() + ')');
+    team = String(JSON.parse(r.getContentText()).teams[0].id); P.setProperty('CLICKUP_TEAM', team);
+  }
+  const out = [], seen = {};
+  for (let page = 0; page < 20; page++) {
+    const q = ['page=' + page, 'include_closed=true', 'subtasks=true', 'due_date_gt=' + (t0 - 1), 'due_date_lt=' + (t1 + 1)]
+      .concat(ids.map(i => 'assignees[]=' + encodeURIComponent(i))).join('&');
+    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team/' + team + '/task?' + q, H);
+    if (r.getResponseCode() !== 200) throw new Error('ClickUp: błąd ' + r.getResponseCode());
+    const d = JSON.parse(r.getContentText());
+    (d.tasks || []).forEach(t => {
+      if (seen[t.id]) return; seen[t.id] = true;
+      out.push({
+        id: t.id, nazwa: t.name, status: t.status && t.status.status, zamk: !!(t.status && /closed|done/.test(t.status.type)),
+        lista: t.list && t.list.id, listaNazwa: t.list && t.list.name,
+        start: t.start_date ? Number(t.start_date) : null, koniec: t.due_date ? Number(t.due_date) : null,
+        godzStart: !!t.start_date_time, godzKoniec: !!t.due_date_time,
+        osoby: (t.assignees || []).map(a => String(a.id)).filter(i => ids.indexOf(i) >= 0), url: t.url
+      });
+    });
+    if (d.last_page || !(d.tasks || []).length) break;
+  }
+  const res = { ok: true, zadania: out, pobrano: Date.now() };
+  const json = JSON.stringify(res);
+  if (json.length < 90000) cache.put(cacheKey, json, 300);   // 5 min – nie odpytujemy ClickUp przy każdym tablecie
+  return res;
 }
 
 /* ===== _Techniczne: DTR wszystkich urządzeń (wspólne dla wszystkich budów) ===== */
