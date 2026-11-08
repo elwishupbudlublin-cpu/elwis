@@ -50,7 +50,7 @@ const Views = {
     $('#top').hidden = true;
     view.innerHTML = `
       <div style="max-width:560px;margin:40px auto" class="stack">
-        <h1>ELWIS – konfiguracja tabletu</h1>
+        <h1>ELWIS – konfiguracja tabletu</h1><div class="mute" style="margin-top:-8px">Designed by Łukasz Pomarański</div>
         <p class="mute">Jednorazowo, przy WiFi. Adres i klucz tabletu podaje biuro (zakładka Tablety w Bazie projektów).</p>
         <div class="card">
           <label class="f" for="cUrl">Adres serwera ELWIS</label>
@@ -86,8 +86,9 @@ const Views = {
       <div class="login">
         <div class="side">
           <div class="big">ELWIS</div>
+          <div class="designed">Designed by Łukasz Pomarański</div>
           <div>Elektryczne Wsparcie<br>Instalatora i Serwisu</div>
-          <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}<br><span class="credit">Aplikacja stworzona dla HUP-BUD przez Łukasza Pomarańskiego</span></div>
+          <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}</div>
         </div>
         <div class="body">
           <div class="grow" style="min-width:300px"><h1>Kto pracuje?</h1>
@@ -131,61 +132,117 @@ const Views = {
     };
   },
 
-  /* Mój plan – zadania z ClickUp na dzień */
+  /* Mój plan – zadania z ClickUp na dzień (pierwszy ekran po zalogowaniu; wygląd od 1.10.0) */
   async plan(par) {
     UI.header('mój plan', null);
     const pl = (await DB.get('plan')) || null;
-    const dzien = par.d || U.day(new Date());
+    const dzis = U.day(new Date());
+    const dzien = par.d || dzis;
     const wszyscy = !!par.all;
     const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu);
     const ja = prac.find(x => S.user && x.name === S.user.name);
-    const osoby = wszyscy ? prac : (ja ? [ja] : []);
-    const zad = ((pl && pl.zadania) || []).filter(t => naDzien(t, dzien));
+    // wszyscy: zalogowany pierwszy, potem pozostali (biuro też – jego zadania były poza ekranem)
+    const kolejnosc = [...(ja ? [ja] : []), ...prac.filter(x => x !== ja)];
+    const wszystkieZad = (pl && pl.zadania) || [];
+    // domyślnie w „Wszyscy” kolumny tylko osób, które mają zadania tego dnia (pozostałe – jednym dotknięciem w pasku osób)
+    const ileOs = o => wszystkieZad.filter(t => naDzien(t, dzien) && t.osoby.includes(String(o.cu))).length;
+    const ukryci = new Set(par.ukryj || kolejnosc.filter(o => o !== ja && !ileOs(o)).map(o => o.name));
+    const osoby = wszyscy ? kolejnosc.filter(o => !ukryci.has(o.name)) : (ja ? [ja] : []);
+    const mojeZad = t => !wszyscy ? (ja && t.osoby.includes(String(ja.cu))) : osoby.some(o => t.osoby.includes(String(o.cu)));
+    const zad = wszystkieZad.filter(t => naDzien(t, dzien));
     const proj = (S.boot && S.boot.projekty) || [];
     const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
     const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
-    // oś godzin: 6–18, rozszerzana o zadania spoza
+    // zadania bez godzin z „Estimated Time” → wolne miejsca od 7:00 (osobno w każdej kolumnie; od 1.10.0)
+    const wpasowane = new Set();
+    kolumny.forEach(k => {
+      const zajete = k.z.filter(maGodziny).map(t => { const a = new Date(t.start), b = new Date(t.koniec); return [a.getHours() * 60 + a.getMinutes(), b.getHours() * 60 + b.getMinutes()]; });
+      k.auto = [];
+      k.z.filter(t => !maGodziny(t) && t.est > 0).forEach(t => {
+        const dl = Math.max(15, Math.round(t.est / 60000));
+        let od = 7 * 60;
+        for (let i = 0; i < 200; i++) { const kol = zajete.find(([a, b]) => od < b && od + dl > a); if (!kol) break; od = kol[1]; }
+        zajete.push([od, od + dl]); k.auto.push({ t, od, dl }); wpasowane.add(t.id);
+      });
+    });
     let h0 = 6, h1 = 18;
-    kolumny.forEach(k => k.z.filter(maGodziny).forEach(t => { h0 = Math.min(h0, new Date(t.start).getHours()); h1 = Math.max(h1, Math.ceil((new Date(t.koniec).getHours() * 60 + new Date(t.koniec).getMinutes()) / 60)); }));
-    const PX = 64; // px na godzinę
-    const dzienTxt = new Date(dzien + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    kolumny.forEach(k => {
+      k.z.filter(maGodziny).forEach(t => { h0 = Math.min(h0, new Date(t.start).getHours()); h1 = Math.max(h1, Math.ceil((new Date(t.koniec).getHours() * 60 + new Date(t.koniec).getMinutes()) / 60)); });
+      k.auto.forEach(x => { h1 = Math.max(h1, Math.ceil((x.od + x.dl) / 60)); });
+    });
+    const PX = 64;
+    // tydzień wybranego dnia (pn–nd) z liczbą zadań
+    const d0 = new Date(dzien + 'T12:00'); const pn = new Date(d0.getTime() - ((d0.getDay() + 6) % 7) * 864e5);
+    const tydzien = Array.from({ length: 7 }, (_, i) => { const d = new Date(pn.getTime() + i * 864e5); const k = U.day(d); return { k, d, n: wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).length }; });
+    const przesun = n => U.day(new Date(d0.getTime() + n * 864e5));
+    const dzienTxt = d0.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    const mojeDzis = zad.filter(mojeZad);
+    const budowy = new Set(mojeDzis.map(t => t.lista).filter(Boolean));
+    const godz = new Date().getHours();
+    const powitanie = (godz < 12 ? 'Dzień dobry' : godz < 18 ? 'Cześć' : 'Dobry wieczór') + (S.user ? ', ' + S.user.name.split(' ')[0] : '');
     const blok = t => {
-      const a = new Date(t.start), b = new Date(t.koniec);
-      const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(28, (b - a) / 36e5 * PX - 2);
+      const a = new Date(t.start), b2 = new Date(t.koniec);
+      const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
       const bud = budowaZ(t);
       return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
-        <span class="pt">${hm(a)}–${hm(b)}</span><b>${U.esc(t.nazwa)}</b><span class="pl">${U.esc(bud ? bud.kod : t.listaNazwa || '')}${bud && bud.wojskowy === 'tak' ? ' · wojskowy' : ''}</span></button>`;
+        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : `<span class="pl">${U.esc(t.listaNazwa || '')}</span>`}</button>`;
     };
-    const wiersz = t => { const bud = budowaZ(t); return `<button class="li pli ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}"><span class="dot"></span><span class="grow"><b>${U.esc(t.nazwa)}</b><br><span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span></span>${wszyscy ? `<span class="mute">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
-    const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t))))];
+    const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    const blokAuto = ({ t, od, dl }) => {
+      const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3), bud = budowaZ(t);
+      return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
+        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${Math.round(dl / 6) / 10} h${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : ''}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+    };
+    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}"><b>${U.esc(t.nazwa)}</b>
+      <span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span>${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
+    const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t) && !wpasowane.has(t.id))))];
+    const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
+    const inicjaly = n => n.split(' ').map(w => w[0]).join('');
     view.innerHTML = `
-      <div class="row planbar">
-        <button class="btn" data-d="-1" aria-label="Poprzedni dzień">‹</button>
-        <button class="btn grow" data-d="0"><b>${U.esc(dzienTxt)}</b>${dzien === U.day(new Date()) ? ' · dziś' : ''}</button>
-        <button class="btn" data-d="1" aria-label="Następny dzień">›</button>
-        <button class="btn ${wszyscy ? 'pri' : ''}" id="pAll">${wszyscy ? 'Tylko mój plan' : 'Pokaż wszystkich'}</button>
-        <button class="btn" id="pBud">Wszystkie budowy</button>
-      </div>
+      <section class="phero">
+        <div class="phtop">
+          <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
+          <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
+          <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
+        </div>
+        <div class="pweek">
+          <button class="pwnav" data-w="-7" aria-label="Poprzedni tydzień">‹</button>
+          ${tydzien.map(x => `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i></button>`).join('')}
+          <button class="pwnav" data-w="7" aria-label="Następny tydzień">›</button>
+        </div>
+        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span><span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
+      </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
       ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
       ${!ja && !wszyscy ? '<p class="mute">Twoje konto nie ma wpisanego ID ClickUp – poproś biuro o uzupełnienie.</p>' : ''}
+      ${wszyscy ? `<div class="ppeople">${kolejnosc.map(o => { const n = zad.filter(t => t.osoby.includes(String(o.cu))).length; return `<button class="pperson ${ukryci.has(o.name) ? '' : 'on'}" data-who="${U.esc(o.name)}"><span class="av">${U.esc(inicjaly(o.name))}</span>${U.esc(o.name)}${o === ja ? ' (ty)' : ''}<span class="pn">${n}</span></button>`; }).join('')}</div>` : ''}
       <div class="ptime" style="--n:${kolumny.length || 1}">
+        ${wszyscy ? `<div class="pheads">${kolumny.map(k => `<div class="phead">${U.esc(k.o.name)}</div>`).join('')}</div>` : ''}
         <div class="pgrid" style="height:${(h1 - h0) * PX}px">
           <div class="phours">${Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * PX}px">${h0 + i}:00</span>`).join('')}</div>
-          ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${wszyscy ? `<div class="phead">${U.esc(k.o.name)}</div>` : ''}${k.z.filter(maGodziny).map(blok).join('')}</div>`).join('') || '<div class="pcol"></div>'}
+          ${terazTop >= 0 && terazTop <= (h1 - h0) * PX ? `<div class="pnowline" style="top:${terazTop}px"><span>${hm(new Date())}</span></div>` : ''}
+          ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${k.z.filter(maGodziny).map(blok).join('')}${k.auto.map(blokAuto).join('')}</div>`).join('') || '<div class="pcol"></div>'}
         </div>
       </div>
-      <h2>Bez godziny (${bezGodz.length})</h2>
-      <div class="list">${bezGodz.map(wiersz).join('') || '<div class="li mute">Brak zadań bez godziny.</div>'}</div>`;
-    view.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const n = +b.dataset.d; UI.go('plan', { ...par, d: n ? U.day(new Date(new Date(dzien + 'T12:00').getTime() + n * 864e5)) : U.day(new Date()) }); });
-    $('#pAll').onclick = () => UI.go('plan', { ...par, all: !wszyscy });
+      <h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2>
+      <div class="pcards">${bezGodz.map(karta).join('') || '<div class="mute">Brak zadań bez godziny.</div>'}</div>`;
+    const idz = o => UI.go('plan', { ...par, ...o });
+    view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, ukryj: undefined }));
+    view.querySelectorAll('[data-w]').forEach(b => b.onclick = () => idz({ d: przesun(+b.dataset.w), ukryj: undefined }));
+    $('#pAll').onclick = () => idz({ all: true, ukryj: undefined });
+    $('#pMy').onclick = () => idz({ all: false });
     $('#pBud').onclick = () => UI.go('home');
+    view.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who); idz({ ukryj: [...u] }); });
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
       const t = zad.find(x => x.id === b.dataset.t); const bud = t && budowaZ(t);
       if (!bud) return UI.toast('To zadanie nie jest przypisane do budowy w ELWIS.');
       openProject(bud.kod);
     });
+    // przewiń oś do „teraz” (albo do pierwszego zadania)
+    const pt = view.querySelector('.pnowline') || view.querySelector('.pblk');
+    if (pt) pt.scrollIntoView({ block: 'center', behavior: 'instant' });
+    window.scrollTo(0, 0);
   },
 
   /* Lista budów */
@@ -545,6 +602,7 @@ function planWiek(t) {
   const d = new Date(t);
   return d.toLocaleDateString('pl-PL', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + hm(d);
 }
+function odm(n, a, b, c) { return n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c; }
 function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }
 function maGodziny(t) { return t.start && t.koniec && t.godzStart && t.godzKoniec && U.day(new Date(t.start)) === U.day(new Date(t.koniec)); }
 function naDzien(t, dzien) {

@@ -44,7 +44,8 @@ Dotknij kafelka braku – otworzy się okno: zmiana opisu, kategorii, „blokuje
 ## 4c1. Zdjęcia (od 1.8.0)
 Dotknij miniatury, aby zobaczyć zdjęcie na cały ekran. Zdjęcia z innych tabletów pobierają się przy podglądzie (wymaga internetu) w zmniejszonej rozdzielczości. „Usuń zdjęcie” – autor swoje, biuro wszystkie; plik na Dysku trafia do kosza.
 
-## 4d. Plan dnia z ClickUp (od 1.4.0)
+## 4d. Plan dnia z ClickUp (od 1.4.0; wygląd od 1.10.0)
+Od 1.10.0: przełącznik Mój plan / Wszyscy, pasek tygodnia, pasek osób (dotknięcie pokazuje / ukrywa kolumnę). Zadania bez godzin, które mają w ClickUp „Estimated Time”, aplikacja wpasowuje w wolne miejsca od 7:00 (kreskowane, „Kierownik nie określił pory dnia”) – żeby ustalić konkretną porę, wpisz w ClickUp godziny startu i końca.
 1. W ClickUp: awatar → **Settings → Apps → API Token → Generate** – skopiuj klucz (zaczyna się od `pk_`). Nie wysyłaj go nikomu.
 2. W Apps Script (projekt „ELWIS serwer”): ikona koła zębatego **Ustawienia projektu → Właściwości skryptu → Dodaj właściwość**: nazwa `CLICKUP_TOKEN`, wartość – klucz z punktu 1 → Zapisz.
 3. Przy aktualizacji do 1.4.0 wklej też nowy `appsscript.json` (dochodzi uprawnienie połączeń zewnętrznych), uruchom raz funkcję `instalacja` i zatwierdź nowe uprawnienie, potem Wdróż → Zarządzaj wdrożeniami → Nowa wersja.

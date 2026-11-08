@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.10.0 – 2026-11-08 (aplikacja i serwer)
+- Nowy wygląd ekranu „Mój plan”: karta z powitaniem, przełącznik Mój plan / Wszyscy i „Wszystkie budowy” u góry, pasek tygodnia (pn–nd, kropki = liczba zadań), podsumowanie dnia, linia „teraz”, plakietki z kodem budowy, zadania bez godziny jako kafelki.
+- „Wszyscy”: kolumna zalogowanej osoby pierwsza; domyślnie tylko osoby z zadaniami w danym dniu (wcześniej np. kolumna biura była poza ekranem); pasek osób z liczbą zadań – dotknięcie pokazuje / ukrywa kolumnę; nazwiska przyklejone przy przewijaniu.
+- Zadania bez godzin z „Estimated Time” w ClickUp są wpasowywane w wolne miejsca osi od 7:00 (kreskowane, „Kierownik nie określił pory dnia”); serwer zwraca `est` (ms).
+- Ekran logowania i konfiguracji: „Designed by Łukasz Pomarański” pod logo.
+- Przycisk „wstecz” w nagłówku dwa razy szerszy (88 px) – łatwiej trafić na budowie.
+
 ## 1.9.0 – 2026-11-08 (aplikacja i serwer)
 - Braki: dotknięcie kafelka otwiera okno braku – kategoria, opis, „blokuje pracę”, zdjęcia, komentarze (z tekstem i zdjęciami), historia zmian.
 - Uprawnienia: edycja, komentarz i zamknięcie – każdy; usunięcie – autor braku i biuro; ponowne otwarcie zamkniętego – biuro.

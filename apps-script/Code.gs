@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.9.0';
+const SCRIPT_VERSION = '1.10.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -272,7 +272,8 @@ function plan_(od, doDnia) {
         lista: t.list && t.list.id, listaNazwa: t.list && t.list.name,
         start: t.start_date ? Number(t.start_date) : null, koniec: t.due_date ? Number(t.due_date) : null,
         godzStart: !!t.start_date_time, godzKoniec: !!t.due_date_time,
-        osoby: (t.assignees || []).map(a => String(a.id)).filter(i => ids.indexOf(i) >= 0), url: t.url
+        osoby: (t.assignees || []).map(a => String(a.id)).filter(i => ids.indexOf(i) >= 0), url: t.url,
+        est: t.time_estimate ? Number(t.time_estimate) : 0   // „Estimated Time” w ms (od 1.10.0)
       });
     });
     if (d.last_page || !(d.tasks || []).length) break;

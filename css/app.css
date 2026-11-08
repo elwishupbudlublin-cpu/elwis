@@ -133,20 +133,47 @@ video.scan{width:100%;max-height:50vh;background:#000;border-radius:12px}
 
 .brand{align-items:center}.logobox{display:flex;flex-direction:column;line-height:1;flex:none}.logobox .ver{font-size:11px;opacity:.75;margin-top:3px;letter-spacing:.02em}
 
-/* Mój plan */
-.planbar{flex-wrap:wrap;margin-bottom:12px}.planbar .btn{min-height:48px}
-.ptime{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 0;margin-bottom:12px}
-.pgrid{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(170px,1fr));gap:6px;margin-left:52px;margin-top:22px}
+/* Mój plan (wygląd od 1.10.0) */
+.phero{background:linear-gradient(135deg,var(--pri),#1d6fb8 70%,#2a8bd6);color:#fff;border-radius:18px;padding:18px 18px 14px;margin-bottom:14px;box-shadow:0 6px 18px rgba(11,79,138,.25)}
+.phtop{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.phero h1{margin:0;color:#fff;font-size:26px}
+.phhi{font-size:14px;opacity:.85}
+.pseg{background:rgba(255,255,255,.18);border-radius:12px;padding:3px;display:flex}
+.phero .pseg button{border:0;background:transparent;color:#fff;font-weight:600;padding:10px 16px;border-radius:10px;min-height:44px;font-size:15px}
+.phero .pseg button.on{background:#fff;color:var(--pri)}
+.pbudbtn{background:#fff;color:var(--pri);border:0;font-weight:700;min-height:48px}
+.pweek{display:flex;gap:6px;margin-top:14px;align-items:stretch}
+.pwnav{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:10px;width:40px;font-size:24px}
+.pday{flex:1;border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:6px 0 4px;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:64px}
+.pday span{font-size:12px;opacity:.85;text-transform:capitalize}.pday b{font-size:20px}.pday i{font-style:normal;font-size:11px;letter-spacing:1px;line-height:1;opacity:.9}
+.pday.today{box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
+.pday.on{background:#fff;color:var(--pri)}
+.phsum{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pchip{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600}
+.pchip.pnow{cursor:pointer;background:#fff;color:var(--pri)}
+.ppeople{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px}
+.pperson{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:22px;padding:4px 10px 4px 4px;white-space:nowrap;font-size:14px;opacity:.55}
+.pperson.on{opacity:1;border-color:var(--pri);box-shadow:0 0 0 1px var(--pri) inset}
+.pperson .av{width:28px;height:28px;border-radius:50%;background:var(--pri);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.pperson .pn{background:#eef3f8;border-radius:10px;padding:0 7px;font-size:12px;font-weight:700}
+.ptime{overflow:auto;max-height:62vh;background:#fff;border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 0;margin-bottom:14px;position:relative}
+.pheads{position:sticky;top:-8px;z-index:3;display:grid;grid-template-columns:repeat(var(--n),minmax(150px,1fr));gap:6px;margin-left:52px;background:#fff;padding:6px 0}
+.phead{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:6px}
+.pgrid{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(150px,1fr));gap:6px;margin-left:52px;margin-top:10px}
 .phours{position:absolute;left:-52px;top:0;bottom:0;width:48px;pointer-events:none}
 .phours span{position:absolute;right:4px;transform:translateY(-50%);font-size:12px;color:var(--mute)}
 .pcol{position:relative;border-left:1px dashed var(--line);background:repeating-linear-gradient(to bottom,#e6eaf0 0 1px,transparent 1px 64px)}
-.phead{position:absolute;top:-22px;left:6px;font-weight:700;font-size:13px;white-space:nowrap}
-.pblk{position:absolute;left:4px;right:4px;border:0;border-left:5px solid var(--c);background:color-mix(in srgb,var(--c) 14%,#fff);border-radius:8px;padding:4px 8px;text-align:left;overflow:hidden;display:flex;flex-direction:column;gap:1px;font-size:14px;z-index:1}
+.pnowline{position:absolute;left:-6px;right:0;height:0;border-top:2px solid #e0453a;z-index:2;pointer-events:none}
+.pnowline span{position:absolute;left:-48px;top:-10px;background:#e0453a;color:#fff;font-size:11px;font-weight:700;border-radius:6px;padding:1px 5px}
+.pblk{position:absolute;left:4px;right:4px;border:0;border-left:5px solid var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);border-radius:10px;padding:5px 8px;text-align:left;overflow:hidden;display:flex;flex-direction:column;gap:2px;font-size:14px;z-index:1;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .pblk .pt,.pblk .pl{font-size:12px;color:var(--mute)}
-.pblk.done,.pli.done{opacity:.55}.pblk.done b,.pli.done b{text-decoration:line-through}
-.pli{border-left:5px solid var(--c)}.pli .dot{display:none}
-
+.pbadge{align-self:flex-start;background:var(--c);color:#fff;border-radius:8px;padding:0 7px;font-size:12px;font-weight:700}
+.pblk.done,.pcard.done{opacity:.55}.pblk.done b,.pcard.done b{text-decoration:line-through}
+.pcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:20px}
+.pcard{border:1px solid var(--line);border-left:6px solid var(--c);background:#fff;border-radius:12px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:3px;font-size:15px}
+.pcard .pwho{font-size:12px;color:var(--pri);font-weight:600}
 .planage{margin:-4px 0 10px;font-size:13px;color:var(--mute)}.planage.old{color:#a3561b;font-weight:600}
+.login .side .designed{font-size:13px;opacity:.85;margin-top:-10px;font-style:italic}
 /* Protokoły (1.5.0) */
 .psek{display:flex;flex-direction:column;gap:10px}
 .pgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px 16px}
@@ -182,3 +209,6 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .fotoview .fvimg{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:8px}
 .fotoview .fvimg img{max-width:100%;max-height:100%;object-fit:contain}
 .fotoview .fvbar .btn:not(.bad){color:#111;background:#fff}
+.pblk.pauto{border:2px dashed var(--c);border-left:5px dashed var(--c);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 10%,#fff) 0 8px,#fff 8px 16px)}
+.pauton{font-size:11px;font-weight:700;color:#a3561b}
+#btnBack{width:88px;font-size:30px;line-height:1}
