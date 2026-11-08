@@ -139,7 +139,8 @@ const Views = {
     const dzis = U.day(new Date());
     const dzien = par.d || dzis;
     const wszyscy = !!par.all;
-    const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu);
+    // kalendarzy roli biuro (administrator) nie widzą pracownicy (od 1.11.2)
+    const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu && (Session.isBiuro() || x.rola !== 'biuro' || (S.user && x.name === S.user.name)));
     const ja = prac.find(x => S.user && x.name === S.user.name);
     // wszyscy: zalogowany pierwszy, potem pozostali (biuro też – jego zadania były poza ekranem)
     const kolejnosc = [...(ja ? [ja] : []), ...prac.filter(x => x !== ja)];
