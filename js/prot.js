@@ -1,5 +1,5 @@
 /* ELWIS – protokoły (od 1.5.0): formularz budowany z definicji (_Szablony/szablon_konfig), zapis jako zdarzenia „protokol”.
- * Numer protokołu nadaje serwer przy pierwszej synchronizacji po „Zakończ”. Word – na żądanie (rola biuro). */
+ * Numer protokołu nadaje serwer przy pierwszej synchronizacji po „Prześlij”. Word – na żądanie (rola biuro). */
 
 const Prot = {
   /* Wszystkie aktywne protokoły z Bazy (bootstrap) z poprawną definicją. */
@@ -213,7 +213,7 @@ ProtViews.protokol = async function (par) {
     const dis = tylkoOdczyt ? 'disabled' : '';
     let inner;
     switch (f.typ) {
-      case 'auto': inner = `<div class="auto" data-auto="${U.esc(f.id)}">${U.esc(f.id === 'nr_protokolu' ? (nr ? ocenWzor(f.wzor, Object.assign(protCtx(urzId), { nr, dd: (dane.data || '').slice(8, 10), mm: (dane.data || '').slice(5, 7) }), {}) : 'nadawany po „Zakończ” i synchronizacji') : v || '')}</div>`; break;
+      case 'auto': inner = `<div class="auto" data-auto="${U.esc(f.id)}">${U.esc(f.id === 'nr_protokolu' ? (nr ? ocenWzor(f.wzor, Object.assign(protCtx(urzId), { nr, dd: (dane.data || '').slice(8, 10), mm: (dane.data || '').slice(5, 7) }), {}) : 'nadawany po „Prześlij” i synchronizacji') : v || '')}</div>`; break;
       case 'taknie': inner = `<div class="seg">${['tak', 'nie'].map(o => `<button type="button" ${key} data-v="${o}" class="${v === o ? 'on' : ''}" ${dis}>${o.toUpperCase()}</button>`).join('')}</div>`; break;
       case 'wybor': inner = `<div class="seg">${f.opcje.map(o => `<button type="button" ${key} data-v="${U.esc(o)}" class="${v === o ? 'on' : ''}" ${dis}>${U.esc(o)}</button>`).join('')}</div>`; break;
       case 'znacznik': inner = `<div class="seg"><button type="button" ${key} data-tog="1" class="${v ? 'on' : ''}" ${dis}>${v ? '☒ tak' : '☐ nie'}</button></div>`; break;
@@ -247,7 +247,7 @@ ProtViews.protokol = async function (par) {
     <p class="mute" style="margin-top:0">Urządzenie <b>${U.esc(urzId || 'bez urządzenia')}</b> · wersja ${U.esc(rec.wersja)}${zapisany ? ' · ostatni zapis: ' + U.esc(zapisany.kto) + ' ' + U.fmt(zapisany.ts) : ''}${tylkoOdczyt ? ' · zablokowany przez biuro (tylko podgląd)' : ''}</p>
     <form class="stack" id="pform" onsubmit="return false">${def.sekcje.map(sekcja).join('')}</form>
     <div class="pfoot">
-      ${tylkoOdczyt ? '' : '<button class="btn" id="pSave">Zapisz</button><button class="btn pri" id="pDone">Zakończ</button>'}
+      ${tylkoOdczyt ? '' : '<button class="btn" id="pSave">Zapisz</button><button class="btn pri" id="pDone">Prześlij</button>'}
       ${Session.isBiuro() || (rec.stan === 'roboczy' && !nr) ? '<button class="btn bad" id="pDel">Usuń protokół</button>' : ''}
       ${Session.isBiuro() && rec.stan !== 'roboczy' ? `<button class="btn" id="pLock">${rec.stan === 'zablokowany' ? 'Odblokuj' : 'Zablokuj'}</button><button class="btn" id="pWord">Generuj Word</button>` : ''}
     </div>
@@ -319,7 +319,7 @@ ProtViews.protokol = async function (par) {
   if ($('#pDone')) $('#pDone').onclick = async () => {
     const b = brakiProtokolu(def, dane); if (b.length) return pokazBraki(b);
     rec.stan = rec.stan === 'zablokowany' ? 'zablokowany' : 'gotowy';
-    await zapisz(rec.stan); UI.toast(nr ? 'Protokół zapisany' : 'Protokół zakończony – numer nada serwer przy synchronizacji'); UI.go('protokoly');
+    await zapisz(rec.stan); UI.toast(nr ? 'Protokół zapisany' : 'Protokół przesłany – numer nada serwer przy synchronizacji'); UI.go('protokoly');
   };
   if ($('#pDel')) $('#pDel').onclick = async () => {
     if (!confirm('Usunąć protokół' + (nr ? ' ' + nr : '') + '? Zniknie z list' + (nr ? '; numer nie zostanie użyty ponownie, plik Word trafi do kosza' : '') + '.')) return;

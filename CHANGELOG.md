@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.6.2 – 2026-11-08 (aplikacja)
+- Protokół: przycisk „Zakończ” nazywa się „Prześlij” (działanie bez zmian: sprawdza pola wymagane, po synchronizacji serwer nadaje numer); na kafelku budowy „przesłanych” zamiast „zakończonych”.
+
 ## 1.6.1 – 2026-11-08 (aplikacja i serwer)
 - Usuwanie protokołu: przycisk „Usuń protokół” w formularzu (z potwierdzeniem). Rola biuro – każdy protokół; pracownik – tylko szkic bez numeru.
 - Usunięcie = zdarzenie `protokol` ze stanem `usuniety` (historia zostaje); protokół znika z list, „Do wykonania” wraca. Numer nie jest nadawany ponownie.

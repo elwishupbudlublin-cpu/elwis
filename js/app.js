@@ -244,7 +244,7 @@ const Views = {
             ${zakres.filter(z => !U.norm(z).startsWith('podlacz')).map(z => { const pr = Prot.lista().filter(x => U.norm(z).startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(U.norm(z)));
               if (!pr.length) return `<button class="tile" disabled><b>${U.esc(z)}</b><span class="mute">w kolejnej wersji aplikacji</span></button>`;
               const ps = Object.values(F.prot).filter(x => pr.some(q => q.id === x.def));
-              return `<button class="tile" data-prot="1"><b>${U.esc(z)} – protokoły</b><span class="mute">${pr.map(q => U.esc(q.nazwa)).join(', ')}</span><span class="mute">${ps.filter(x => x.stan !== 'roboczy').length} zakończonych · ${ps.filter(x => x.stan === 'roboczy').length} w trakcie</span></button>`; }).join('')}
+              return `<button class="tile" data-prot="1"><b>${U.esc(z)} – protokoły</b><span class="mute">${pr.map(q => U.esc(q.nazwa)).join(', ')}</span><span class="mute">${ps.filter(x => x.stan !== 'roboczy').length} przesłanych · ${ps.filter(x => x.stan === 'roboczy').length} w trakcie</span></button>`; }).join('')}
             ${!zakres.some(z => Prot.lista().some(x => U.norm(z).startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(U.norm(z)))) && Prot.wszystkie().length ? `<button class="tile" data-prot="1"><b>Protokoły</b><span class="mute">brak dedykowanych tej budowie · ${Prot.wszystkie().length} dostępnych</span></button>` : ''}
           </div>
           ${maEtapy() ? `<h2 style="margin:6px 0 0">Postęp etapów</h2><div class="grid2">${etapyOf().map(e => etapTile(e, F)).join('')}</div>` : ''}
