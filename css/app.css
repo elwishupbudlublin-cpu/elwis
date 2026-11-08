@@ -223,5 +223,6 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .pblk,.pcard{position:relative}.pblk{position:absolute}
 .ptw{position:absolute;top:4px;right:6px;display:flex;align-items:center;gap:3px;font-size:13px;font-weight:700;color:#333;background:rgba(255,255,255,.75);border-radius:8px;padding:1px 6px}
 .ptw .ptwi{font-size:20px;line-height:1}
-.pblk:has(.ptw) .pt,.pblk:has(.ptw) b,.pcard:has(.ptw) b{padding-right:84px}
+.pbud{font-size:11px;color:#8a8f98;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pblk:has(.ptw) .pt,.pblk:has(.ptw) .pbud,.pcard:has(.ptw) .pbud,.pblk:has(.ptw) b,.pcard:has(.ptw) b{padding-right:84px}
 .pweekwrap{overflow:hidden;margin-top:14px}.pweekwrap .pweek{margin-top:0;will-change:transform}

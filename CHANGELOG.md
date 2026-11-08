@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.6 – 2026-11-08 (aplikacja)
+- Kafelki zadań w planie: nad nazwą zadania mała szara linia z numerem i nazwą budowy (zamiast plakietki z samym numerem); dla zadań spoza ELWIS – nazwa listy z ClickUp.
+
 ## 1.11.5 – 2026-11-08 (aplikacja)
 - Pasek dni: przy przeciąganiu kolejne dni wjeżdżają płynnie (po 7 dni zapasu z każdej strony), po puszczeniu pasek dociąga do pełnego dnia; tap w dzień działa jak dotąd.
 - Kafelek zadania: po prawej pogoda (7–16, deszcz) z lokalizacji budowy, jeśli jest wpisana.

@@ -192,8 +192,12 @@ const Views = {
       const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
       const bud = budowaZ(t);
       return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : `<span class="pl">${U.esc(t.listaNazwa || '')}</span>`}</button>`;
+        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b></button>`;
     };
+    // numer i nazwa budowy szarą małą czcionką nad nazwą zadania (od 1.11.6)
+    const pbud = t => { const b = budowaZ(t); const n = b ? String(b.nazwa || '').replace(new RegExp('^' + b.kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '') : '';
+      const txt = b ? `${b.kod} ${n}${b.wojskowy === 'tak' && !/\bW$/.test(n) ? ' · W' : ''}` : (t.listaNazwa || 'zadanie spoza budów ELWIS');
+      return `<span class="pbud">${U.esc(txt)}</span>`; };
     // pogoda na kafelku zadania – tylko gdy budowa ma lokalizację (od 1.11.5)
     const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(b.lokalizacja); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
       return p ? `<span class="ptw" title="${U.esc(b.nazwa)}: 7–16 ${p.tmin}°…${p.tmax}°${p.pada ? ', pada' : ''}"><span class="ptwi">${p.ikona}</span>${p.tmin}°/${p.tmax}°</span>` : ''; };
@@ -201,10 +205,10 @@ const Views = {
     const blokAuto = ({ t, od, dl, bezEst }) => {
       const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3), bud = budowaZ(t);
       return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : ''}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b><span class="pauton">Kierownik nie określił pory dnia</span></button>`;
     };
-    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}<b>${U.esc(t.nazwa)}</b>
-      <span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span>${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
+    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>
+      ${t.status ? `<span class="mute">${U.esc(t.status)}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
     const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t) && !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
     const inicjaly = n => n.split(' ').map(w => w[0]).join('');
