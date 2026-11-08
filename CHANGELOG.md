@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.8.0 – 2026-11-08 (aplikacja i serwer)
+- Podgląd zdjęć: dotknięcie miniatury (karta urządzenia, karty braków) otwiera zdjęcie na cały ekran z autorem i datą. Zdjęcia zrobione na tym tablecie – w pełnej rozdzielczości; z innych tabletów – pobierane na żądanie i zapisywane pomniejszone (ok. 800 px), żeby nie zajmowały miejsca; usuwane razem z budową z pamięci.
+- Usuwanie zdjęć: w podglądzie „Usuń zdjęcie” (autor – swoje, biuro – wszystkie); nowe zdarzenie `foto_usun`; niewysłane zdjęcie nie zostanie wysłane, wysłane serwer przenosi z Dysku do kosza (sprawdza autora).
+- Serwer: operacja `foto` (podgląd zdjęcia z folderu Zdjęcia aktywnej budowy, tylko pliki zapisane przez ELWIS).
+
 ## 1.7.0 – 2026-11-08 (aplikacja i serwer, schemat 1.6)
 - Synchronizacja: procent w nagłówku („Synchronizuję… 45%”) i pasek postępu pod nagłówkiem z opisem etapu (wysyłka zdjęć i wpisów, plan dnia, „Budowa 2/6 · pliki 3/12”, „DTR 5/18 · 45 MB / 120 MB”).
 - Pamięć tabletu: limit budów liczony z wolnego miejsca (rezerwa 1 GB na zdjęcia, szkice i aktualizacje) – do 30 przy dużej ilości miejsca, mniej przy małej; najstarsze budowy usuwane najpierw; bieżąca i budowy z niewysłanymi danymi zostają zawsze.

@@ -50,6 +50,7 @@ const DB = (() => {
     delSentPhotos: (kod) => tx('photos', 'readwrite', s => req(s.getAll()).then(a => a.filter(p => p.sent && p.kod === kod).forEach(p => s.delete(p.id)))),
     putPhoto: (p) => tx('photos', 'readwrite', s => { s.put(p); }),
     getPhoto: (id) => tx('photos', 'readonly', s => req(s.get(id))),
+    delPhoto: (id) => tx('photos', 'readwrite', s => { s.delete(id); }),
     unsentPhotos: () => tx('photos', 'readonly', s => req(s.getAll())).then(a => a.filter(p => !p.sent)),
     clearAll: () => open().then(d => Promise.all(['kv', 'events', 'files', 'photos'].map(n => new Promise(res => {
       const t = d.transaction(n, 'readwrite'); t.objectStore(n).clear(); t.oncomplete = res;

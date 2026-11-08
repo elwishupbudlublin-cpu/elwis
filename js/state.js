@@ -39,21 +39,31 @@ function fold(events) {
   const notes = [];
   const prot = {};     // pid -> ostatni zapis protokołu
   const D = id => (dev[id] = dev[id] || { kroki: {}, sn: '', snKto: '', foto: [], hist: [] });
+  const fotoInfo = {};   // fid -> {kto, ts, urz, rodzaj} – autor zdjęcia (podgląd i usuwanie, od 1.8.0)
+  const usuniete = new Set();
+  const fi = (fid, e, rodzaj) => { if (fid && !fotoInfo[fid]) fotoInfo[fid] = { fid, kto: e.kto, ts: e.ts, urz: e.urz || '', rodzaj }; };
   for (const e of ev) {
     const d = e.d || {};
     if (e.urz) D(e.urz).hist.push(e);
     switch (e.typ) {
       case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
-      case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); break;
-      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null }; break;
+      case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
+      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
       case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
-      case 'notatka': notes.push(e); break;
+      case 'notatka': notes.push(e); (d.foto || []).forEach(f => fi(f, e, 'notatka')); break;
+      case 'foto_usun': if (d.fid) usuniete.add(d.fid); break;
       case 'protokol': if (d.pid && d.stan === 'usuniety') { delete prot[d.pid]; break; }   // usunięty (1.6.1) – znika z list
         if (d.pid) prot[d.pid] = { pid: d.pid, def: d.def, wersja: d.wersja, prefiks: d.prefiks, stan: d.stan || 'roboczy', nr: d.nr || (prot[d.pid] && prot[d.pid].nr) || '', dane: d.dane || {}, urz: e.urz, kto: e.kto, ts: e.ts }; break;
     }
   }
-  return { dev, braki, notes, prot };
+  // usunięte zdjęcia znikają z kart urządzeń, braków i notatek (historia zostaje w zdarzeniach)
+  if (usuniete.size) {
+    Object.values(dev).forEach(x => { x.foto = x.foto.filter(f => !usuniete.has(f.fid)); });
+    Object.values(braki).forEach(b => { b.foto = (b.foto || []).filter(f => !usuniete.has(f)); });
+    usuniete.forEach(f => delete fotoInfo[f]);
+  }
+  return { dev, braki, notes, prot, fotoInfo, usuniete };
 }
 
 function devStatus(u, F) {
@@ -270,6 +280,8 @@ const Pamiec = {
       const p = await DB.get('proj:' + kod);
       if (p) for (const id of [...Object.values(p.rzuty || {}), ...(p.pliki || []).map(f => f.id)]) if (!(await this.uzywany(id, kod))) await DB.delFile(id);
       await DB.del('proj:' + kod); await DB.del('seq:' + kod);
+      const Fk = fold(await DB.eventsFor(kod));   // pomniejszone zdjęcia z innych tabletów
+      for (const fid of [...Object.keys(Fk.fotoInfo), ...Fk.usuniete]) await DB.delFile('mini:' + fid);
       await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod); await DB.del('rozmiar:' + kod);
     }
     await DB.set('offline', l.filter(k => keep.has(k)));

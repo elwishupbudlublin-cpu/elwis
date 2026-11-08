@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -53,6 +53,7 @@ const API = (() => {
       return { name: first.name, mime: first.mime, blob: new Blob(chunks, { type: first.mime }) };
     },
     events: (kod, since) => get('events', { kod, since: String(since || 0) }),
+    foto: (kod, fid) => get('foto', { kod, fid }),
     push: (kod, events, photos) => post({ action: 'push', kod, events, photos }),
     docx: (kod, pid) => post({ action: 'docx', kod, pid, kto: S.user ? S.user.name : '' })
   };

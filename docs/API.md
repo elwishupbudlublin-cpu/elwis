@@ -6,6 +6,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 
 | Operacja | Metoda | Parametry | Zwraca |
 |---|---|---|---|
+| `foto` | GET | `kod, fid` → `{mime, b64}` – zdjęcie z folderu Zdjęcia aktywnej budowy (od 1.8.0; tablet zapisuje je pomniejszone) |
 | `bootstrap` | GET | `pamiec?` (od 1.7.0 – opis stanu pamięci tabletu; serwer zapisuje go w Tablety, kol. F) | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash,cu,m}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy,etapy[{id,opis}],listaCU,inwestor,zamawiajacy}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}, protokoly[{id,nazwa,wersja,rodzaj,powiazania[],powiazanie,def,blad}]` (protokoly od 1.5.0; `powiazania` od 1.6.0 – prefiksy z kolumny E, `powiazanie` = pierwszy – tylko „Aktywny = tak”, `def` = treść pliku definicji) |
 | `project` | GET | `kod` | `etapy[{id,opis}], urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status,etap}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}, ostrzezenia[]` |
 | `file` | GET | `id`, `part?` | `name, mime, size, b64` – tylko pliki z „Do wglądu” aktywnej budowy lub z `_Techniczne`. Z `part` (od 1.2.0): część nr `part` po 6 MB + `parts` (liczba części), pliki do 60 MB; bez `part`: cały plik do 20 MB |
@@ -26,6 +27,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `brak` | `{kat, opis, blokuje, foto[], etap?}` – `etap` tylko dla braku bez urządzenia zgłoszonego w wybranym etapie |
 | `brak_zamk` | `{bid, opis}` |
 | `notatka` | `{tekst, foto[]}` |
+| `foto_usun` | `{fid}` – usunięcie zdjęcia (od 1.8.0); serwer akceptuje od autora zdjęcia lub roli biuro i przenosi plik do kosza |
 | `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).

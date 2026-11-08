@@ -334,7 +334,7 @@ const Views = {
     bindEtap();
     view.querySelectorAll('[data-c]').forEach(b => b.onclick = () => UI.go('braki', { closed: b.dataset.c === '1' }));
     $('#nb').onclick = () => Dialogs.brak('');
-    bindIssue(view);
+    bindIssue(view); hydrateFotos(view);
   },
 
   /* Protokoły (js/prot.js) */
@@ -418,7 +418,7 @@ const Dialogs = {
     modal.querySelectorAll('[data-npr]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { nowy: b.dataset.npr, urz: id }); });
     $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }); };
     bindIssue(modal, () => Dialogs.device(id));
-    thumbs($('#thumbs'), st.foto);
+    thumbs($('#thumbs'), st.foto); hydrateFotos(modal);
   },
 
   brak(urz) {
@@ -543,7 +543,7 @@ function attention(arr, F) {
 function issueHtml(b) {
   const canClose = !b.zamk && (Session.isBiuro() || b.kto === S.user.name);
   return `<div class="issue ${b.zamk ? 'closed' : ''}${b.urz ? ' link' : ''}" ${b.urz ? `data-iu="${U.esc(b.urz)}" role="button" tabindex="0" aria-label="Otwórz urządzenie ${U.esc(b.urz)}"` : ''}><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
-    <div>${U.esc(b.opis)}</div><div class="mute">Zgłosił: ${U.esc(b.kto)}${b.foto && b.foto.length ? ' · ' + b.foto.length + ' zdjęć' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
+    <div>${U.esc(b.opis)}</div>${b.foto && b.foto.length ? `<div class="thumbs" data-fotos="${U.esc(b.foto.join(','))}"></div>` : ''}<div class="mute">Zgłosił: ${U.esc(b.kto)}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
     ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
 }
 function bindIssue(root, after) {
@@ -562,16 +562,67 @@ function bindIssue(root, after) {
 }
 function histTxt(e) {
   const d = e.d || {};
-  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ;
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ;
 }
 async function thumbs(el, foto) {
+  if (!el) return;
   if (!foto.length) { el.innerHTML = '<span class="mute">Brak zdjęć.</span>'; return; }
+  el.innerHTML = '';
   for (const f of foto.slice(-12)) {
-    const p = await DB.getPhoto(f.fid);
-    if (p) { const i = new Image(); i.src = URL.createObjectURL(p.blob); i.alt = f.rodzaj; el.appendChild(i); }
-    else { const s = document.createElement('span'); s.className = 'chip'; s.textContent = f.rodzaj + ' (na Dysku)'; el.appendChild(s); }
+    const fid = f.fid || f;
+    const p = await DB.getPhoto(fid), m = p ? null : await DB.getFile('mini:' + fid);
+    let n;
+    if (p || m) { n = new Image(); n.src = URL.createObjectURL((p || m).blob); n.alt = f.rodzaj || 'zdjęcie'; }
+    else { n = document.createElement('button'); n.type = 'button'; n.className = 'chip fotochip'; n.textContent = '📷 ' + (f.rodzaj && f.rodzaj !== 'zdjecie' ? f.rodzaj : 'zdjęcie'); }
+    n.dataset.foto = fid; n.title = 'Podgląd';
+    n.onclick = ev => { ev.stopPropagation(); Foto.podglad(fid); };
+    el.appendChild(n);
   }
 }
+/* miniatury zdjęć w kartach braków (data-fotos="fid,fid") */
+function hydrateFotos(root) { (root || document).querySelectorAll('[data-fotos]').forEach(el => thumbs(el, el.dataset.fotos.split(',').filter(String))); }
+
+/* Podgląd i usuwanie zdjęć (od 1.8.0): pełna rozdzielczość – zdjęcia z tego tabletu; z innych tabletów – pomniejszone, pobierane na żądanie */
+const Foto = {
+  info(fid) { return fold(S.ev).fotoInfo[fid] || {}; },
+  mozeUsunac(fid) { const i = this.info(fid); return Session.isBiuro() || (i.kto && S.user && i.kto === S.user.name); },
+  async obraz(fid) {
+    const p = await DB.getPhoto(fid); if (p) return { blob: p.blob, pelne: true };
+    const m = await DB.getFile('mini:' + fid); if (m) return { blob: m.blob, pelne: false };
+    if (!navigator.onLine) throw new Error('Zdjęcie jest na Dysku – połącz się z siecią, aby je zobaczyć.');
+    const r = await API.foto(S.kod, fid);
+    const mini = await U.compress(U.b64ToBlob(r.b64, r.mime || 'image/jpeg'), 800, 0.6);   // pomniejszone – nie zapycha pamięci
+    await DB.putFile('mini:' + fid, { blob: mini, mime: 'image/jpeg', name: fid + '.jpg' });
+    return { blob: mini, pelne: false };
+  },
+  async podglad(fid) {
+    const wrap = document.createElement('div'); wrap.className = 'fotoview'; wrap.id = 'fotoView';
+    const i = this.info(fid);
+    wrap.innerHTML = `<div class="fvbar"><span class="grow">${U.esc(i.urz || '')} ${U.esc(({ tabliczka: 'tabliczka', brak: 'zdjęcie braku', notatka: 'zdjęcie notatki' })[i.rodzaj] || 'zdjęcie')} · ${U.esc(i.kto || '')} ${i.ts ? U.fmt(i.ts) : ''} <span class="mute" id="fvJak"></span></span>
+      ${this.mozeUsunac(fid) ? '<button class="btn bad sm" id="fvDel">Usuń zdjęcie</button>' : ''}<button class="btn sm" id="fvX">✕ Zamknij</button></div>
+      <div class="fvimg" id="fvImg"><span class="mute">Wczytuję…</span></div>`;
+    document.body.appendChild(wrap);
+    const zamknij = () => wrap.remove();
+    $('#fvX').onclick = zamknij;
+    if ($('#fvDel')) $('#fvDel').onclick = async () => {
+      if (!confirm('Usunąć to zdjęcie? Zniknie z aplikacji, a plik na Dysku trafi do kosza.')) return;
+      await this.usun(fid); zamknij();
+    };
+    try {
+      const o = await this.obraz(fid);
+      $('#fvImg').innerHTML = ''; const img = new Image(); img.src = URL.createObjectURL(o.blob); img.alt = 'zdjęcie'; $('#fvImg').appendChild(img);
+      $('#fvJak').textContent = o.pelne ? '· z tego tabletu' : '· podgląd pomniejszony';
+    } catch (e) { $('#fvImg').innerHTML = `<p class="mute" style="color:#fff">${U.esc(e.message)}</p>`; }
+  },
+  async usun(fid) {
+    const i = this.info(fid);
+    await addEvent('foto_usun', i.urz || '', { fid });
+    await DB.delPhoto(fid); await DB.delFile('mini:' + fid);   // niewysłane zdjęcie nie zostanie już wysłane
+    S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length; UI.net();
+    UI.toast('Zdjęcie usunięte');
+    if ($('#ov') && i.urz && $('#thumbs')) Dialogs.device(i.urz); else UI.refresh();
+  }
+};
 async function saveSn(id, v) {
   const urz = (S.proj.urzadzenia || []);
   const F = fold(S.ev);

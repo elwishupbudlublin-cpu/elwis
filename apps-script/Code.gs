@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.7.0';
+const SCRIPT_VERSION = '1.8.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -57,6 +57,7 @@ function handle_(p, body) {
       case 'techniczne': return out_(techniczne_());
       case 'plan': return out_(plan_(String(p.od || ''), String(p.do || '')));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
+      case 'foto': return out_(foto_(String(p.kod || ''), String(p.fid || '')));
       case 'push': return out_(push_(body, tablet));
       case 'docx': return out_(docx_(body || {}));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
@@ -345,7 +346,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun'];
 
 function push_(b, tablet) {
   const p = projekt_(String(b.kod || ''));
@@ -372,8 +373,8 @@ function push_(b, tablet) {
       const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', "yyyy-MM-dd'T'HH:mm:ss");
       const rows = [], touched = {};
       numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
-      const usuniete = [];
-      let biuro = null;
+      const usuniete = [], zdjeciaDoKosza = [];
+      let biuro = null, autorzy = null;
       evs.forEach(e => {
         accepted.push(e.id);
         if (have[e.id]) return;
@@ -383,6 +384,14 @@ function push_(b, tablet) {
           if (numery[e.d.pid] && !biuro[txt_(e.kto)]) return;
           usuniete.push(e.d.pid);
         }
+        if (e.typ === 'foto_usun') {
+          // zdjęcie usuwa autor albo rola biuro (od 1.8.0)
+          const fid = txt_(e.d && e.d.fid); if (!fid) return;
+          if (biuro === null) biuro = rolaBiuro_();
+          if (autorzy === null) autorzy = autorzyZdjec_(sh);
+          if (!biuro[txt_(e.kto)] && autorzy[fid] && autorzy[fid] !== txt_(e.kto)) return;
+          zdjeciaDoKosza.push(fid);
+        }
         have[e.id] = true;
         rows.push([e.id, txt_(e.ts), txt_(e.kto).slice(0, 80), tablet, txt_(e.urz).slice(0, 20), e.typ, JSON.stringify(e.d || {}).slice(0, 45000), now]);
         if (e.urz) touched[e.urz] = true;
@@ -390,6 +399,7 @@ function push_(b, tablet) {
       if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
       przelicz_(p, Object.keys(touched));
       if (usuniete.length) koszWord_(p, usuniete);
+      if (zdjeciaDoKosza.length) zdjeciaDoKosza.forEach(fid => { const f = plikZdjecia_(p, fid); if (f) f.setTrashed(true); });
     }
     return { ok: true, accepted: accepted, numery: numery };
   } finally { lock.releaseLock(); }
@@ -474,6 +484,39 @@ function numeruj_(sh, nowe) {
 }
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 /** Word protokołu na żądanie (tylko rola biuro) → folder budowy / Protokoły. */
+/** Autorzy zdjęć budowy: fid → pracownik (zdarzenia foto, brak, notatka). */
+function autorzyZdjec_(sh) {
+  const a = {}; if (sh.getLastRow() < 2) return a;
+  sh.getRange(2, 3, sh.getLastRow() - 1, 5).getDisplayValues().forEach(r => {
+    const typ = txt_(r[3]); if (typ !== 'foto' && typ !== 'brak' && typ !== 'notatka') return;
+    const d = safeJson_(r[4]); [d.fid, ...(d.foto || [])].filter(Boolean).forEach(f => { if (!a[f]) a[f] = txt_(r[0]); });
+  });
+  return a;
+}
+/** Plik zdjęcia (opis „ELWIS <fid> …”) – wyłącznie z folderu Zdjęcia tej budowy. */
+function plikZdjecia_(p, fid) {
+  if (!/^[\w-]{4,60}$/.test(fid)) return null;
+  const zd = sub_(DriveApp.getFolderById(p.folder), 'Zdjęcia', false); if (!zd) return null;
+  const it = DriveApp.searchFiles("fullText contains '" + fid + "' and trashed = false");
+  while (it.hasNext()) {
+    const f = it.next();
+    if ((f.getDescription() || '').indexOf('ELWIS ' + fid) !== 0) continue;
+    const par = f.getParents(); if (!par.hasNext()) continue;
+    const dzien = par.next(), nad = dzien.getParents();
+    if (nad.hasNext() && nad.next().getId() === zd.getId()) return f;
+  }
+  // zapasowo (indeks wyszukiwania Dysku bywa opóźniony): przejrzenie folderów dni
+  const dni = zd.getFolders();
+  while (dni.hasNext()) { const fs = dni.next().getFiles(); while (fs.hasNext()) { const f = fs.next(); if ((f.getDescription() || '').indexOf('ELWIS ' + fid) === 0) return f; } }
+  return null;
+}
+/** Podgląd zdjęcia z innego tabletu (od 1.8.0) – tablet zapisuje je pomniejszone. */
+function foto_(kod, fid) {
+  const p = projekt_(kod);
+  const f = plikZdjecia_(p, fid); if (!f) throw new Error('Zdjęcie nie jest jeszcze na Dysku (zsynchronizuj tablet, który je zrobił).');
+  const b = f.getBlob(); if (b.getBytes().length > 8e6) throw new Error('Zdjęcie za duże do podglądu');
+  return { ok: true, mime: b.getContentType() || 'image/jpeg', b64: Utilities.base64Encode(b.getBytes()) };
+}
 /** Osoby z rolą biuro (aktywne) – { nazwa: true } */
 function rolaBiuro_() {
   const o = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (txt_(r[2]) === 'biuro' && tak_(r[4])) o[txt_(r[0])] = true; }); return o;
