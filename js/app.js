@@ -211,9 +211,9 @@ const Views = {
           <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
         </div>
         <div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby zmienić tydzień">
-          ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i>${w ? `<span class="pw">${w.tmin}°/${w.tmax}°</span><span class="pr ${w.pada ? 'mokro' : ''}">${w.pada ? '☔ pada' : '—'}</span>` : ''}</button>`; }).join('')}
+          ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><b>${x.d.getDate()}</b><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : '&nbsp;'}</i>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span><span class="pw">${w.tmin}°/${w.tmax}°</span>${w.pada ? '<span class="pr mokro">pada</span>' : ''}` : ''}</button>`; }).join('')}
         </div>
-        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}">7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
+        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}"><span class="pchipico">${w.ikona}</span> 7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
       ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
@@ -626,7 +626,10 @@ function wspolrzedne(v) {
 }
 function pogodaDnia(k, lok) {
   const d = S.pogoda && lok && S.pogoda[lok.klucz] && S.pogoda[lok.klucz][k]; if (!d) return null;
-  return { tmin: Math.round(d.tmin), tmax: Math.round(d.tmax), pada: d.opad >= 0.2 || d.szansa >= 60, szansa: d.szansa, miejsce: lok.miejsce };
+  const pada = d.opad >= 0.2 || d.szansa >= 60, c = d.kod || 0;
+  // ikona: najgorsza pogoda w godzinach 7–16 (kod WMO); deszcz zawsze widoczny
+  const ikona = c >= 95 ? '⛈️' : (c >= 71 && c <= 77) || c === 85 || c === 86 ? '🌨️' : pada || c >= 51 ? '🌧️' : c >= 45 ? '🌫️' : c >= 3 ? '☁️' : c >= 1 ? '⛅' : '☀️';
+  return { tmin: Math.round(d.tmin), tmax: Math.round(d.tmax), pada, szansa: d.szansa, ikona, miejsce: lok.miejsce };
 }
 function odm(n, a, b, c) { return n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c; }
 function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); }

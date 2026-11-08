@@ -210,14 +210,14 @@ const Sync = {
       pl.zadania.forEach(t => { const b = proj.find(p => p.listaCU && p.listaCU === t.lista); const w = b && wspolrzedne(b.lokalizacja); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
       const wynik = {};
       for (const [klucz, w] of miejsca) {
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&hourly=temperature_2m,precipitation,precipitation_probability&timezone=Europe%2FWarsaw&past_days=7&forecast_days=16`);
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&hourly=temperature_2m,precipitation,precipitation_probability,weather_code&timezone=Europe%2FWarsaw&past_days=7&forecast_days=16`);
         if (!r.ok) continue;
         const j = await r.json(), h = j.hourly || {}, dni = {};
         (h.time || []).forEach((t, i) => {
           const g = +t.slice(11, 13); if (g < 7 || g > 16) return;
-          const k = t.slice(0, 10), d = dni[k] = dni[k] || { tmin: 99, tmax: -99, opad: 0, szansa: 0 };
+          const k = t.slice(0, 10), d = dni[k] = dni[k] || { tmin: 99, tmax: -99, opad: 0, szansa: 0, kod: 0 };
           const temp = h.temperature_2m[i]; if (temp != null) { d.tmin = Math.min(d.tmin, temp); d.tmax = Math.max(d.tmax, temp); }
-          d.opad += h.precipitation[i] || 0; d.szansa = Math.max(d.szansa, h.precipitation_probability[i] || 0);
+          d.opad += h.precipitation[i] || 0; d.kod = Math.max(d.kod, (h.weather_code || [])[i] || 0); d.szansa = Math.max(d.szansa, h.precipitation_probability[i] || 0);
         });
         Object.keys(dni).forEach(k => { if (dni[k].tmax === -99) delete dni[k]; });
         wynik[klucz] = dni;

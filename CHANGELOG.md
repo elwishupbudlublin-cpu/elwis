@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.1 – 2026-11-08 (aplikacja)
+- Pogoda: duża ikona na kafelku dnia (najgorsza pogoda w godzinach 7–16: ☀️ ⛅ ☁️ 🌫️ 🌧️ 🌨️ ⛈️; przy prognozie opadu zawsze ikona deszczu i napis „pada”), większa temperatura; ikona także w podsumowaniu dnia.
+
 ## 1.11.0 – 2026-11-08 (aplikacja)
 - Pogoda w planie: na kafelkach dni temperatura min/maks w godzinach 7–16 i „☔ pada” / „—”; w podsumowaniu dnia „7–16: 6°…9° · bez opadów / będzie padać (do 70%)” i miejsce prognozy (żółte tło, gdy pada).
 - Miejsce prognozy: budowa z kolumną „Lokalizacja” (współrzędne), na której zalogowany ma zadania tego dnia; inaczej Lublin.

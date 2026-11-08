@@ -216,3 +216,6 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .pday.on .pr.mokro{color:#0b5fb0}
 .pchip.pwarn{background:#ffd54a;color:#4a3500}
 .pday .pw,.pday .pr{text-transform:none}
+.pday .pico{font-size:26px;line-height:1.1;margin-top:2px}
+.pday .pw{font-size:13px}.pday .pr.mokro{font-size:11px}
+.pchip .pchipico{font-size:18px;vertical-align:-2px}
