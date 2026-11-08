@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.11.5 – 2026-11-08 (aplikacja)
+- Pasek dni: przy przeciąganiu kolejne dni wjeżdżają płynnie (po 7 dni zapasu z każdej strony), po puszczeniu pasek dociąga do pełnego dnia; tap w dzień działa jak dotąd.
+- Kafelek zadania: po prawej pogoda (7–16, deszcz) z lokalizacji budowy, jeśli jest wpisana.
+
 ## 1.11.4 – 2026-11-08 (aplikacja i serwer)
 - Plan dnia: serwer wysyła pracownikowi plan bez zadań osób z rolą biuro (wspólne zadania zostają, bez osób z biura); pełny plan tylko dla roli biuro (parametr `kto` w operacji `plan`). Po wylogowaniu roli biuro plan jest usuwany z tabletu.
 

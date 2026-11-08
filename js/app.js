@@ -180,7 +180,8 @@ const Views = {
     const d0 = new Date(dzien + 'T12:00');
     const dzienPlus = (k, n) => U.day(new Date(new Date(k + 'T12:00').getTime() + n * 864e5));
     const od = par.od || dzienPlus(dzien, -3);
-    const tydzien = Array.from({ length: 7 }, (_, i) => { const k = dzienPlus(od, i); const d = new Date(k + 'T12:00'); return { k, d, n: wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).length }; });
+    const ZAPAS = 7;   // dni ukryte po obu stronach – przy przeciąganiu wjeżdżają płynnie (od 1.11.5)
+    const tydzien = Array.from({ length: 7 + 2 * ZAPAS }, (_, i) => { const k = dzienPlus(od, i - ZAPAS); const d = new Date(k + 'T12:00'); return { k, d, n: wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).length }; });
     const dzienTxt = d0.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
     const mojeDzis = zad.filter(mojeZad);
     const budowy = new Set(mojeDzis.map(t => t.lista).filter(Boolean));
@@ -190,16 +191,19 @@ const Views = {
       const a = new Date(t.start), b2 = new Date(t.koniec);
       const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
       const bud = budowaZ(t);
-      return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
+      return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
         <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : `<span class="pl">${U.esc(t.listaNazwa || '')}</span>`}</button>`;
     };
+    // pogoda na kafelku zadania – tylko gdy budowa ma lokalizację (od 1.11.5)
+    const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(b.lokalizacja); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
+      return p ? `<span class="ptw" title="${U.esc(b.nazwa)}: 7–16 ${p.tmin}°…${p.tmax}°${p.pada ? ', pada' : ''}"><span class="ptwi">${p.ikona}</span>${p.tmin}°/${p.tmax}°</span>` : ''; };
     const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
     const blokAuto = ({ t, od, dl, bezEst }) => {
       const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3), bud = budowaZ(t);
-      return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">
+      return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
         <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span><b>${U.esc(t.nazwa)}</b>${bud ? `<span class="pbadge">${U.esc(bud.kod)}${bud.wojskowy === 'tak' ? ' · W' : ''}</span>` : ''}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
     };
-    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}"><b>${U.esc(t.nazwa)}</b>
+    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}<b>${U.esc(t.nazwa)}</b>
       <span class="mute">${U.esc(bud ? bud.nazwa : t.listaNazwa || 'zadanie spoza budów ELWIS')}${t.status ? ' · ' + U.esc(t.status) : ''}</span>${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
     const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t) && !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
@@ -211,9 +215,9 @@ const Views = {
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
           <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
         </div>
-        <div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby zmienić tydzień">
+        <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
           ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}" title="${w ? w.tmin + '°/' + w.tmax + '° (7–16)' + (w.pada ? ', pada' : '') : ''}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><span class="pmid"><b>${x.d.getDate()}</b>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span>` : ''}</span><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : ''}${w ? `<em>${w.tmin}°/${w.tmax}°</em>` : ''}${!x.n && !w ? '&nbsp;' : ''}</i></button>`; }).join('')}
-        </div>
+        </div></div>
         <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}"><span class="pchipico">${w.ikona}</span> 7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
@@ -231,17 +235,24 @@ const Views = {
       ${bezGodz.length ? `<h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2><div class="pcards">${bezGodz.map(karta).join('')}</div>` : ''}`;
     const idz = o => UI.go('plan', { ...par, ...o });
     view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, od: b.classList.contains('pnow') ? undefined : od, ukryj: undefined }));
-    // przeciąganie paska tygodnia w lewo / prawo = następny / poprzedni tydzień
+    // przeciąganie paska dni: 21 kafelków (7 widocznych), tor przesuwa się za palcem; po puszczeniu dociąga do pełnych dni
     (() => {
-      const w = $('#pWeek'); let x0 = null, dx = 0, przeciagniete = false;
-      // przesunięcie o tyle dni, ile kafelków przeciągnięto (min. 1 dzień przy ruchu > 1/3 kafelka)
-      const szer = () => { const k = w.querySelector('.pday'); return k ? k.getBoundingClientRect().width + 6 : 100; };
-      const ruch = e => { if (x0 === null) return; dx = e.clientX - x0; if (Math.abs(dx) > 10) przeciagniete = true; if (przeciagniete) w.style.transform = `translateX(${dx}px)`; };
+      const wrap = $('#pWeekWrap'), w = $('#pWeek'), GAP = 6;
+      let szer = 0, baza = 0, x0 = null, dx = 0, przeciagniete = false;
+      const uloz = () => {
+        const W = wrap.getBoundingClientRect().width; szer = (W - 6 * GAP) / 7;
+        w.querySelectorAll('.pday').forEach(k => { k.style.flex = `0 0 ${szer}px`; });
+        baza = -ZAPAS * (szer + GAP); w.style.transition = 'none'; w.style.transform = `translateX(${baza}px)`;
+      };
+      uloz(); window.addEventListener('resize', uloz, { once: true });
+      const ruch = e => { if (x0 === null) return; dx = e.clientX - x0; if (Math.abs(dx) > 10) przeciagniete = true;
+        if (przeciagniete) w.style.transform = `translateX(${Math.max(Math.min(baza + dx, 0), 2 * baza)}px)`; };
       const koniec = () => {
         if (x0 === null) return; x0 = null; window.removeEventListener('pointermove', ruch);
-        w.style.transition = 'transform .2s'; w.style.transform = '';
-        const sz = szer(); const n = Math.abs(dx) < sz / 3 ? 0 : Math.max(1, Math.round(Math.abs(dx) / sz)) * (dx < 0 ? 1 : -1);
-        if (n) idz({ od: dzienPlus(od, n) });
+        const krok = szer + GAP; let n = Math.round(-dx / krok); if (!n && Math.abs(dx) > krok / 3) n = dx < 0 ? 1 : -1;
+        n = Math.max(-ZAPAS, Math.min(ZAPAS, n));
+        w.style.transition = 'transform .18s ease-out'; w.style.transform = `translateX(${baza - n * krok}px)`;
+        if (n) setTimeout(() => idz({ od: dzienPlus(od, n) }), 180);
       };
       w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
       w.addEventListener('click', e => { if (przeciagniete) { e.stopPropagation(); e.preventDefault(); przeciagniete = false; } }, true);
