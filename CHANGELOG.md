@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.4 – 2026-11-08 (aplikacja i serwer)
+- Plan dnia: serwer wysyła pracownikowi plan bez zadań osób z rolą biuro (wspólne zadania zostają, bez osób z biura); pełny plan tylko dla roli biuro (parametr `kto` w operacji `plan`). Po wylogowaniu roli biuro plan jest usuwany z tabletu.
+
 ## 1.11.3 – 2026-11-08 (aplikacja)
 - Kafelki dni wróciły do dawnej wysokości: duża ikona pogody obok daty, temperatura 7–16 w jednej linii z kropkami zadań; deszcz pokazuje ikona (bez napisu „pada”).
 

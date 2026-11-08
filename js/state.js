@@ -20,7 +20,8 @@ const Session = {
     S.user = { name: u.name, rola: u.rola, ekipa: u.ekipa, exp: Date.now() + h * 3600e3 };
     await DB.set('session', S.user);
   },
-  async logout() { S.user = null; await DB.del('session'); },
+  async logout() { if (S.user && S.user.rola === 'biuro') await DB.del('plan');   // pełny plan biura nie zostaje na tablecie
+    S.user = null; await DB.del('session'); },
   isBiuro: () => S.user && S.user.rola === 'biuro'
 };
 

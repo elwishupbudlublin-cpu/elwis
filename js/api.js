@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.11.3';
+const APP_VERSION = '1.11.4';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -39,7 +39,7 @@ const API = (() => {
     bootstrap: (pamiec) => get('bootstrap', pamiec ? { pamiec } : {}),
     project: (kod) => get('project', { kod }),
     techniczne: () => get('techniczne'),
-    plan: (od, d) => get('plan', { od, do: d }),
+    plan: (od, d) => get('plan', { od, do: d, kto: S.user ? S.user.name : '' }),
     file: (id, part) => get('file', part === undefined ? { id } : { id, part }),
     /* Plik w częściach (serwer 1.2+); stary serwer zwraca od razu cały plik. */
     async fileFull(id, onProgress) {

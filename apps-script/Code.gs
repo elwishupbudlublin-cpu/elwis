@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.10.0';
+const SCRIPT_VERSION = '1.11.4';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -55,7 +55,7 @@ function handle_(p, body) {
       case 'project': return out_(project_(String(p.kod || '')));
       case 'file': return out_(file_(String(p.id || ''), p.part));
       case 'techniczne': return out_(techniczne_());
-      case 'plan': return out_(plan_(String(p.od || ''), String(p.do || '')));
+      case 'plan': return out_(planDla_(plan_(String(p.od || ''), String(p.do || '')), String(p.kto || '')));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'foto': return out_(foto_(String(p.kod || ''), String(p.fid || '')));
       case 'push': return out_(push_(body, tablet));
@@ -238,6 +238,18 @@ function file_(id, part) {
 /* ===== Plan dnia z ClickUp (od 1.4.0) =====
  * Klucz API ClickUp: właściwość skryptu CLICKUP_TOKEN (wpisuje Łukasz – nigdy w kodzie).
  * Zwraca zadania przypisane do pracowników z kolumną „ID ClickUp”, z terminem w zakresie dni [od, do]. */
+/** Plan widziany przez zalogowaną osobę (od 1.11.4): pracownik nie dostaje zadań osób z rolą biuro
+ *  (wspólne zadania zostają, ale bez osób z biura). Rola biuro – pełny plan. */
+function planDla_(res, kto) {
+  if (!res || !res.zadania) return res;
+  const pr = rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => tak_(r[4]));
+  const ja = pr.find(r => txt_(r[0]) === kto);
+  if (ja && txt_(ja[2]) === 'biuro') return res;
+  const biuroIds = pr.filter(r => txt_(r[2]) === 'biuro' && txt_(r[0]) !== kto).map(r => txt_(r[5])).filter(String);
+  if (!biuroIds.length) return res;
+  const zad = res.zadania.map(t => Object.assign({}, t, { osoby: (t.osoby || []).filter(i => biuroIds.indexOf(i) < 0) })).filter(t => t.osoby.length);
+  return Object.assign({}, res, { zadania: zad });
+}
 function plan_(od, doDnia) {
   const token = P.getProperty('CLICKUP_TOKEN');
   if (!token) return { ok: true, zadania: [], brakKlucza: true };
