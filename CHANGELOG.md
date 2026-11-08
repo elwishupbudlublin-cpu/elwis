@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.3 – 2026-11-08 (aplikacja)
+- Kafelki dni wróciły do dawnej wysokości: duża ikona pogody obok daty, temperatura 7–16 w jednej linii z kropkami zadań; deszcz pokazuje ikona (bez napisu „pada”).
+
 ## 1.11.2 – 2026-11-08 (aplikacja)
 - Plan „Wszyscy”: pracownicy nie widzą kalendarzy osób z rolą biuro (administratora) – ani kolumn, ani ich nazwisk przy wspólnych zadaniach; rola biuro widzi wszystkich.
 
