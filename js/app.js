@@ -268,7 +268,7 @@ const Views = {
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
       const t = zad.find(x => x.id === b.dataset.t); const bud = t && budowaZ(t);
       if (!bud) return UI.toast('To zadanie nie jest przypisane do budowy w ELWIS.');
-      openProject(bud.kod);
+      openProject(bud.kod, { v: 'plan', par: { ...par } });
     });
     // przewiń oś do „teraz” (albo do pierwszego zadania)
     const pt = view.querySelector('.pnowline') || view.querySelector('.pblk');
@@ -304,7 +304,7 @@ const Views = {
   async budowa() {
     const p = curProj(); if (!p) return UI.go('home');
     if (!dostepDoBudowy(p)) { S.kod = null; UI.go('home'); return brakDostepu(p); }
-    UI.header(p.nazwa, () => UI.go('home'));
+    UI.header(p.nazwa, () => { const w = S.powrot; S.powrot = null; w ? UI.go(w.v, w.par) : UI.go('home'); });
     const pd = S.proj || {};
     const F = fold(S.ev);
     const urz = urzE();
@@ -814,10 +814,10 @@ function brakDostepu(p) {
     <div class="sfoot"><button class="btn pri" id="bdOk">Rozumiem</button></div></div></div>`;
   $('#bdOk').onclick = UI.close; $('#bdOk').focus();
 }
-async function openProject(kod) {
+async function openProject(kod, powrot = null) {
   const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
   if (!dostepDoBudowy(pp)) return brakDostepu(pp);
-  S.kod = kod;
+  S.kod = kod; S.powrot = powrot;   // skąd wróci „wstecz” z ekranu budowy (od 1.11.7)
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
   await wczytajEtap(kod);

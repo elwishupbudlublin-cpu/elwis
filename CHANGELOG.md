@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.7 – 2026-11-08 (aplikacja)
+- Budowa otwarta z kafelka zadania w planie: przycisk „wstecz” wraca do planu (ten sam dzień i widok), a nie do listy budów. Budowa otwarta z listy budów wraca jak dotąd do listy.
+
 ## 1.11.6 – 2026-11-08 (aplikacja)
 - Kafelki zadań w planie: nad nazwą zadania mała szara linia z numerem i nazwą budowy (zamiast plakietki z samym numerem); dla zadań spoza ELWIS – nazwa listy z ClickUp.
 
