@@ -6,7 +6,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 
 | Operacja | Metoda | Parametry | Zwraca |
 |---|---|---|---|
-| `bootstrap` | GET | – | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash,cu,m}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy,etapy[{id,opis}],listaCU}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}, protokoly[{id,nazwa,wersja,rodzaj,powiazanie,def,blad}]` (protokoly od 1.5.0 – tylko „Aktywny = tak”, `def` = treść pliku definicji) |
+| `bootstrap` | GET | – | `server, schema, minApp, sesjaGodziny, tablet, salt, pracownicy[{name,ekipa,rola,hash,cu,m}], projekty[{kod,nazwa,adres,lokalizacja,kontakt,zakres[],uwagi,wojskowy,etapy[{id,opis}],listaCU,inwestor,zamawiajacy}], slowniki{kategorie[],typy[{prefix,nazwa,kroki[],sn}],rodzaje[{id,opis}]}, protokoly[{id,nazwa,wersja,rodzaj,powiazanie,def,blad}]` (protokoly od 1.5.0 – tylko „Aktywny = tak”, `def` = treść pliku definicji) |
 | `project` | GET | `kod` | `etapy[{id,opis}], urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status,etap}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}, ostrzezenia[]` |
 | `file` | GET | `id`, `part?` | `name, mime, size, b64` – tylko pliki z „Do wglądu” aktywnej budowy lub z `_Techniczne`. Z `part` (od 1.2.0): część nr `part` po 6 MB + `parts` (liczba części), pliki do 60 MB; bez `part`: cały plik do 20 MB |
 | `techniczne` | GET | – | `pliki[{id,name,mime,size,grupa,zm}]` – DTR z `_Techniczne` (grupa = ścieżka podfolderu), `brakFolderu` gdy brak klucza w Konfiguracji (od 1.3.0) |
@@ -30,6 +30,9 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).
 
+## Inwestor i zamawiający (od 1.5.1, schemat 1.5)
+- Projekty, kol. N „Inwestor”, kol. O „Zamawiający” → `inwestor`, `zamawiajacy` (wartości domyślne w protokołach).
+
 ## Etapy budowy (od 1.1.0, schemat 1.3)
 - Projekty, kol. M „Etap Budowy”: `A: opis; B: opis` → `etapy`. Puste = bez podziału.
 - Urządzenia, kol. L „Etap Budowy”: oznaczenie etapu → `etap`.
@@ -39,7 +42,7 @@ Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urzą
 - Zakładka **Protokoły** w Bazie: link do definicji (`_Szablony/szablon_konfig/definicja_<ID>-v<wersja>.json`) i do szablonu Word (`_Szablony/szablon_<ID>-v<wersja>_<nazwa>.docx`).
 - Definicja: `id, wersja, nazwa, szablon, powiazanie` (prefiks typu urządzenia), `prefiks_nr` (PU/PR/PP…), `nazwa_pliku` (wzór), `znak_tak/znak_nie`, `sekcje[{id, tytul, typ?: "tabela", word_petla?, pokaz_gdy?, pola[]}]`.
 - Pole: `{id, etykieta, typ, wymagane?, domyslnie?, jednostka?, opcje?, word?, wzor?, pamietaj_dla_budowy?, zapisz_do_urzadzenia?}`. Typy: `tekst, tekst_dlugi, liczba, data, godzina, taknie, wybor, znacznik, kod, auto`.
-- Wzory: `{pole}` – wartość z danych lub kontekstu (`kod, nazwa_budowy, adres, nr, dd, mm, etap_urzadzenia, kondygnacja_urzadzenia, zalogowany, lp`); `{pole=X:A|B}` – A gdy pole = X, inaczej B.
+- Wzory: `{pole}` – wartość z danych lub kontekstu (`kod, nazwa_budowy, adres, inwestor, zamawiajacy, nr, dd, mm, etap_urzadzenia, kondygnacja_urzadzenia, zalogowany, lp`); `{pole=X:A|B}` – A gdy pole = X, inaczej B.
 - Szablon Word: `{{pole}}` – wartość; pola `taknie/wybor` z mapą `word` → znaczniki opcji (☒/☐); `znacznik` → ☒/☐; wiersz tabeli z `{{#petla}} … {{/petla}}` powielany dla każdej pozycji. Daty w Word: dd/mm/rrrr.
 - Numer: przy pierwszym zapisie ze stanem innym niż `roboczy` serwer nadaje `<prefiks><nr 2 cyfry>` (kolejny w budowie dla prefiksu); kolejne zapisy tego `pid` dostają ten sam numer.
 

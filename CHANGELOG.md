@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.5.1 – 2026-11-08 (aplikacja i serwer, schemat 1.5)
+- Protokoły: pola „Inwestor” i „Zamawiający” wypełniają się z Bazy projektów (zakładka Projekty, nowe kolumny N „Inwestor” i O „Zamawiający” – uzupełniane przy zakładaniu projektu). Puste w Bazie → wartość z poprzedniego protokołu budowy. Na tablecie można je poprawić.
+- Serwer: bootstrap zwraca `inwestor` i `zamawiajacy` budowy; dostępne też we wzorach definicji i nazwie pliku Word.
+
 ## 1.5.0 – 2026-11-08 (aplikacja i serwer)
 - Protokoły na tablecie: formularz budowany z pliku definicji (`_Szablony/szablon_konfig`), bez zmiany aplikacji przy nowych protokołach. Dostępne, gdy protokół ma w Bazie „Aktywny = tak”, a budowa ma jego rodzaj pracy w zakresie prac.
 - Wejście: kafelek „<rodzaj pracy> – protokoły” na karcie budowy (lista urządzeń danego typu ze stanem protokołów) oraz sekcja „Protokoły” w karcie urządzenia.

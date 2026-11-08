@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.5.0';
+const SCRIPT_VERSION = '1.5.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -109,7 +109,8 @@ function aktywne_() {
       kod: txt_(r[0]), nazwa: txt_(r[1]), adres: txt_(r[2]), lokalizacja: txt_(r[3]), kontakt: txt_(r[4]),
       zakres: txt_(r[6]).split(/[;,]/).map(s => s.trim()).filter(String), uwagi: txt_(r[7]),
       folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase(),
-      etapy: etapy_(r[12]), listaCU: txt_(r[9])
+      etapy: etapy_(r[12]), listaCU: txt_(r[9]),
+      inwestor: txt_(r[13]), zamawiajacy: txt_(r[14])   // schemat 1.5 – do protokołów
     }));
 }
 /** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
@@ -478,6 +479,7 @@ function kontekst_(p, d) {
   const dane = d.dane || {}, dt = String(dane.data || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   const ctx = {
     kod: p.kod, nazwa_budowy: p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + p.nazwa, adres: p.adres,
+    inwestor: p.inwestor || '', zamawiajacy: p.zamawiajacy || '',
     nr: d.nr || '', prefiks_nr: d.prefiks || '', dd: dt ? dt[3] : '', mm: dt ? dt[2] : '', rrrr: dt ? dt[1] : ''
   };
   return ctx;

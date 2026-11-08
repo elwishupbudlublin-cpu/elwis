@@ -38,6 +38,7 @@ function protCtx(urzId, lp) {
   const p = curProj() || {}; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === urzId) || {};
   return {
     kod: p.kod || '', nazwa_budowy: p.nazwa || '', adres: p.adres || '', zalogowany: S.user ? S.user.name : '',
+    inwestor: p.inwestor || '', zamawiajacy: p.zamawiajacy || '',   // Baza projektów, kol. N i O (schemat 1.5)
     etap_urzadzenia: u.etap || '', kondygnacja_urzadzenia: u.kond || '', urzadzenie: urzId || '', lp: lp || ''
   };
 }
@@ -58,7 +59,8 @@ function nowyProtokol(pr, urzId) {
     sek.pola.forEach(f => {
       if (f.typ === 'auto') return;
       let v = domyslna(f, ctx);
-      if (f.pamietaj_dla_budowy) { const z = poprzednie.find(p => p.dane && p.dane[f.id]); if (z) v = z.dane[f.id]; }
+      // dane z Bazy projektów mają pierwszeństwo; puste → wartość z poprzedniego protokołu tej budowy
+      if (f.pamietaj_dla_budowy && (v === '' || v == null)) { const z = poprzednie.find(p => p.dane && p.dane[f.id]); if (z) v = z.dane[f.id]; }
       dane[f.id] = v;
     });
   });
