@@ -27,6 +27,8 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `brak` | `{kat, opis, blokuje, foto[], etap?}` – `etap` tylko dla braku bez urządzenia zgłoszonego w wybranym etapie |
 | `brak_zamk` | `{bid, opis}` |
 | `notatka` | `{tekst, foto[]}` |
+| `brak_edyc` | `{bid, kat?, opis?, blokuje?, foto[]?, usun?, otworz?}` – edycja braku (od 1.9.0); `usun` – autor lub biuro, `otworz` – biuro |
+| `brak_kom` | `{bid, tekst, foto[]}` – komentarz do braku (od 1.9.0) |
 | `foto_usun` | `{fid}` – usunięcie zdjęcia (od 1.8.0); serwer akceptuje od autora zdjęcia lub roli biuro i przenosi plik do kosza |
 | `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 

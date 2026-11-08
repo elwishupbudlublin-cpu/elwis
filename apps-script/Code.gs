@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.8.0';
+const SCRIPT_VERSION = '1.9.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -346,7 +346,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom'];
 
 function push_(b, tablet) {
   const p = projekt_(String(b.kod || ''));
@@ -374,7 +374,7 @@ function push_(b, tablet) {
       const rows = [], touched = {};
       numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
       const usuniete = [], zdjeciaDoKosza = [];
-      let biuro = null, autorzy = null;
+      let biuro = null, autorzy = null, autorzyBrakow = null;
       evs.forEach(e => {
         accepted.push(e.id);
         if (have[e.id]) return;
@@ -383,6 +383,15 @@ function push_(b, tablet) {
           if (biuro === null) biuro = rolaBiuro_();
           if (numery[e.d.pid] && !biuro[txt_(e.kto)]) return;
           usuniete.push(e.d.pid);
+        }
+        if (e.typ === 'brak_edyc' && e.d && (e.d.usun || e.d.otworz)) {
+          // usunięcie braku – autor lub biuro; ponowne otwarcie – biuro (od 1.9.0)
+          if (biuro === null) biuro = rolaBiuro_();
+          if (!biuro[txt_(e.kto)]) {
+            if (e.d.otworz) return;
+            if (autorzyBrakow === null) autorzyBrakow = autorzyBrakow_(sh);
+            if (autorzyBrakow[txt_(e.d.bid)] && autorzyBrakow[txt_(e.d.bid)] !== txt_(e.kto)) return;
+          }
         }
         if (e.typ === 'foto_usun') {
           // zdjęcie usuwa autor albo rola biuro (od 1.8.0)
@@ -412,7 +421,11 @@ function przelicz_(p, ids) {
   const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
     .sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
   const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
-  const braki = {}; ev.forEach(e => { if (e.typ === 'brak') braki[e.id] = { urz: e.urz, open: true }; if (e.typ === 'brak_zamk' && braki[e.d.bid]) braki[e.d.bid].open = false; });
+  const braki = {}; ev.forEach(e => {
+    if (e.typ === 'brak') braki[e.id] = { urz: e.urz, open: true };
+    if (e.typ === 'brak_zamk' && braki[e.d.bid]) braki[e.d.bid].open = false;
+    if (e.typ === 'brak_edyc' && braki[e.d.bid]) { if (e.d.usun) delete braki[e.d.bid]; else if (e.d.otworz) braki[e.d.bid].open = true; }   // od 1.9.0
+  });
   const sh = ss.getSheetByName('Urządzenia');
   const v = sh.getRange(2, 1, sh.getLastRow() - 1, 11).getValues();
   ids.forEach(id => {
@@ -491,6 +504,12 @@ function autorzyZdjec_(sh) {
     const typ = txt_(r[3]); if (typ !== 'foto' && typ !== 'brak' && typ !== 'notatka') return;
     const d = safeJson_(r[4]); [d.fid, ...(d.foto || [])].filter(Boolean).forEach(f => { if (!a[f]) a[f] = txt_(r[0]); });
   });
+  return a;
+}
+/** Autorzy braków: id zdarzenia „brak” → pracownik. */
+function autorzyBrakow_(sh) {
+  const a = {}; if (sh.getLastRow() < 2) return a;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 6).getDisplayValues().forEach(r => { if (txt_(r[5]) === 'brak') a[txt_(r[0])] = txt_(r[2]); });
   return a;
 }
 /** Plik zdjęcia (opis „ELWIS <fid> …”) – wyłącznie z folderu Zdjęcia tej budowy. */

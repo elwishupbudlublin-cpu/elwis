@@ -49,8 +49,19 @@ function fold(events) {
       case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
-      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
+      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
       case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
+      case 'brak_edyc': {   // edycja / usunięcie / ponowne otwarcie braku (od 1.9.0)
+        const b = braki[d.bid]; if (!b) break;
+        if (d.usun) { delete braki[d.bid]; break; }
+        if (d.otworz) b.zamk = null;
+        ['kat', 'opis'].forEach(k => { if (d[k] != null && d[k] !== '') b[k] = d[k]; });
+        if (d.blokuje != null) b.blokuje = !!d.blokuje;
+        (d.foto || []).forEach(f => { if (!b.foto.includes(f)) b.foto.push(f); fi(f, e, 'brak'); });
+        b.zm.push({ kto: e.kto, ts: e.ts, co: d.usun ? 'usunięcie' : d.otworz ? 'ponowne otwarcie' : 'edycja' });
+        break;
+      }
+      case 'brak_kom': if (braki[d.bid]) { braki[d.bid].kom.push({ kto: e.kto, ts: e.ts, tekst: d.tekst || '', foto: d.foto || [] }); (d.foto || []).forEach(f => fi(f, e, 'brak')); } break;
       case 'notatka': notes.push(e); (d.foto || []).forEach(f => fi(f, e, 'notatka')); break;
       case 'foto_usun': if (d.fid) usuniete.add(d.fid); break;
       case 'protokol': if (d.pid && d.stan === 'usuniety') { delete prot[d.pid]; break; }   // usunięty (1.6.1) – znika z list
@@ -60,7 +71,7 @@ function fold(events) {
   // usunięte zdjęcia znikają z kart urządzeń, braków i notatek (historia zostaje w zdarzeniach)
   if (usuniete.size) {
     Object.values(dev).forEach(x => { x.foto = x.foto.filter(f => !usuniete.has(f.fid)); });
-    Object.values(braki).forEach(b => { b.foto = (b.foto || []).filter(f => !usuniete.has(f)); });
+    Object.values(braki).forEach(b => { b.foto = (b.foto || []).filter(f => !usuniete.has(f)); b.kom.forEach(k => { k.foto = k.foto.filter(f => !usuniete.has(f)); }); });
     usuniete.forEach(f => delete fotoInfo[f]);
   }
   return { dev, braki, notes, prot, fotoInfo, usuniete };

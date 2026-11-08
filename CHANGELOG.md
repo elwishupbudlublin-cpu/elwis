@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.9.0 – 2026-11-08 (aplikacja i serwer)
+- Braki: dotknięcie kafelka otwiera okno braku – kategoria, opis, „blokuje pracę”, zdjęcia, komentarze (z tekstem i zdjęciami), historia zmian.
+- Uprawnienia: edycja, komentarz i zamknięcie – każdy; usunięcie – autor braku i biuro; ponowne otwarcie zamkniętego – biuro.
+- Nowe zdarzenia `brak_edyc` (`kat, opis, blokuje, foto[]`, `usun`, `otworz`) i `brak_kom` (`tekst, foto[]`); serwer sprawdza uprawnienia do usunięcia i ponownego otwarcia; status urządzenia uwzględnia usunięte / ponownie otwarte braki.
+- Tematy do wyjaśnienia widoczne tylko dla roli biuro (dotyczą przygotowania projektu); kafelek „Braki” dla pracowników.
+
 ## 1.8.0 – 2026-11-08 (aplikacja i serwer)
 - Podgląd zdjęć: dotknięcie miniatury (karta urządzenia, karty braków) otwiera zdjęcie na cały ekran z autorem i datą. Zdjęcia zrobione na tym tablecie – w pełnej rozdzielczości; z innych tabletów – pobierane na żądanie i zapisywane pomniejszone (ok. 800 px), żeby nie zajmowały miejsca; usuwane razem z budową z pamięci.
 - Usuwanie zdjęć: w podglądzie „Usuń zdjęcie” (autor – swoje, biuro – wszystkie); nowe zdarzenie `foto_usun`; niewysłane zdjęcie nie zostanie wysłane, wysłane serwer przenosi z Dysku do kosza (sprawdza autora).

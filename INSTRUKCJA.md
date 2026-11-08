@@ -38,6 +38,9 @@ Folder `_Budowy/_Techniczne` – DTR wszystkich urządzeń, wrzucane ręcznie (m
 Tablet trzyma komplet danych do 30 ostatnio otwieranych budów (na liście „✓ offline”). Starsze są usuwane i pobierane ponownie przy otwarciu (wymaga internetu).
 Od 1.7.0 limit zależy od wolnego miejsca (rezerwa 1 GB): przy małej ilości miejsca tablet trzyma mniej budów, a gdy miejsca nie starcza na 2 budowy – pokazuje czerwony komunikat „Mało miejsca… zgłoś to administratorowi”. Stan pamięci każdego tabletu widać w Bazie → Tablety, kolumna F „Stan pamięci” (aktualizowana przy każdej synchronizacji).
 
+## 4c0. Braki (od 1.9.0)
+Dotknij kafelka braku – otworzy się okno: zmiana opisu, kategorii, „blokuje”, dodanie zdjęć i komentarzy, zamknięcie. Usunąć brak może jego autor i biuro; zamknięty brak otwiera ponownie tylko biuro. Tematy do wyjaśnienia widzi tylko biuro.
+
 ## 4c1. Zdjęcia (od 1.8.0)
 Dotknij miniatury, aby zobaczyć zdjęcie na cały ekran. Zdjęcia z innych tabletów pobierają się przy podglądzie (wymaga internetu) w zmniejszonej rozdzielczości. „Usuń zdjęcie” – autor swoje, biuro wszystkie; plik na Dysku trafia do kosza.
 
