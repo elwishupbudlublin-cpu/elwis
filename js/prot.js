@@ -142,7 +142,7 @@ function protKarta(id, F) {
 const ProtViews = {};
 ProtViews.protokoly = function () {
   const p = curProj(); if (!p) return UI.go('home');
-  UI.header(p.nazwa + ' · protokoły', () => UI.go('budowa'));
+  UI.header(p.nazwa + ' · protokoły', () => UI.wstecz('budowa'));
   const F = fold(S.ev); const urz = urzE();
   const ded = Prot.dedykowaneBudowy(), poz = Prot.pozostaleBudowy();
   const zapisane = pr => Object.values(F.prot).filter(x => x.def === pr.id).sort((a, b) => a.ts < b.ts ? 1 : -1);
@@ -189,23 +189,23 @@ ProtViews.protokol = async function (par) {
   const F = fold(S.ev);
   let rec;
   if (par.nowy) {
-    const pr = Prot.def(par.nowy); if (!pr || !pr.def) { UI.toast('Brak definicji protokołu – zsynchronizuj tablet.'); return UI.go('budowa'); }
+    const pr = Prot.def(par.nowy); if (!pr || !pr.def) { UI.toast('Brak definicji protokołu – zsynchronizuj tablet.'); return UI.wstecz('budowa'); }
     rec = nowyProtokol(pr, par.urz);
     UI.par = { pid: rec.pid }; await DB.set('draft:' + rec.pid, rec);
   } else {
     const zap = F.prot[par.pid];
     const dr = await DB.get('draft:' + par.pid);
     rec = dr && (!zap || dr.ts0 === zap.ts) ? dr : zap ? JSON.parse(JSON.stringify(zap)) : dr;
-    if (!rec) { UI.toast('Nie znaleziono protokołu.'); return UI.go('protokoly'); }
+    if (!rec) { UI.toast('Nie znaleziono protokołu.'); return UI.wstecz('protokoly'); }
   }
   const pr = Prot.def(rec.def, rec.wersja);
-  if (!pr || !pr.def) { UI.toast('Definicja ' + rec.def + ' v' + rec.wersja + ' nie jest dostępna na tablecie.'); return UI.go('protokoly'); }
+  if (!pr || !pr.def) { UI.toast('Definicja ' + rec.def + ' v' + rec.wersja + ' nie jest dostępna na tablecie.'); return UI.wstecz('protokoly'); }
   const def = pr.def, dane = rec.dane, urzId = rec.urz;
   const zapisany = F.prot[rec.pid];
   const nr = (zapisany && zapisany.nr) || rec.nr || '';
   const tylkoOdczyt = rec.stan === 'zablokowany' && !Session.isBiuro();
   let zmiana = false;   // nowy protokół zapisuje się dopiero po pierwszej zmianie
-  UI.header(p.nazwa + ' · ' + (urzId || 'protokół'), async () => { await zapiszPrzyWyjsciu(); UI.go('protokoly'); });
+  UI.header(p.nazwa + ' · ' + (urzId || 'protokół'), async () => { await zapiszPrzyWyjsciu(); UI.wstecz('protokoly'); });
 
   const pole = (f, w, wi, sek) => {
     const v = w[f.id], key = `data-f="${U.esc(f.id)}"` + (wi != null ? ` data-w="${wi}" data-s="${U.esc(sek.id)}"` : '');
@@ -319,13 +319,13 @@ ProtViews.protokol = async function (par) {
   if ($('#pDone')) $('#pDone').onclick = async () => {
     const b = brakiProtokolu(def, dane); if (b.length) return pokazBraki(b);
     rec.stan = rec.stan === 'zablokowany' ? 'zablokowany' : 'gotowy';
-    await zapisz(rec.stan); UI.toast(nr ? 'Protokół zapisany' : 'Protokół przesłany – numer nada serwer przy synchronizacji'); UI.go('protokoly');
+    await zapisz(rec.stan); UI.toast(nr ? 'Protokół zapisany' : 'Protokół przesłany – numer nada serwer przy synchronizacji'); UI.wstecz('protokoly');
   };
   if ($('#pDel')) $('#pDel').onclick = async () => {
     if (!confirm('Usunąć protokół' + (nr ? ' ' + nr : '') + '? Zniknie z list' + (nr ? '; numer nie zostanie użyty ponownie, plik Word trafi do kosza' : '') + '.')) return;
     if (zapisany) await addEvent('protokol', urzId, { pid: rec.pid, def: rec.def, wersja: rec.wersja, prefiks: rec.prefiks || def.prefiks_nr || '', stan: 'usuniety', dane: {} });
     await DB.del('draft:' + rec.pid); zmiana = false;
-    UI.toast('Protokół usunięty'); UI.go('protokoly');
+    UI.toast('Protokół usunięty'); UI.wstecz('protokoly');
   };
   if ($('#pLock')) $('#pLock').onclick = async () => { rec.stan = rec.stan === 'zablokowany' ? 'gotowy' : 'zablokowany'; await zapisz(rec.stan); ProtViews.protokol({ pid: rec.pid }); };
   if ($('#pWord')) $('#pWord').onclick = async () => {

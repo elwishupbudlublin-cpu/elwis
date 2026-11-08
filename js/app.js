@@ -29,7 +29,23 @@ const UI = {
     $('#btnBack').hidden = !back; $('#btnBack').onclick = back || null;
     $('#btnUser').textContent = S.user ? S.user.name : '';
   },
-  go(v, par = {}) { this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0); },
+  // nawigacja ze stosem (od 1.11.7): „wstecz” wraca do ekranu, z którego przyszliśmy (z tym samym widokiem i ewentualnie otwartą kartą urządzenia)
+  stos: [],
+  go(v, par = {}, opc = {}) {
+    if (['setup', 'login', 'plan'].includes(v) && !opc.zostaw) this.stos = [];
+    else if (this.cur && v !== this.cur) {
+      const i = this.stos.findIndex(e => e.v === v);
+      if (i >= 0) this.stos.length = i;                       // powrót do ekranu, który już jest na stosie
+      else this.stos.push({ v: this.cur, par: this.par, dlg: opc.dlg || null });
+    }
+    this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0);
+  },
+  wstecz(domyslny = 'home') {
+    const e = this.stos.pop();
+    if (!e) return this.go(domyslny);
+    this.cur = e.v; this.par = e.par; this.pv = null; this.refresh(); window.scrollTo(0, 0);
+    if (e.dlg) Dialogs.device(e.dlg);
+  },
   refresh() {
     if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box)) {   // bez przeładowania rzutu (zachowuje powiększenie)
       const F = fold(S.ev); const urz = urzE();
@@ -268,7 +284,7 @@ const Views = {
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
       const t = zad.find(x => x.id === b.dataset.t); const bud = t && budowaZ(t);
       if (!bud) return UI.toast('To zadanie nie jest przypisane do budowy w ELWIS.');
-      openProject(bud.kod, { v: 'plan', par: { ...par } });
+      openProject(bud.kod);
     });
     // przewiń oś do „teraz” (albo do pierwszego zadania)
     const pt = view.querySelector('.pnowline') || view.querySelector('.pblk');
@@ -278,7 +294,7 @@ const Views = {
 
   /* Lista budów */
   async home() {
-    UI.header('wybór budowy', () => UI.go('plan'));
+    UI.header('wybór budowy', () => UI.wstecz('plan'));
     const all = (S.boot && S.boot.projekty) || [];
     const recent = (await DB.get('recent')) || [];
     const q = UI.par.q || '';
@@ -304,7 +320,7 @@ const Views = {
   async budowa() {
     const p = curProj(); if (!p) return UI.go('home');
     if (!dostepDoBudowy(p)) { S.kod = null; UI.go('home'); return brakDostepu(p); }
-    UI.header(p.nazwa, () => { const w = S.powrot; S.powrot = null; w ? UI.go(w.v, w.par) : UI.go('home'); });
+    UI.header(p.nazwa, () => UI.wstecz('home'));
     const pd = S.proj || {};
     const F = fold(S.ev);
     const urz = urzE();
@@ -364,7 +380,7 @@ const Views = {
   /* Rzuty + lista urządzeń */
   async rzut(par) {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · podłączenia', () => UI.go('budowa'));
+    UI.header(p.nazwa + ' · podłączenia', () => UI.wstecz('budowa'));
     const pd = S.proj || {}; const F = fold(S.ev);
     const urz = urzE();
     const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))];
@@ -407,7 +423,7 @@ const Views = {
   /* Braki i tematy */
   braki(par) {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · braki', () => UI.go('budowa'));
+    UI.header(p.nazwa + ' · braki', () => UI.wstecz('budowa'));
     const F = fold(S.ev); const showClosed = par.closed;
     const br = Object.values(F.braki).filter(b => (showClosed ? b.zamk : !b.zamk) && brakWEtapie(b)).sort((a, b) => a.ts < b.ts ? 1 : -1);
     const temE = t => { if (!maEtapy() || !S.etap || !t.urz) return true; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === t.urz); return !u || u.etap === S.etap; };
@@ -432,7 +448,7 @@ const Views = {
   /* Postęp */
   postep() {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · postęp', () => UI.go('budowa'));
+    UI.header(p.nazwa + ' · postęp', () => UI.wstecz('budowa'));
     const F = fold(S.ev); const urz = urzE(); const all = (S.proj || {}).urzadzenia || [];
     const groups = groupBy(urz, u => U.prefix(u.id));
     const today = U.day();
@@ -502,9 +518,9 @@ const Dialogs = {
     $('#tab').onclick = () => pickPhoto(id, 'tabliczka');
     $('#dFoto').onclick = () => pickPhoto(id, 'zdjecie');
     $('#dBrak').onclick = () => Dialogs.brak(id);
-    modal.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { pid: b.dataset.pid }); });
-    modal.querySelectorAll('[data-npr]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { nowy: b.dataset.npr, urz: id }); });
-    $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }); };
+    modal.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => { const z = UI.cur; UI.close(); UI.go('protokol', { pid: b.dataset.pid }, { dlg: z !== 'protokol' ? id : null }); });
+    modal.querySelectorAll('[data-npr]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { nowy: b.dataset.npr, urz: id }, { dlg: id }); });
+    $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); const z = UI.cur; UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }, { dlg: z !== 'rzut' ? id : null }); };
     bindIssue(modal, () => Dialogs.device(id));
     thumbs($('#thumbs'), st.foto); hydrateFotos(modal);
   },
@@ -814,10 +830,10 @@ function brakDostepu(p) {
     <div class="sfoot"><button class="btn pri" id="bdOk">Rozumiem</button></div></div></div>`;
   $('#bdOk').onclick = UI.close; $('#bdOk').focus();
 }
-async function openProject(kod, powrot = null) {
+async function openProject(kod) {
   const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
   if (!dostepDoBudowy(pp)) return brakDostepu(pp);
-  S.kod = kod; S.powrot = powrot;   // skąd wróci „wstecz” z ekranu budowy (od 1.11.7)
+  S.kod = kod;
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
   await wczytajEtap(kod);
@@ -891,6 +907,12 @@ function settings() {
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });
   window.addEventListener('offline', () => UI.net());
+  // systemowy przycisk „wstecz” Androida: zamyka okno albo cofa ekran tak jak strzałka w aplikacji (od 1.11.7)
+  history.pushState({ elwis: 1 }, '');
+  window.addEventListener('popstate', () => {
+    const okno = !!modal.innerHTML, ekran = !$('#btnBack').hidden;
+    if (okno || ekran) { history.pushState({ elwis: 1 }, ''); okno ? UI.close() : $('#btnBack').click(); }
+  });
   setInterval(() => { if (navigator.onLine && S.user) Sync.run(); }, 3 * 60e3);
   setInterval(async () => { if (S.user && S.user.exp < Date.now()) { await Session.logout(); UI.close(); UI.toast('Sesja wygasła – zaloguj się ponownie.'); UI.go('login'); } }, 60e3);
   if (!API.ready()) return UI.go('setup');
