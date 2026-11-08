@@ -38,7 +38,7 @@ function protCtx(urzId, lp) {
   const p = curProj() || {}; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === urzId) || {};
   return {
     kod: p.kod || '', nazwa_budowy: p.nazwa || '', adres: p.adres || '', zalogowany: S.user ? S.user.name : '',
-    inwestor: p.inwestor || '', zamawiajacy: p.zamawiajacy || '',   // Baza projektów, kol. N i O (schemat 1.5)
+    inwestor: p.inwestor || p.zamawiajacy || '', zamawiajacy: p.zamawiajacy || '',   // Baza projektów, kol. N i O (schemat 1.5); brak inwestora → zamawiający
     etap_urzadzenia: u.etap || '', kondygnacja_urzadzenia: u.kond || '', urzadzenie: urzId || '', lp: lp || ''
   };
 }

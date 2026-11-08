@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.5.2 – 2026-11-08 (aplikacja i serwer)
+- Protokoły: gdy w Bazie projektów brak inwestora, pole „Inwestor” przyjmuje wartość z kolumny „Zamawiający”.
+
 ## 1.5.1 – 2026-11-08 (aplikacja i serwer, schemat 1.5)
 - Protokoły: pola „Inwestor” i „Zamawiający” wypełniają się z Bazy projektów (zakładka Projekty, nowe kolumny N „Inwestor” i O „Zamawiający” – uzupełniane przy zakładaniu projektu). Puste w Bazie → wartość z poprzedniego protokołu budowy. Na tablecie można je poprawić.
 - Serwer: bootstrap zwraca `inwestor` i `zamawiajacy` budowy; dostępne też we wzorach definicji i nazwie pliku Word.
