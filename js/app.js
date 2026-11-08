@@ -173,10 +173,11 @@ const Views = {
       k.auto.forEach(x => { h1 = Math.max(h1, Math.ceil((x.od + x.dl) / 60)); });
     });
     const PX = 64;
-    // tydzień wybranego dnia (pn–nd) z liczbą zadań
-    const d0 = new Date(dzien + 'T12:00'); const pn = new Date(d0.getTime() - ((d0.getDay() + 6) % 7) * 864e5);
-    const tydzien = Array.from({ length: 7 }, (_, i) => { const d = new Date(pn.getTime() + i * 864e5); const k = U.day(d); return { k, d, n: wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).length }; });
-    const przesun = n => U.day(new Date(d0.getTime() + n * 864e5));
+    // pasek 7 dni przesuwany o pojedyncze dni (od 1.10.2): par.od = pierwszy widoczny dzień; domyślnie wybrany dzień w środku
+    const d0 = new Date(dzien + 'T12:00');
+    const dzienPlus = (k, n) => U.day(new Date(new Date(k + 'T12:00').getTime() + n * 864e5));
+    const od = par.od || dzienPlus(dzien, -3);
+    const tydzien = Array.from({ length: 7 }, (_, i) => { const k = dzienPlus(od, i); const d = new Date(k + 'T12:00'); return { k, d, n: wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).length }; });
     const dzienTxt = d0.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
     const mojeDzis = zad.filter(mojeZad);
     const budowy = new Set(mojeDzis.map(t => t.lista).filter(Boolean));
@@ -226,15 +227,18 @@ const Views = {
       </div>
       ${bezGodz.length ? `<h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2><div class="pcards">${bezGodz.map(karta).join('')}</div>` : ''}`;
     const idz = o => UI.go('plan', { ...par, ...o });
-    view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, ukryj: undefined }));
+    view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, od: b.classList.contains('pnow') ? undefined : od, ukryj: undefined }));
     // przeciąganie paska tygodnia w lewo / prawo = następny / poprzedni tydzień
     (() => {
       const w = $('#pWeek'); let x0 = null, dx = 0, przeciagniete = false;
+      // przesunięcie o tyle dni, ile kafelków przeciągnięto (min. 1 dzień przy ruchu > 1/3 kafelka)
+      const szer = () => { const k = w.querySelector('.pday'); return k ? k.getBoundingClientRect().width + 6 : 100; };
       const ruch = e => { if (x0 === null) return; dx = e.clientX - x0; if (Math.abs(dx) > 10) przeciagniete = true; if (przeciagniete) w.style.transform = `translateX(${dx}px)`; };
       const koniec = () => {
         if (x0 === null) return; x0 = null; window.removeEventListener('pointermove', ruch);
         w.style.transition = 'transform .2s'; w.style.transform = '';
-        if (Math.abs(dx) > 60) idz({ d: przesun(dx < 0 ? 7 : -7), ukryj: undefined });
+        const sz = szer(); const n = Math.abs(dx) < sz / 3 ? 0 : Math.max(1, Math.round(Math.abs(dx) / sz)) * (dx < 0 ? 1 : -1);
+        if (n) idz({ od: dzienPlus(od, n) });
       };
       w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
       w.addEventListener('click', e => { if (przeciagniete) { e.stopPropagation(); e.preventDefault(); przeciagniete = false; } }, true);

@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.10.2 – 2026-11-08 (aplikacja)
+- Pasek dni: 7 kolejnych dni przesuwanych o pojedyncze dni – przeciągnięcie o jeden kafelek = jeden dzień (o kilka kafelków = kilka dni); domyślnie wybrany dzień w środku; „↺ dziś” wraca do bieżącego dnia.
+
 ## 1.10.1 – 2026-11-08 (aplikacja)
 - Plan: zadania bez godzin i bez „Estimated Time” też trafiają na oś (po zadaniach z szacowanym czasem), z czasem 1,5 h dobranym do wielkości kafelka i opisem „czas nieokreślony”; lista „Bez godziny” znika, gdy pusta.
 - Pasek tygodnia: zmiana tygodnia przeciągnięciem kafelków dni w lewo / prawo (bez strzałek); dotknięcie dnia – jak dotąd.
