@@ -10,8 +10,19 @@ const UI = {
     const n = $('#net'), t = $('#netText');
     n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '');
     const p = S.pending ? ` · ${S.pending} do wysłania` : '';
-    t.textContent = S.syncing ? 'Synchronizuję…' : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
+    t.textContent = S.syncing ? 'Synchronizuję…' + (S.prog ? ' ' + Math.round(S.prog.p * 100) + '%' : '') : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
     $('#btnSync').classList.toggle('spin', S.syncing);
+    this.prog();
+    $('#memWarn').hidden = !(S.malo && S.user);
+  },
+  /* pasek postępu pod nagłówkiem (od 1.7.0) */
+  prog() {
+    const on = !!(S.syncing && S.prog);
+    $('#syncStrip').hidden = !on || $('#top').hidden;
+    if (!on) return;
+    $('#syncFill').style.width = Math.round(S.prog.p * 100) + '%';
+    $('#syncTxt').textContent = S.prog.t;
+    $('#netText').textContent = 'Synchronizuję… ' + Math.round(S.prog.p * 100) + '%';
   },
   header(sub, back) {
     $('#top').hidden = false; $('#topSub').textContent = sub || '';
@@ -640,12 +651,13 @@ function settings() {
         <div>Sesja do: <b>${S.user ? new Date(S.user.exp).toLocaleString('pl-PL') : ''}</b></div>
         <div>Ostatnia synchronizacja: <b>${S.lastSync ? new Date(S.lastSync).toLocaleString('pl-PL') : '—'}</b></div>
         <div>Do wysłania: <b>${S.pending}</b></div>
-        <div>Budowy w pamięci: <b id="sBud">…</b> (najwyżej ${PAMIEC_BUDOW}) · zajęte: <b id="sMem">…</b></div>${S.syncErr ? `<div class="badbox">${U.esc(S.syncErr)}</div>` : ''}</div>
+        <div>Budowy w pamięci: <b id="sBud">…</b> (limit <b id="sLim">…</b> z ${PAMIEC_BUDOW}) · zajęte: <b id="sMem">…</b> · wolne: <b id="sFree">…</b></div>
+        ${S.malo ? '<div class="badbox">Mało miejsca na tablecie – zgłoś to administratorowi (Łukasz P).</div>' : ''}${S.syncErr ? `<div class="badbox">${U.esc(S.syncErr)}</div>` : ''}</div>
       <button class="btn pri" id="sLogout">Wyloguj</button>
       <button class="btn" id="sFull">Pobierz wszystko ponownie (WiFi)</button>
       ${Session.isBiuro() ? '<button class="btn bad" id="sReset">Resetuj tablet (usuwa dane z tego urządzenia)</button>' : ''}
     </div></div></div>`;
-  (async () => { $('#sBud').textContent = (await Pamiec.lista()).length; const z = await Pamiec.zajete(); $('#sMem').textContent = z ? mb(z) : 'brak danych'; })();
+  (async () => { const st = await Pamiec.stan(); $('#sBud').textContent = st.budowy; $('#sLim').textContent = st.limit; $('#sMem').textContent = st.usage ? mbTxt(st.usage) : 'brak danych'; $('#sFree').textContent = st.quota ? mbTxt(st.wolne) : 'brak danych'; })();
   $('#sx').onclick = UI.close;
   $('#sLogout').onclick = async () => { await Session.logout(); UI.close(); UI.go('login'); };
   $('#sFull').onclick = () => { UI.close(); Sync.run(true); };
@@ -663,6 +675,7 @@ function settings() {
   await API.load();
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
   S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+  try { await Pamiec.limit(); } catch (e) { }
   $('#topVer').textContent = 'v' + APP_VERSION;
   $('#btnSync').onclick = () => Sync.run();
   $('#btnUser').onclick = settings;

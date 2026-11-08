@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.7.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -36,7 +36,7 @@ const API = (() => {
     load, ready, test,
     setCfg: async (c) => { cfg = c; await DB.set('cfg', c); },
     cfg: () => cfg,
-    bootstrap: () => get('bootstrap'),
+    bootstrap: (pamiec) => get('bootstrap', pamiec ? { pamiec } : {}),
     project: (kod) => get('project', { kod }),
     techniczne: () => get('techniczne'),
     plan: (od, d) => get('plan', { od, do: d }),

@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.7.0 – 2026-11-08 (aplikacja i serwer, schemat 1.6)
+- Synchronizacja: procent w nagłówku („Synchronizuję… 45%”) i pasek postępu pod nagłówkiem z opisem etapu (wysyłka zdjęć i wpisów, plan dnia, „Budowa 2/6 · pliki 3/12”, „DTR 5/18 · 45 MB / 120 MB”).
+- Pamięć tabletu: limit budów liczony z wolnego miejsca (rezerwa 1 GB na zdjęcia, szkice i aktualizacje) – do 30 przy dużej ilości miejsca, mniej przy małej; najstarsze budowy usuwane najpierw; bieżąca i budowy z niewysłanymi danymi zostają zawsze.
+- Miejsca na mniej niż 2 budowy (albo brak miejsca przy pobieraniu) → czerwony komunikat „Mało miejsca na tablecie – zgłoś to administratorowi (Łukasz P)”.
+- Ustawienia: liczba budów w pamięci, aktualny limit, zajęte i wolne miejsce.
+- Tablet zgłasza stan pamięci przy każdej synchronizacji (parametr `pamiec` w `bootstrap`); serwer wpisuje go w Bazie → Tablety, kolumna F „Stan pamięci” (schemat 1.6), z dopiskiem „MAŁO MIEJSCA”, gdy trzeba.
+
 ## 1.6.2 – 2026-11-08 (aplikacja)
 - Protokół: przycisk „Zakończ” nazywa się „Prześlij” (działanie bez zmian: sprawdza pola wymagane, po synchronizacji serwer nadaje numer); na kafelku budowy „przesłanych” zamiast „zakończonych”.
 

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.6.1';
+const SCRIPT_VERSION = '1.7.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -51,7 +51,7 @@ function handle_(p, body) {
     const tablet = auth_(p.key);
     if (!tablet) return out_({ ok: false, error: 'Nieznany lub wyłączony klucz tabletu' });
     switch (body ? body.action : p.action) {
-      case 'bootstrap': return out_(bootstrap_(tablet));
+      case 'bootstrap': if (p.pamiec) stanPamieci_(p.key, p.pamiec); return out_(bootstrap_(tablet));
       case 'project': return out_(project_(String(p.kod || '')));
       case 'file': return out_(file_(String(p.id || ''), p.part));
       case 'techniczne': return out_(techniczne_());
@@ -97,6 +97,17 @@ function auth_(key) {
   return r ? txt_(r[0]) : null;
 }
 
+/** Stan pamięci zgłoszony przez tablet (od 1.7.0) → Tablety, kolumna F „Stan pamięci” (schemat 1.6). */
+function stanPamieci_(key, v) {
+  try {
+    const sh = baza_().getSheetByName('Tablety');
+    if (!txt_(sh.getRange(1, 6).getValue())) sh.getRange(1, 6).setValue('Stan pamięci');
+    const keys = sh.getRange(2, 2, Math.max(sh.getLastRow() - 1, 1), 1).getDisplayValues();
+    const i = keys.findIndex(r => txt_(r[0]) === String(key)); if (i < 0) return;
+    const czas = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm');
+    sh.getRange(i + 2, 6).setNumberFormat(TEXT).setValue((czas + ' · ' + String(v)).replace(/[=+@]/g, ' ').slice(0, 200));
+  } catch (e) { /* zgłoszenie stanu nie może blokować synchronizacji */ }
+}
 function sha_(s) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8)
     .map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');

@@ -80,6 +80,8 @@ async function addEvent(typ, urz, d) {
 /* Synchronizacja */
 const Sync = {
   timer: null,
+  /* postęp synchronizacji (od 1.7.0): p = 0..1, t = opis etapu */
+  prog(p, t) { S.prog = { p: Math.max(0, Math.min(1, p)), t: t || '' }; UI.prog(); },
   soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 1500); },
   async run(full) {
     if (S.syncing || !API.ready()) return;
@@ -87,12 +89,15 @@ const Sync = {
     S.syncing = true; S.syncErr = null; UI.net();
     try {
       // 1. konfiguracja i słowniki
-      const b = await API.bootstrap();
+      this.prog(0.01, 'Konfiguracja');
+      const b = await API.bootstrap(await Pamiec.opisStanu());
       if (String(b.schema).split('.')[0] !== '1') throw new Error('Nieznana wersja schematu danych: ' + b.schema + '. Zaktualizuj aplikację.');
       if (verLess(APP_VERSION, b.minApp)) throw new Error('Wymagana nowsza wersja aplikacji (' + b.minApp + '). Odśwież aplikację przy WiFi.');
       S.boot = b; await DB.set('boot', b);
       // 2. zdjęcia (pojedynczo – mniejsze paczki)
-      for (const p of await DB.unsentPhotos()) {
+      const fotki = await DB.unsentPhotos(); let fi = 0;
+      for (const p of fotki) {
+        this.prog(0.05 + 0.1 * fi++ / fotki.length, `Wysyłam zdjęcia ${fi}/${fotki.length}`);
         const b64 = await U.blobToB64(p.blob);
         await API.push(p.kod, [], [{ id: p.id, name: p.name, b64 }]);
         p.sent = 1; await DB.putPhoto(p);
@@ -101,9 +106,11 @@ const Sync = {
       const un = await DB.unsynced();
       const byKod = {};
       un.forEach(e => (byKod[e.kod] = byKod[e.kod] || []).push(e));
+      let wyslane = 0;
       for (const kod of Object.keys(byKod)) {
         const all = byKod[kod];
         for (let i = 0; i < all.length; i += 100) {
+          this.prog(0.15 + 0.1 * wyslane / un.length, `Wysyłam wpisy ${wyslane}/${un.length}`); wyslane += Math.min(100, all.length - i);
           const part = all.slice(i, i + 100).map(({ synced, ...e }) => e);
           const r = await API.push(kod, part, []);
           const ok = new Set(r.accepted || []);
@@ -114,35 +121,44 @@ const Sync = {
       }
       // 4. dane budów: bieżąca + ostatnio używane
       // plan dnia z ClickUp (±7 dni) – przed plikami, żeby był od razu po zalogowaniu
+      this.prog(0.26, 'Plan dnia');
       await this.pullPlan();
       if (UI.cur === 'plan') UI.refresh();
       // bieżąca + 5 ostatnich (pozostałe z 30 – przy otwarciu albo „Pobierz wszystko ponownie”)
       const recent = (await DB.get('recent')) || [];
-      const ile = full ? PAMIEC_BUDOW : 6;
+      const limit = await Pamiec.limit();
+      const ile = Math.min(full ? PAMIEC_BUDOW : 6, Math.max(limit, 1));
       const kody = [...new Set([S.kod, ...recent.slice(0, ile)].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
-      for (const kod of kody) await this.pullProject(kod, full);
+      for (let j = 0; j < kody.length; j++) await this.pullProject(kody[j], full, (f, t) => this.prog(0.3 + 0.5 * (j + f) / kody.length, `Budowa ${j + 1}/${kody.length}` + (t ? ' · ' + t : '')));
       // 5. DTR wspólne dla wszystkich budów
-      await this.pullTech(full);
+      await this.pullTech(full, (f, t) => this.prog(0.8 + 0.18 * f, t));
+      this.prog(0.99, 'Porządki w pamięci');
       await Pamiec.porzadki();
+      await Pamiec.sprawdz();
       S.lastSync = Date.now(); await DB.set('lastSync', S.lastSync);
     } catch (err) {
       S.syncErr = err.message; console.warn('sync', err);
     } finally {
-      S.syncing = false;
+      S.syncing = false; S.prog = null;
       S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
       UI.net(); if (!['login', 'setup', 'protokol'].includes(UI.cur)) UI.refresh();   // formularza protokołu nie przerysowujemy w trakcie pisania
     }
   },
-  async pullProject(kod, full) {
+  async pullProject(kod, full, onProg) {
+    const pr = onProg || (() => { });
+    pr(0, 'dane');
     const p = await API.project(kod);
     await DB.set('proj:' + kod, p);
     // rzuty i dokumenty do wglądu – do pamięci tabletu (raz, potem z pamięci)
-    const ids = [...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size <= 60e6).map(f => f.id)];
-    for (const id of [...new Set(ids)]) {
-      const have = await DB.getFile(id);
-      if (have && !full) continue;
-      try { await pobierzPlik(id); } catch (e) { console.warn('file', id, e); }
+    const ids = [...new Set([...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size <= 60e6).map(f => f.id)])];
+    const brak = [];
+    for (const id of ids) if (full || !(await DB.hasFile(id))) brak.push(id);
+    for (let i = 0; i < brak.length; i++) {
+      pr(0.05 + 0.85 * i / brak.length, `pliki ${i + 1}/${brak.length}`);
+      try { await pobierzPlik(brak[i], (c, n) => pr(0.05 + 0.85 * (i + c / n) / brak.length, `pliki ${i + 1}/${brak.length} · ${Math.round(c / n * 100)}%`)); }
+      catch (e) { console.warn('file', brak[i], e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; break; } }
     }
+    pr(0.92, 'wpisy z innych tabletów');
     // zdarzenia z innych tabletów
     let since = (await DB.get('seq:' + kod)) || 0;
     for (let guard = 0; guard < 50; guard++) {
@@ -157,13 +173,16 @@ const Sync = {
     }
     if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); }
     await Pamiec.oznacz(kod);
+    await Pamiec.zmierz(kod, ids);
   },
   async pullPlan() {
     const od = U.day(new Date(Date.now() - 7 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));
     try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
   },
-  async pullTech(full) {
+  async pullTech(full, onProg) {
+    const pr = onProg || (() => { });
+    pr(0, 'DTR');
     let r;
     try { r = await API.techniczne(); } catch (e) { S.techInfo = 'Pozostałe DTR wymagają aktualizacji serwera ELWIS.'; return; }
     S.techInfo = r.brakFolderu ? 'Folder _Techniczne nie jest ustawiony w Konfiguracji.' : '';
@@ -171,19 +190,54 @@ const Sync = {
     await DB.set('tech', r.pliki);
     const now = new Set(r.pliki.map(f => f.id));
     for (const f of old) if (!now.has(f.id) && !(await Pamiec.uzywany(f.id))) await DB.delFile(f.id);   // usunięte z Dysku
+    const doPobrania = [];
     for (const f of r.pliki) {
       if (f.size > 60e6) continue;
       const prev = old.find(x => x.id === f.id);
       const changed = prev && prev.zm && f.zm && prev.zm !== f.zm;
       if (!full && !changed && await DB.hasFile(f.id)) continue;
-      try { await pobierzPlik(f.id); } catch (e) { console.warn('dtr', f.id, e); }
+      doPobrania.push(f);
+    }
+    const razem = doPobrania.reduce((a, f) => a + (f.size || 0), 0) || 1; let gotowe = 0;
+    for (let i = 0; i < doPobrania.length; i++) {
+      const f = doPobrania[i];
+      const opis = (c) => `DTR ${i + 1}/${doPobrania.length} · ${mbTxt(gotowe + c)} / ${mbTxt(razem)}`;
+      pr(gotowe / razem, opis(0));
+      try { await pobierzPlik(f.id, (c, n) => pr((gotowe + f.size * c / n) / razem, opis(f.size * c / n))); }
+      catch (e) { console.warn('dtr', f.id, e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; break; } }
+      gotowe += f.size || 0;
     }
   }
 };
 
-/* Pamięć tabletu: komplet danych 30 ostatnio otwieranych budów */
+/* Pamięć tabletu: komplet danych do 30 ostatnio otwieranych budów; przy małej ilości miejsca mniej (od 1.7.0) */
 const PAMIEC_BUDOW = 30;
+const REZERWA = 1024 * 1048576;   // 1 GB na zdjęcia, szkice i aktualizacje
+const BUDOWA_DOMYSLNIE = 50 * 1048576;   // gdy nie ma jeszcze pomiaru
+function mbTxt(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(1).replace('.', ',') + ' GB' : Math.round(b / 1048576) + ' MB'; }
 const Pamiec = {
+  /* rozmiar budowy w pamięci (pliki rzutów i dokumentów) – zapamiętany po pobraniu */
+  async zmierz(kod, ids) {
+    let n = 0; for (const id of ids) { const f = await DB.getFile(id); if (f && f.blob) n += f.blob.size; }
+    await DB.set('rozmiar:' + kod, n);
+  },
+  async stan() {
+    let quota = 0, usage = 0;
+    try { const e = await navigator.storage.estimate(); quota = e.quota || 0; usage = e.usage || 0; } catch (e) { }
+    const l = await this.lista(); let bud = 0, n = 0;
+    for (const k of l) { const r = await DB.get('rozmiar:' + k); if (r != null) { bud += r; n++; } }
+    const sr = n ? Math.max(bud / n, 5 * 1048576) : BUDOWA_DOMYSLNIE;
+    const wolne = Math.max(quota - usage, 0);
+    const budzet = bud + wolne - REZERWA;   // miejsce na budowy: zajęte przez budowy + wolne − rezerwa
+    const limit = quota ? Math.max(0, Math.min(PAMIEC_BUDOW, Math.floor(budzet / sr))) : PAMIEC_BUDOW;
+    return { quota, usage, wolne, budowy: l.length, limit, sr, malo: !!quota && limit < 2 };
+  },
+  async limit() { const s = await this.stan(); S.malo = s.malo; return s.limit; },
+  async sprawdz() { const s = await this.stan(); S.malo = S.malo || s.malo; if (S.malo) UI.toast('Mało miejsca na tablecie – zgłoś to administratorowi (Łukasz P)'); return s; },
+  async opisStanu() {
+    const s = await this.stan(); if (!s.quota) return '';
+    return (s.malo ? 'MAŁO MIEJSCA · ' : '') + `wolne ${mbTxt(s.wolne)} z ${mbTxt(s.quota)} · budowy ${s.budowy} (limit ${s.limit}) · v${APP_VERSION}`;
+  },
   async lista() {
     let l = await DB.get('offline');
     if (!l) {   // pierwsze uruchomienie 1.3: budowy pobrane przez starsze wersje
@@ -206,14 +260,17 @@ const Pamiec = {
     return false;
   },
   async porzadki() {
-    const recent = ((await DB.get('recent')) || []).slice(0, PAMIEC_BUDOW);
-    const keep = new Set([S.kod, ...recent].filter(Boolean));
+    const limit = await this.limit();
+    const recent = ((await DB.get('recent')) || []).slice(0, Math.min(PAMIEC_BUDOW, limit));
+    // bieżąca budowa i budowy z niewysłanymi wpisami / zdjęciami zostają zawsze
+    const niewyslane = new Set([...(await DB.unsynced()).map(e => e.kod), ...(await DB.unsentPhotos()).map(p => p.kod)]);
+    const keep = new Set([S.kod, ...recent, ...niewyslane].filter(Boolean));
     const l = await this.lista();
     for (const kod of l.filter(k => !keep.has(k))) {
       const p = await DB.get('proj:' + kod);
       if (p) for (const id of [...Object.values(p.rzuty || {}), ...(p.pliki || []).map(f => f.id)]) if (!(await this.uzywany(id, kod))) await DB.delFile(id);
       await DB.del('proj:' + kod); await DB.del('seq:' + kod);
-      await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod);
+      await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod); await DB.del('rozmiar:' + kod);
     }
     await DB.set('offline', l.filter(k => keep.has(k)));
   },

@@ -35,7 +35,8 @@ Budowa z kilkoma budynkami / częściami: w Bazie projektów kolumna „Etap Bud
 Folder `_Budowy/_Techniczne` – DTR wszystkich urządzeń, wrzucane ręcznie (można tworzyć podfoldery, np. producentów). Każdy tablet pobiera całość przy synchronizacji; pierwsze pobranie najlepiej przy WiFi. Pliki do 60 MB.
 
 ## 4c. Pamięć tabletu
-Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ offline”). Starsze są usuwane i pobierane ponownie przy otwarciu (wymaga internetu).
+Tablet trzyma komplet danych do 30 ostatnio otwieranych budów (na liście „✓ offline”). Starsze są usuwane i pobierane ponownie przy otwarciu (wymaga internetu).
+Od 1.7.0 limit zależy od wolnego miejsca (rezerwa 1 GB): przy małej ilości miejsca tablet trzyma mniej budów, a gdy miejsca nie starcza na 2 budowy – pokazuje czerwony komunikat „Mało miejsca… zgłoś to administratorowi”. Stan pamięci każdego tabletu widać w Bazie → Tablety, kolumna F „Stan pamięci” (aktualizowana przy każdej synchronizacji).
 
 ## 4d. Plan dnia z ClickUp (od 1.4.0)
 1. W ClickUp: awatar → **Settings → Apps → API Token → Generate** – skopiuj klucz (zaczyna się od `pk_`). Nie wysyłaj go nikomu.

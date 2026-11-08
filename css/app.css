@@ -164,3 +164,11 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .pwiersz{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:#fafbfc}
 .pfoot{position:sticky;bottom:0;display:flex;gap:10px;flex-wrap:wrap;padding:12px 0;background:var(--bg)}
 .pfoot .btn{flex:1;min-width:140px}
+
+/* 1.7.0: postęp synchronizacji i ostrzeżenie o pamięci */
+.syncstrip{position:sticky;top:64px;z-index:19;background:var(--pri);color:#fff;padding:4px 16px 8px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.syncstrip[hidden]{display:none}
+.syncstrip .sbar{height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden}
+.syncstrip .sbar i{display:block;height:100%;width:0;background:#5be38a;transition:width .3s}
+.memwarn{background:#c62828;color:#fff;font-weight:600;padding:10px 16px;font-size:15px}
+.memwarn[hidden]{display:none}
