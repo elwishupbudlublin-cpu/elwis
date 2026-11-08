@@ -245,6 +245,7 @@ const Views = {
               if (!pr.length) return `<button class="tile" disabled><b>${U.esc(z)}</b><span class="mute">w kolejnej wersji aplikacji</span></button>`;
               const ps = Object.values(F.prot).filter(x => pr.some(q => q.id === x.def));
               return `<button class="tile" data-prot="1"><b>${U.esc(z)} – protokoły</b><span class="mute">${pr.map(q => U.esc(q.nazwa)).join(', ')}</span><span class="mute">${ps.filter(x => x.stan !== 'roboczy').length} zakończonych · ${ps.filter(x => x.stan === 'roboczy').length} w trakcie</span></button>`; }).join('')}
+            ${!zakres.some(z => Prot.lista().some(x => U.norm(z).startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(U.norm(z)))) && Prot.wszystkie().length ? `<button class="tile" data-prot="1"><b>Protokoły</b><span class="mute">brak dedykowanych tej budowie · ${Prot.wszystkie().length} dostępnych</span></button>` : ''}
           </div>
           ${maEtapy() ? `<h2 style="margin:6px 0 0">Postęp etapów</h2><div class="grid2">${etapyOf().map(e => etapTile(e, F)).join('')}</div>` : ''}
           <div class="row"><button class="btn bad grow" id="bBrak">Zgłoś brak</button><button class="btn grow" id="bNote">Notatka z budowy</button></div>
@@ -377,6 +378,7 @@ const Dialogs = {
         <div class="card stack"><div class="row"><b class="grow">Nr seryjny</b>${t.sn ? '<span class="chip warn">wymagany</span>' : ''}</div>
           <div class="row"><input type="text" id="sn" value="${U.esc(sn)}" placeholder="zeskanuj kod lub wpisz" class="grow" style="flex:1"><button class="btn sm" id="snSave">Zapisz</button></div>
           <div class="row"><button class="btn sm pri" id="scan">Skanuj kod</button><button class="btn sm" id="tab">Zdjęcie tabliczki${hasTab ? ' ✓' : ''}</button></div></div>
+        ${protKarta(id, F)}
         <div><div class="lbl">Kroki</div><div class="stack" style="margin-top:8px">${t.kroki.map((k, i) => {
           const s = st.kroki[i]; const done = s && s.val;
           const last = i === t.kroki.length - 1;
@@ -384,7 +386,6 @@ const Dialogs = {
           const dis = (!done && (blocked || needSn));
           return `<button class="step ${done ? 'done' : ''}" data-k="${i}" ${dis ? 'disabled' : ''}><span class="box">${done ? '✓' : ''}</span><span class="grow"><b>${U.esc(k)}</b><br><span class="mute">${done ? U.esc(s.kto) + ' · ' + U.fmt(s.ts) : blocked ? 'Zablokowane: otwarty brak' : needSn ? 'Wymaga nr seryjnego lub zdjęcia tabliczki' : 'do zrobienia'}</span></span></button>`;
         }).join('')}</div></div>
-        ${Prot.dlaUrz(id).length ? `<div class="card stack"><div class="lbl">Protokoły</div>${Prot.dlaUrzStan(id, F).map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc((Prot.def(x.def, x.wersja) || {}).nazwa || x.def)}</span>${Prot.chip(x)}</button>`).join('')}${Prot.dlaUrz(id).map(q => `<button class="btn sm pri" data-npr="${U.esc(q.id)}">+ ${U.esc(q.nazwa)}</button>`).join('')}</div>` : ''}
         <div><div class="lbl">Braki (${br.filter(b => !b.zamk).length} otwartych)</div><div class="stack" style="margin-top:8px">${br.map(issueHtml).join('') || '<span class="mute">Brak.</span>'}</div></div>
         <div><div class="lbl">Zdjęcia</div><div class="thumbs" id="thumbs" style="margin-top:8px"></div></div>
         <div><div class="lbl">Historia</div><div class="hist" style="margin-top:8px">${st.hist.slice().reverse().slice(0, 30).map(e => `<div><b>${U.fmt(e.ts)}</b> ${U.esc(e.kto)} – ${U.esc(histTxt(e))}</div>`).join('') || '<span class="mute">Brak wpisów.</span>'}</div></div>

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.5.2';
+const SCRIPT_VERSION = '1.6.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -404,9 +404,14 @@ function protokolyBaza_() {
   const sh = baza_().getSheetByName('Protokoły'); if (!sh) return [];
   return rowsT_(sh).filter(r => txt_(r[0])).map(r => ({
     id: txt_(r[0]), nazwa: txt_(r[1]), wersja: txt_(r[2]).replace(/^v/i, ''), rodzaj: txt_(r[3]),
-    powiazanie: (txt_(r[4]).match(/^[A-Za-z]+/) || [''])[0].toUpperCase(),
+    powiazania: prefiksy_(r[4]),
     defId: idFromUrl_(r[5]), szablonId: idFromUrl_(r[6]), aktywny: tak_(r[7])
   }));
+}
+/** Powiązanie: jeden lub kilka prefiksów typu urządzenia, np. „SZ; SP (szafy)”; tekst w nawiasie = opis; pusto = wszystkie urządzenia. */
+function prefiksy_(v) {
+  return txt_(v).replace(/\([^)]*\)/g, ' ').split(/[;,\s]+/).map(x => x.replace(/[^A-Za-z]/g, '').toUpperCase()).filter(String)
+    .filter((x, i, a) => a.indexOf(x) === i);
 }
 function definicja_(fileId) {
   const c = CacheService.getScriptCache(), k = 'def:' + fileId, hit = c.get(k);
@@ -420,7 +425,7 @@ function protokolyAktywne_() {
   return protokolyBaza_().filter(p => p.aktywny && p.defId && p.szablonId).map(p => {
     let def = null, blad = '';
     try { def = definicja_(p.defId); } catch (e) { blad = 'Błąd pliku definicji: ' + (e.message || e); }
-    return { id: p.id, nazwa: p.nazwa, wersja: p.wersja, rodzaj: p.rodzaj, powiazanie: p.powiazanie, def: def, blad: blad };
+    return { id: p.id, nazwa: p.nazwa, wersja: p.wersja, rodzaj: p.rodzaj, powiazania: p.powiazania, powiazanie: p.powiazania[0] || '', def: def, blad: blad };
   });
 }
 /** Numer protokołu nadaje serwer (bez kolizji między tabletami): <prefiks><nr 2 cyfry>, kolejno w budowie dla prefiksu.

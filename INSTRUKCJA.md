@@ -48,7 +48,9 @@ Tablet trzyma komplet danych 30 ostatnio otwieranych budów (na liście „✓ o
 1. Wklej nowy `Code.gs` → **Wdróż → Zarządzaj wdrożeniami → edytuj → Nowa wersja** (adres `/exec` bez zmian).
 2. W Bazie, zakładka **Protokoły**: link do definicji (kolumna F), link do szablonu Word (kolumna G), **Aktywny = tak**.
 3. W zakładce **Projekty** w „Zakresie prac” budowy wpisz rodzaj pracy protokołu (np. `went. bytowa`).
-4. Na tablecie: synchronizacja → na karcie budowy kafelek „… – protokoły”; protokół także z karty szafy.
+4. Na tablecie: synchronizacja → na karcie budowy kafelek „… – protokoły” (najpierw dedykowane, niżej „Pozostałe protokoły” z wyborem urządzenia); w karcie urządzenia przycisk „Do wykonania: …” dla protokołu dedykowanego jego typowi.
+   - Powiązanie z typami urządzeń: zakładka Protokoły, kolumna E, kilka prefiksów rozdzielonych średnikiem (np. `SZ; SP`).
+   - W tabelach (np. wentylatory) wybierz urządzenie z listy budowy albo „Dodaj wszystkie” – nr seryjny spisany przy podłączeniu wpisze się sam.
 5. Word: zaloguj się kontem z rolą biuro → protokół → **Generuj Word** → plik w folderze budowy → Protokoły. PDF – na żądanie przez Claude.
 
 ## 4e. Obiekty wojskowe

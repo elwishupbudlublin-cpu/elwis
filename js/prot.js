@@ -2,12 +2,26 @@
  * Numer protokołu nadaje serwer przy pierwszej synchronizacji po „Zakończ”. Word – na żądanie (rola biuro). */
 
 const Prot = {
-  /* Aktywne protokoły z Bazy (bootstrap), dostępne na tej budowie (zakres prac ⊇ rodzaj pracy protokołu). */
-  lista() {
+  /* Wszystkie aktywne protokoły z Bazy (bootstrap) z poprawną definicją. */
+  wszystkie() { return ((S.boot && S.boot.protokoly) || []).filter(x => x.def); },
+  /* Powiązanie: lista prefiksów typów urządzeń (od 1.6.0 kilka, np. „SZ; SP”); pusto = każde urządzenie. */
+  pow(x) { return x.powiazania || (x.powiazanie ? [x.powiazanie] : []); },
+  pasuje(x, id) { const p = this.pow(x); return !p.length || p.indexOf(U.prefix(id)) >= 0; },
+  wZakresie(x) {
     const p = curProj(); const zakres = ((p && p.zakres) || []).map(U.norm);
-    return ((S.boot && S.boot.protokoly) || []).filter(x => x.def && (!x.rodzaj || zakres.some(z => z.startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(z))));
+    return !x.rodzaj || zakres.some(z => z.startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(z));
   },
-  dlaUrz(id) { return this.lista().filter(x => !x.powiazanie || x.powiazanie === U.prefix(id)); },
+  /* Protokoły w zakresie prac budowy (kafelki na karcie budowy). */
+  lista() { return this.wszystkie().filter(x => this.wZakresie(x)); },
+  /* Dedykowane budowie: w zakresie prac i dla typów urządzeń, które są na budowie (kolejność wierszy w zakładce Protokoły). */
+  dedykowaneBudowy() {
+    const pref = new Set(((S.proj || {}).urzadzenia || []).map(u => U.prefix(u.id)));
+    return this.lista().filter(x => !this.pow(x).length || this.pow(x).some(q => pref.has(q)));
+  },
+  pozostaleBudowy() { const d = this.dedykowaneBudowy(); return this.wszystkie().filter(x => d.indexOf(x) < 0).sort(poNazwie); },
+  /* Dedykowane urządzeniu: w zakresie prac i z prefiksem urządzenia w powiązaniu. */
+  dedykowaneUrz(id) { return this.lista().filter(x => this.pow(x).indexOf(U.prefix(id)) >= 0); },
+  inneUrz(id) { const d = this.dedykowaneUrz(id); return this.wszystkie().filter(x => d.indexOf(x) < 0).sort(poNazwie); },
   def(id, wersja) { return ((S.boot && S.boot.protokoly) || []).find(x => x.id === id && (!wersja || String(x.wersja) === String(wersja))); },
   /* Stan protokołów budowy ze zdarzeń: ostatni zapis wygrywa. */
   stan(F) { return (F || fold(S.ev)).prot; },
@@ -18,6 +32,8 @@ const Prot = {
   },
   chip(p) { return `<span class="chip ${p.stan === 'roboczy' ? 'warn' : 'ok'}">${U.esc(this.opisStanu(p))}</span>`; }
 };
+
+const poNazwie = (a, b) => String(a.nazwa).localeCompare(String(b.nazwa), 'pl');
 
 /* Wzór: {pole} – z danych lub kontekstu; {pole=X:A|B} – A gdy pole = X, inaczej B (ta sama składnia co na serwerze). */
 function ocenWzor(w, ctx, dane) {
@@ -48,6 +64,24 @@ function domyslna(f, ctx) {
   if (f.typ === 'godzina') return hhmm(f.domyslnie);
   return typeof f.domyslnie === 'string' ? ocenWzor(f.domyslnie, ctx, {}) : f.domyslnie;
 }
+/* Urządzenia budowy do pola typu „urzadzenie”: prefiksy z f.typy (pusto = wszystkie), wybrany etap; bez użytych w innych wierszach. */
+function urzDoPola(f, uzyte, biezace) {
+  const typy = (f.typy || []).map(x => String(x).toUpperCase());
+  return ((S.proj || {}).urzadzenia || []).filter(u => u.id === biezace || ((!typy.length || typy.indexOf(U.prefix(u.id)) >= 0)
+    && (!S.etap || !u.etap || u.etap === S.etap) && uzyte.indexOf(u.id) < 0));
+}
+/* Wartość z karty urządzenia: id, sn (spisany na tablecie lub w liście urządzeń), typ, kond, etap, arkusz, zasilanie, grupa */
+function zUrz(id, klucz) {
+  const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u) return '';
+  if (klucz === 'id') return u.id;
+  if (klucz === 'sn') { const st = fold(S.ev).dev[id]; return (st && st.sn) || u.sn || ''; }
+  return u[klucz] || '';
+}
+/* Po wyborze urządzenia: pola z „z_urzadzenia” w tym samym wierszu / sekcji */
+function wypelnijZUrz(sek, cel, id) {
+  sek.pola.filter(f => f.z_urzadzenia).forEach(f => { const v = zUrz(id, f.z_urzadzenia); if (v !== '' || !id) cel[f.id] = v; });
+}
+function poleUrz(sek) { return (sek.pola || []).find(f => f.typ === 'urzadzenie'); }
 function nowyWiersz(sek, lp, urzId) { const o = {}; const ctx = protCtx(urzId, lp); sek.pola.forEach(f => { o[f.id] = domyslna(f, ctx); }); return o; }
 
 /* Nowy protokół: wartości domyślne + pola „pamiętaj dla budowy” z ostatniego protokołu tej budowy */
@@ -90,15 +124,31 @@ function brakiProtokolu(def, dane) {
 }
 function nazwaPola(id) { return id.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()); }
 
+/* ---------- Karta urządzenia: dedykowane („Do wykonania”), zapisane, inne ---------- */
+function protKarta(id, F) {
+  if (!Prot.wszystkie().length) return '';
+  const ded = Prot.dedykowaneUrz(id), inne = Prot.inneUrz(id), ist = Prot.dlaUrzStan(id, F);
+  const doWyk = ded.filter(q => !ist.some(x => x.def === q.id));
+  const nazwa = x => (Prot.def(x.def, x.wersja) || {}).nazwa || x.def;
+  return `<div class="card stack"><div class="lbl">Protokoły</div>
+    ${doWyk.map(q => `<button class="btn pri" data-npr="${U.esc(q.id)}" style="text-align:left">Do wykonania: ${U.esc(q.nazwa)}</button>`).join('')}
+    ${ist.map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc(nazwa(x))}</span>${Prot.chip(x)}</button>`).join('')}
+    ${ded.filter(q => doWyk.indexOf(q) < 0).map(q => `<button class="btn sm" data-npr="${U.esc(q.id)}">+ kolejny: ${U.esc(q.nazwa)}</button>`).join('')}
+    ${inne.length ? `<details><summary class="mute">Inne protokoły (${inne.length})</summary><div class="stack" style="margin-top:6px">${inne.map(q => `<button class="btn sm" data-npr="${U.esc(q.id)}">+ ${U.esc(q.nazwa)}</button>`).join('')}</div></details>` : ''}
+  </div>`;
+}
+
 /* ---------- Widok: lista protokołów budowy ---------- */
 const ProtViews = {};
 ProtViews.protokoly = function () {
   const p = curProj(); if (!p) return UI.go('home');
   UI.header(p.nazwa + ' · protokoły', () => UI.go('budowa'));
-  const F = fold(S.ev); const lista = Prot.lista();
-  const urz = urzE();
-  view.innerHTML = etapSwitch() + (lista.map(pr => {
-    const urzT = urz.filter(u => !pr.powiazanie || U.prefix(u.id) === pr.powiazanie);
+  const F = fold(S.ev); const urz = urzE();
+  const ded = Prot.dedykowaneBudowy(), poz = Prot.pozostaleBudowy();
+  const zapisane = pr => Object.values(F.prot).filter(x => x.def === pr.id).sort((a, b) => a.ts < b.ts ? 1 : -1);
+  const blokDed = pr => {
+    const urzT = urz.filter(u => Prot.pow(pr).length && Prot.pasuje(pr, u.id));
+    const bezUrz = zapisane(pr).filter(x => !x.urz);
     return `<h2>${U.esc(pr.nazwa)} <span class="mute" style="font-size:14px">v${U.esc(pr.wersja)}</span></h2>
       ${pr.blad ? `<div class="badbox">${U.esc(pr.blad)}</div>` : ''}
       <div class="list">${urzT.map(u => {
@@ -106,12 +156,32 @@ ProtViews.protokoly = function () {
         return `<div class="li"><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.kond || '')}${u.etap ? ' · etap ' + U.esc(u.etap) : ''}</span></span>
           ${ps.map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}">${Prot.chip(x)}</button>`).join('')}
           <button class="btn sm pri" data-new="${U.esc(pr.id)}" data-u="${U.esc(u.id)}">${ps.length ? '+ kolejny' : 'Wypełnij'}</button></div>`;
-      }).join('') || '<div class="li mute">Brak urządzeń tego typu' + (S.etap ? ' w wybranym etapie' : '') + '.</div>'}</div>`;
-  }).join('') || '<p class="mute">Brak aktywnych protokołów dla tej budowy.</p>');
+      }).join('')}
+      ${bezUrz.map(x => `<div class="li"><span class="grow">${U.esc(x.nr || 'bez urządzenia')}</span><button class="btn sm" data-pid="${U.esc(x.pid)}">${Prot.chip(x)}</button></div>`).join('')}
+      ${!Prot.pow(pr).length ? wybor(pr, urz) : urzT.length ? '' : '<div class="li mute">Brak urządzeń tego typu' + (S.etap ? ' w wybranym etapie' : '') + '.</div>'}</div>`;
+  };
+  // pozostałe protokoły: zapisane + wybór urządzenia z listy budowy (najpierw pasujące typem)
+  const blokPoz = pr => `<div class="card stack"><b>${U.esc(pr.nazwa)} <span class="mute">v${U.esc(pr.wersja)}</span></b>
+      ${zapisane(pr).map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc(x.urz || 'bez urządzenia')}</span>${Prot.chip(x)}</button>`).join('')}
+      ${wybor(pr, urz)}</div>`;
+  view.innerHTML = etapSwitch()
+    + (ded.length ? '<div class="lbl">Dedykowane tej budowie</div>' + ded.map(blokDed).join('') : '<p class="mute">Brak protokołów dedykowanych tej budowie (zakres prac i typy urządzeń).</p>')
+    + (poz.length ? `<details class="card" style="margin-top:12px"><summary><b>Pozostałe protokoły (${poz.length})</b></summary><div class="stack" style="margin-top:8px">${poz.map(blokPoz).join('')}</div></details>` : '');
   bindEtap();
   view.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => UI.go('protokol', { pid: b.dataset.pid }));
-  view.querySelectorAll('[data-new]').forEach(b => b.onclick = () => UI.go('protokol', { nowy: b.dataset.new, urz: b.dataset.u }));
+  view.querySelectorAll('[data-new]').forEach(b => b.onclick = () => {
+    const sel = b.dataset.sel ? view.querySelector(`select[data-selfor="${CSS.escape(b.dataset.new)}"]`) : null;
+    UI.go('protokol', { nowy: b.dataset.new, urz: sel ? sel.value : b.dataset.u });
+  });
 };
+/* Lista wyboru urządzenia do nowego protokołu: najpierw pasujące typem, potem pozostałe; można bez urządzenia. */
+function wybor(pr, urz) {
+  const pas = urz.filter(u => Prot.pow(pr).length && Prot.pasuje(pr, u.id)), resz = urz.filter(u => pas.indexOf(u) < 0);
+  const opt = u => `<option value="${U.esc(u.id)}">${U.esc(u.id + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`;
+  return `<div class="row"><select class="grow" data-selfor="${U.esc(pr.id)}"><option value="">— bez urządzenia —</option>
+    ${pas.length ? `<optgroup label="Pasujące typem">${pas.map(opt).join('')}</optgroup>` : ''}${resz.length ? `<optgroup label="Pozostałe urządzenia">${resz.map(opt).join('')}</optgroup>` : ''}</select>
+    <button class="btn sm pri" data-new="${U.esc(pr.id)}" data-sel="1">Wypełnij</button></div>`;
+}
 
 /* ---------- Widok: formularz protokołu ---------- */
 ProtViews.protokol = async function (par) {
@@ -135,7 +205,7 @@ ProtViews.protokol = async function (par) {
   const nr = (zapisany && zapisany.nr) || rec.nr || '';
   const tylkoOdczyt = rec.stan === 'zablokowany' && !Session.isBiuro();
   let zmiana = false;   // nowy protokół zapisuje się dopiero po pierwszej zmianie
-  UI.header(p.nazwa + ' · ' + urzId, async () => { await zapiszPrzyWyjsciu(); UI.go('protokoly'); });
+  UI.header(p.nazwa + ' · ' + (urzId || 'protokół'), async () => { await zapiszPrzyWyjsciu(); UI.go('protokoly'); });
 
   const pole = (f, w, wi, sek) => {
     const v = w[f.id], key = `data-f="${U.esc(f.id)}"` + (wi != null ? ` data-w="${wi}" data-s="${U.esc(sek.id)}"` : '');
@@ -147,6 +217,12 @@ ProtViews.protokol = async function (par) {
       case 'taknie': inner = `<div class="seg">${['tak', 'nie'].map(o => `<button type="button" ${key} data-v="${o}" class="${v === o ? 'on' : ''}" ${dis}>${o.toUpperCase()}</button>`).join('')}</div>`; break;
       case 'wybor': inner = `<div class="seg">${f.opcje.map(o => `<button type="button" ${key} data-v="${U.esc(o)}" class="${v === o ? 'on' : ''}" ${dis}>${U.esc(o)}</button>`).join('')}</div>`; break;
       case 'znacznik': inner = `<div class="seg"><button type="button" ${key} data-tog="1" class="${v ? 'on' : ''}" ${dis}>${v ? '☒ tak' : '☐ nie'}</button></div>`; break;
+      case 'urzadzenie': {
+        const uz = sek.typ === 'tabela' ? (dane[sek.id] || []).filter((r, j) => j !== wi).map(r => r[f.id]).filter(String) : [];
+        const lst = urzDoPola(f, uz, v);
+        inner = `<select ${key} ${dis}><option value="">— wybierz z listy budowy —</option>${lst.map(u => `<option value="${U.esc(u.id)}" ${u.id === v ? 'selected' : ''}>${U.esc(u.id + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`).join('')}</select>`;
+        break;
+      }
       case 'tekst_dlugi': inner = `<textarea ${key} ${dis}>${U.esc(v || '')}</textarea>`; break;
       case 'data': inner = `<input type="date" ${key} value="${U.esc(v || '')}" ${dis}>`; break;
       case 'godzina': inner = `<input type="time" ${key} value="${U.esc(hhmm(v))}" ${dis}>`; break;
@@ -159,7 +235,7 @@ ProtViews.protokol = async function (par) {
   const sekcja = sek => {
     if (sek.typ === 'tabela') {
       const w = dane[sek.id] = dane[sek.id] || [];
-      return `<section class="card psek" data-sek="${U.esc(sek.id)}"><div class="row"><h2 class="grow" style="margin:0">${U.esc(sek.tytul)} (${w.length})</h2>${tylkoOdczyt ? '' : `<button type="button" class="btn sm pri" data-add="${U.esc(sek.id)}">+ Dodaj</button>`}</div>
+      return `<section class="card psek" data-sek="${U.esc(sek.id)}"><div class="row"><h2 class="grow" style="margin:0">${U.esc(sek.tytul)} (${w.length})</h2>${tylkoOdczyt ? '' : (poleUrz(sek) ? `<button type="button" class="btn sm" data-addall="${U.esc(sek.id)}">Dodaj wszystkie</button>` : '') + `<button type="button" class="btn sm pri" data-add="${U.esc(sek.id)}">+ Dodaj</button>`}</div>
         ${w.map((r, i) => `<div class="pwiersz"><div class="row"><b class="grow">${U.esc(r.nr || 'Pozycja ' + (i + 1))}</b>${tylkoOdczyt ? '' : `<button type="button" class="btn sm" data-del="${U.esc(sek.id)}" data-i="${i}">Usuń</button>`}</div>
           <div class="pgrid2">${sek.pola.map(f => pole(f, r, i, sek)).join('')}</div></div>`).join('') || '<p class="mute">Brak pozycji – dodaj przyciskiem „+ Dodaj”.</p>'}</section>`;
     }
@@ -168,7 +244,7 @@ ProtViews.protokol = async function (par) {
   przeliczAuto(def, dane, urzId);
   view.innerHTML = `
     <div class="row" style="margin-bottom:8px"><h1 class="grow" style="margin:0">${U.esc(pr.nazwa)}</h1>${Prot.chip(Object.assign({}, rec, { nr }))}</div>
-    <p class="mute" style="margin-top:0">Urządzenie <b>${U.esc(urzId)}</b> · wersja ${U.esc(rec.wersja)}${zapisany ? ' · ostatni zapis: ' + U.esc(zapisany.kto) + ' ' + U.fmt(zapisany.ts) : ''}${tylkoOdczyt ? ' · zablokowany przez biuro (tylko podgląd)' : ''}</p>
+    <p class="mute" style="margin-top:0">Urządzenie <b>${U.esc(urzId || 'bez urządzenia')}</b> · wersja ${U.esc(rec.wersja)}${zapisany ? ' · ostatni zapis: ' + U.esc(zapisany.kto) + ' ' + U.fmt(zapisany.ts) : ''}${tylkoOdczyt ? ' · zablokowany przez biuro (tylko podgląd)' : ''}</p>
     <form class="stack" id="pform" onsubmit="return false">${def.sekcje.map(sekcja).join('')}</form>
     <div class="pfoot">
       ${tylkoOdczyt ? '' : '<button class="btn" id="pSave">Zapisz</button><button class="btn pri" id="pDone">Zakończ</button>'}
@@ -186,11 +262,26 @@ ProtViews.protokol = async function (par) {
   const form = $('#pform');
   form.addEventListener('input', e => {
     const el = e.target; if (!el.dataset || !el.dataset.f) return;
-    cel(el)[el.dataset.f] = el.value; el.closest('.pf').classList.remove('err'); draft(); odswiezAuto();
+    cel(el)[el.dataset.f] = el.value; el.closest('.pf').classList.remove('err');
+    if (el.tagName === 'SELECT') {   // wybór urządzenia → autouzupełnienie pól z karty urządzenia
+      const sek = def.sekcje.find(x => x.id === (el.dataset.s || el.closest('[data-sek]').dataset.sek));
+      wypelnijZUrz(sek, cel(el), el.value); draft(); return ProtViews.protokol({ pid: rec.pid });
+    }
+    draft(); odswiezAuto();
   });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || tylkoOdczyt) return;
     if (b.dataset.add) { const sek = def.sekcje.find(s => s.id === b.dataset.add); const w = dane[sek.id]; w.push(nowyWiersz(sek, w.length + 1, urzId)); draft(); return ProtViews.protokol({ pid: rec.pid }); }
+    if (b.dataset.addall) {
+      const sek = def.sekcje.find(s => s.id === b.dataset.addall), f = poleUrz(sek);
+      let w = dane[sek.id];
+      // puste wiersze domyślne (bez urządzenia i bez wpisów) zastępujemy wierszami urządzeń
+      w = dane[sek.id] = w.filter((r, i) => r[f.id] || JSON.stringify(r) !== JSON.stringify(nowyWiersz(sek, i + 1, urzId)));
+      const nowe = urzDoPola(f, w.map(r => r[f.id]).filter(String));
+      if (!nowe.length) return UI.toast('Wszystkie urządzenia tego typu' + (S.etap ? ' w etapie' : '') + ' są już na liście.');
+      nowe.forEach(u => { const r = nowyWiersz(sek, w.length + 1, urzId); r[f.id] = u.id; wypelnijZUrz(sek, r, u.id); w.push(r); });
+      draft(); UI.toast('Dodano ' + nowe.length + ' poz.'); return ProtViews.protokol({ pid: rec.pid });
+    }
     if (b.dataset.del) { if (!confirm('Usunąć pozycję ' + (+b.dataset.i + 1) + '?')) return; dane[b.dataset.del].splice(+b.dataset.i, 1); draft(); return ProtViews.protokol({ pid: rec.pid }); }
     if (b.dataset.scan) { return Dialogs.scan(v => { cel(b)[b.dataset.scan] = v; draft(); ProtViews.protokol({ pid: rec.pid }); }); }
     if (!b.dataset.f) return;
@@ -206,10 +297,17 @@ ProtViews.protokol = async function (par) {
     if (nr) d.nr = nr;
     await addEvent('protokol', urzId, d);
     // nr seryjny urządzenia z protokołu → karta urządzenia i lista urządzeń
-    def.sekcje.forEach(sek => (sek.pola || []).filter(f => f.zapisz_do_urzadzenia && dane[f.id]).forEach(async f => {
+    if (urzId) def.sekcje.filter(sek => sek.typ !== 'tabela').forEach(sek => (sek.pola || []).filter(f => f.zapisz_do_urzadzenia && dane[f.id]).forEach(async f => {
       const st = fold(S.ev).dev[urzId]; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === urzId) || {};
       if (((st && st.sn) || u.sn) !== dane[f.id]) await addEvent('nr', urzId, { sn: dane[f.id] });
     }));
+    // tabele: nr seryjny wpisany przy wybranym urządzeniu → karta urządzenia (gdy urządzenie nie ma jeszcze numeru)
+    for (const sek of def.sekcje.filter(x => x.typ === 'tabela' && poleUrz(x))) {
+      const fu = poleUrz(sek);
+      for (const r of dane[sek.id] || []) for (const f of sek.pola.filter(x => x.zapisz_do_urzadzenia && r[x.id] && r[fu.id])) {
+        if (!zUrz(r[fu.id], 'sn')) await addEvent('nr', r[fu.id], { sn: r[f.id] });
+      }
+    }
     await DB.del('draft:' + rec.pid); zmiana = false;
   }
   async function zapiszPrzyWyjsciu() { if (zmiana && !tylkoOdczyt) { await zapisz(rec.stan || 'roboczy'); UI.toast('Protokół zapisany'); } }

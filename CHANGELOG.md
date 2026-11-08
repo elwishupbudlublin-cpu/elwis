@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.6.0 – 2026-11-08 (aplikacja i serwer)
+- Powiązanie protokołu z kilkoma typami urządzeń: Baza → Protokoły, kolumna E, np. `SZ; SP` (tekst w nawiasie = opis, pusto = każde urządzenie). Bootstrap zwraca `powiazania[]` (oraz `powiazanie` = pierwszy prefiks, dla zgodności).
+- Lista protokołów budowy: najpierw **dedykowane** (rodzaj pracy w zakresie prac i typ urządzenia obecny na budowie, kolejność jak w zakładce Protokoły), niżej zwinięte **pozostałe** aktywne protokoły (alfabetycznie) z wyborem urządzenia z listy budowy lub „bez urządzenia”.
+- Karta urządzenia: przycisk „Do wykonania: <protokół>” dla nierozpoczętego protokołu dedykowanego, zapisane protokoły ze stanem, „+ kolejny”, zwinięte „Inne protokoły”.
+- Nowy typ pola definicji `urzadzenie` (`typy[]` – prefiksy): wybór urządzenia z listy budowy (filtr etapu, bez użytych w innych wierszach). Pola z `z_urzadzenia` (`id, sn, typ, kond, etap, arkusz, zasilanie, grupa`) wypełniają się po wyborze – m.in. nr seryjny spisany przy podłączeniu.
+- Tabele z polem `urzadzenie`: przycisk „Dodaj wszystkie” (wiersz dla każdego urządzenia danego typu w etapie).
+- Nr seryjny wpisany w wierszu tabeli z `zapisz_do_urzadzenia` trafia do karty wybranego urządzenia, gdy urządzenie nie ma jeszcze numeru.
+
 ## 1.5.2 – 2026-11-08 (aplikacja i serwer)
 - Protokoły: gdy w Bazie projektów brak inwestora, pole „Inwestor” przyjmuje wartość z kolumny „Zamawiający”.
 
