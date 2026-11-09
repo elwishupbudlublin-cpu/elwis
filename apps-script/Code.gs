@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.12.0';
+const SCRIPT_VERSION = '1.13.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -159,7 +159,8 @@ function bootstrap_(tablet) {
     .filter(r => txt_(r[0]) && tak_(r[4]) && txt_(r[3]))
     .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])),
       cu: txt_(r[5]), m: tak_(r[7]) || txt_(r[2]) === 'biuro' }));
-  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; return o; });
+  const postep = safeJson_(P.getProperty('POSTEP') || '{}');
+  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; return o; });
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
@@ -174,6 +175,7 @@ function project_(kod) {
     id: txt_(r[0]), grupa: txt_(r[1]), typ: txt_(r[2]), zasilanie: txt_(r[3]), kond: txt_(r[4]), arkusz: txt_(r[5]),
     uwagi: txt_(r[6]), x: num_(r[7]), y: num_(r[8]), sn: txt_(r[9]), status: txt_(r[10]), etap: txt_(r[11])
   }));
+  zapiszPostep_(kod, urz.map(u => u.status));
   // zgodność etapów urządzeń z listą etapów budowy (fundamenty 2.4)
   const ostrzezenia = [];
   if (p.etapy.length) {
@@ -499,7 +501,18 @@ function przelicz_(p, ids) {
     const open = Object.keys(braki).some(b => braki[b].urz === id && braki[b].open);
     const status = open ? 'brak' : (done === kroki.length && kroki.length ? 'gotowe' : done ? 'w toku' : 'czeka');
     sh.getRange(i + 2, 10, 1, 2).setNumberFormat(TEXT).setValues([[sn, status]]);
+    v[i][10] = status;
   });
+  zapiszPostep_(p.kod, v.filter(r => txt_(r[0])).map(r => txt_(r[10])));
+}
+
+/* Postęp budów do listy budów na tablecie (od 1.13.0): [gotowe, wszystkie] w pamięci skryptu, liczone przy pobraniu budowy i przy zmianie statusów */
+function zapiszPostep_(kod, statusy) {
+  try {
+    const m = safeJson_(P.getProperty('POSTEP') || '{}');
+    m[kod] = [statusy.filter(x => x === 'gotowe').length, statusy.length];
+    P.setProperty('POSTEP', JSON.stringify(m));
+  } catch (e) { }
 }
 
 /* ===================== Protokoły (od 1.5.0) =====================

@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.13.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}

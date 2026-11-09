@@ -21,7 +21,7 @@ const UI = {
     n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '');
     const p = S.pending ? ` · ${S.pending} do wysłania` : '';
     t.textContent = S.syncing ? 'Synchronizuję…' + (S.prog ? ' ' + Math.round(S.prog.p * 100) + '%' : '') : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
-    $('#btnSync').classList.toggle('spin', S.syncing);
+    $('#btnSync .spinico').classList.toggle('spin', S.syncing);
     this.prog();
     $('#memWarn').hidden = !(S.malo && S.user);
     if ($('#nPend')) { $('#nPend').hidden = !S.pending; $('#nPend').textContent = S.pending || ''; }
@@ -49,12 +49,18 @@ const UI = {
       if (i >= 0) this.stos.length = i;                       // powrót do ekranu, który już jest na stosie
       else this.stos.push({ v: this.cur, par: this.par, dlg: opc.dlg || null });
     }
-    this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0);
+    this.cur = v; this.par = par; this.pv = null; this.refresh(); window.scrollTo(0, 0); this.zapamietaj();
+  },
+  /* ostatni ekran użytkownika – po ponownym otwarciu aplikacji wraca w to samo miejsce (od 1.13.0) */
+  zapamietaj() {
+    if (!S.user || ['setup', 'login'].includes(this.cur)) return;
+    let par = {}; try { par = JSON.parse(JSON.stringify(this.par || {})); } catch (e) { }
+    DB.set('ostatni:' + S.user.name, { v: this.cur, par, kod: S.kod || null, stos: this.stos.map(e => ({ v: e.v, par: e.par })), ts: Date.now() }).catch(() => { });
   },
   wstecz(domyslny = 'home') {
     const e = this.stos.pop();
     if (!e) return this.go(domyslny);
-    this.cur = e.v; this.par = e.par; this.pv = null; this.refresh(); window.scrollTo(0, 0);
+    this.cur = e.v; this.par = e.par; this.pv = null; this.refresh(); window.scrollTo(0, 0); this.zapamietaj();
     if (e.dlg) Dialogs.device(e.dlg);
   },
   refresh() {
@@ -71,8 +77,10 @@ const UI = {
   /* dolny pasek: Plan · Budowy · Synchronizuj (od 1.12.0) */
   bnav() {
     const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
+    const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
-    $('#nBud').classList.toggle('on', this.cur !== 'plan');
+    $('#nDok').classList.toggle('on', dok);
+    $('#nBud').classList.toggle('on', this.cur !== 'plan' && !dok);
     const n = $('#nPend'); n.hidden = !S.pending; n.textContent = S.pending || '';
   }
 };
@@ -172,7 +180,10 @@ const Views = {
     const pl = (await DB.get('plan')) || null;
     const dzis = U.day(new Date());
     const dzien = par.d || dzis;
-    const wszyscy = !!par.all;
+    // widok planu zapamiętany dla użytkownika (od 1.13.0): Mój plan / Wszyscy i wybrane osoby – zostają po zmianie dnia i po zamknięciu aplikacji
+    const kluczWid = 'widokPlanu:' + (S.user ? S.user.name : '');
+    const wid = (await DB.get(kluczWid)) || {};
+    const wszyscy = par.all !== undefined ? !!par.all : !!wid.all;
     // kalendarzy roli biuro (administrator) nie widzą pracownicy (od 1.11.2)
     const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu && (Session.isBiuro() || x.rola !== 'biuro' || (S.user && x.name === S.user.name)));
     const ja = prac.find(x => S.user && x.name === S.user.name);
@@ -184,7 +195,7 @@ const Views = {
       return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
     // domyślnie w „Wszyscy” kolumny tylko osób, które mają zadania tego dnia (pozostałe – jednym dotknięciem w pasku osób)
     const ileOs = o => wszystkieZad.filter(t => naDzien(t, dzien) && t.osoby.includes(String(o.cu))).length;
-    const ukryci = new Set(par.ukryj || kolejnosc.filter(o => o !== ja && !ileOs(o)).map(o => o.name));
+    const ukryci = new Set(par.ukryj || (wid.wybrani ? kolejnosc.filter(o => !wid.wybrani.includes(o.name)).map(o => o.name) : kolejnosc.filter(o => o !== ja && !ileOs(o)).map(o => o.name)));
     const osoby = wszyscy ? kolejnosc.filter(o => !ukryci.has(o.name)) : (ja ? [ja] : []);
     const mojeZad = t => !wszyscy ? (ja && t.osoby.includes(String(ja.cu))) : osoby.some(o => t.osoby.includes(String(o.cu)));
     const zad = wszystkieZad.filter(t => naDzien(t, dzien));
@@ -277,7 +288,6 @@ const Views = {
         <div class="phtop">
           <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
-          <button class="btn pbudbtn" id="pBud" style="display:flex;align-items:center;gap:8px">${ic('bud')}Wszystkie budowy</button>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
           ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}" title="${w ? w.tmin + '°/' + w.tmax + '° (7–16)' + (w.pada ? ', pada' : '') : ''}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><span class="pmid"><b>${x.d.getDate()}</b>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span>` : ''}</span><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : ''}${w ? `<em>${w.tmin}°/${w.tmax}°</em>` : ''}${!x.n && !w ? '&nbsp;' : ''}</i></button>`; }).join('')}
@@ -298,7 +308,7 @@ const Views = {
       </div>
       ${bezGodz.length ? `<h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2><div class="pcards">${bezGodz.map(karta).join('')}</div>` : ''}`;
     const idz = o => UI.go('plan', { ...par, ...o });
-    view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, od: b.classList.contains('pnow') ? undefined : od, ukryj: undefined }));
+    view.querySelectorAll('[data-day]').forEach(b => b.onclick = () => idz({ d: b.dataset.day, od: b.classList.contains('pnow') ? undefined : od }));
     // przeciąganie paska dni: 21 kafelków (7 widocznych), tor przesuwa się za palcem; po puszczeniu dociąga do pełnych dni
     (() => {
       const wrap = $('#pWeekWrap'), w = $('#pWeek'), GAP = 6;
@@ -321,10 +331,11 @@ const Views = {
       w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
       w.addEventListener('click', e => { if (przeciagniete) { e.stopPropagation(); e.preventDefault(); przeciagniete = false; } }, true);
     })();
-    $('#pAll').onclick = () => idz({ all: true, ukryj: undefined });
-    $('#pMy').onclick = () => idz({ all: false });
-    $('#pBud').onclick = () => UI.go('home');
-    view.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who); idz({ ukryj: [...u] }); });
+    const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
+    $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
+    $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
+    view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
+      await zapiszWid({ wybrani: kolejnosc.filter(o => !u.has(o.name)).map(o => o.name) }); idz({ ukryj: [...u] }); });
     // dotknięcie zadania → okienko z danymi z ClickUp, statusem i „Przejdź do budowy” (od 1.12.0)
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
       const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []));
@@ -335,31 +346,37 @@ const Views = {
     window.scrollTo(0, 0);
   },
 
-  /* Lista budów */
+  /* Lista budów – od 1.13.0: ciemny nagłówek „Wyszukaj budowę” z polem wyszukiwania, postęp podłączeń przy każdej budowie */
   async home() {
-    UI.header('wybór budowy', () => UI.wstecz('plan'));
+    UI.header('budowy', () => UI.wstecz('plan'));
     const all = (S.boot && S.boot.projekty) || [];
     const recent = (await DB.get('recent')) || [];
     const q = UI.par.q || '';
-    const rec = recent.map(k => all.find(p => p.kod === k)).filter(Boolean).slice(0, 3);
+    const rec = recent.map(k => all.find(p => p.kod === k)).filter(Boolean).slice(0, 4);
     const off = new Set(await Pamiec.lista());
     const nq = U.norm(q);
     const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
+    const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
+    // podłączone / wszystkie: z serwera (liczone przy pobraniu budowy i zmianie statusów), dla otwartej budowy – z tabletu
+    const post = p => { if (p.kod === S.kod && S.proj) { const u = (S.proj.urzadzenia || []), F = fold(S.ev); return [u.filter(x => devStatus(x, F) === 'gotowe').length, u.length]; } return p.postep || null; };
+    const stat = (p, maly) => { const x = post(p); if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
+      const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>podłączonych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; };
+    const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? '<span class="chip ok">✓ offline</span>' : ''}`;
     view.innerHTML = `
-      <h1>Na której budowie dziś pracujesz?</h1>
-      <label class="search"><span aria-hidden="true">🔎</span><span hidden>Szukaj budowy</span>
-        <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
-      ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(card).join('')}</div>` : ''}
+      <section class="bhero">
+        <h1>Wyszukaj budowę</h1>
+        <label class="search hsearch"><span hidden>Szukaj budowy</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+          <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
+      </section>
+      ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
       <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
-      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b>${U.esc(p.kod)}</b><span class="grow">${U.esc(p.nazwa.replace(p.kod, '').trim())}</span>
-        ${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}<span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" title="Dane w pamięci tabletu">✓ offline</span>' : ''}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
-    function card(p) { return `<button class="tile" data-k="${U.esc(p.kod)}"><b>${U.esc(p.nazwa)}</b><span class="mute">${U.esc(p.adres || '')}</span>${off.has(p.kod) ? '<span class="chip ok" style="align-self:flex-start">✓ offline</span>' : ''}</button>`; }
+      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
     const inp = $('#q');
     inp.oninput = () => { UI.par.q = inp.value; Views.home(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
 
-  /* Karta budowy – wygląd B (od 1.12.0): nagłówek, nawigacja/pinezka, 4 główne kafelki, „Więcej” */
+  /* Karta budowy – od 1.13.0: ciemny nagłówek (nazwa, adres, nawigacja), pod nim etapy, 6 kafelków ze statystykami, „Więcej” */
   async budowa() {
     const p = curProj(); if (!p) return UI.go('home');
     if (!dostepDoBudowy(p)) { S.kod = null; UI.go('home'); return brakDostepu(p); }
@@ -371,57 +388,63 @@ const Views = {
     const openB = Object.values(F.braki).filter(b => !b.zamk && brakWEtapie(b));
     const pilne = openB.filter(b => b.blokuje).length;
     const pct = urz.length ? Math.round(cnt.gotowe / urz.length * 100) : 0;
-    const prot = Object.values(F.prot);
-    const rob = prot.filter(x => x.stan === 'roboczy').length;
-    const bezProt = Prot.wszystkie().length ? urz.filter(u => protZnacznik(u.id, F).k === 'do').length : 0;
+    const zn = Prot.wszystkie().length ? urz.map(u => protZnacznik(u.id, F).k).filter(Boolean) : [];
+    const protWym = zn.length, protOk = zn.filter(k => k === 'ok').length;
+    const rob = Object.values(F.prot).filter(x => x.stan === 'roboczy').length;
     const fotki = Object.keys(F.fotoInfo).length;
     const dzis = U.day(); const fotDzis = Object.values(F.fotoInfo).filter(f => U.day(f.ts) === dzis).length;
-    const notatki = F.notes.length;
+    const pliki = pd.pliki || [];
+    let plikiOff = 0; for (const f of pliki) if (await DB.hasFile(f.id)) plikiOff++;
     const tech = (await DB.get('tech')) || [];
     const lok = lokBudowy(p), wsp = wspolrzedne(lok), link = /^https?:/.test(lok);
     const cel = wsp ? wsp.lat + ',' + wsp.lon : link ? '' : p.adres;
     const navUrl = link ? lok : cel ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(cel) : '';
     const mozePin = !wsp && !link;
     const nazwa = String(p.nazwa || '').replace(new RegExp('^' + p.kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
-    const C = 2 * Math.PI * 44, PUSTY = '<span class="chip" style="visibility:hidden">–</span>';   // wyrównanie kafelków bez etykiety
-    view.innerHTML = etapSwitch() + `
+    const pasek = v => `<span class="tbar"><i style="width:${v}%"></i></span>`;
+    const PUSTY = '<span class="chip" style="visibility:hidden">–</span>';
+    view.innerHTML = `
       <section class="bhero">
-        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}${S.etap ? `<span class="bpill">etap ${U.esc(S.etap)}</span>` : ''}</div>
+        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}</div>
         <div><h1>${U.esc(nazwa || p.nazwa)}</h1><div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div></div>
         ${p.uwagi ? `<div class="bsub" style="color:#E5ECF6">${U.esc(p.uwagi)}</div>` : ''}
-        <div class="bhact">
+        ${navUrl || mozePin ? `<div class="bhact">
           ${navUrl ? `<a class="hb pri" href="${U.esc(navUrl)}" target="_blank" rel="noopener">${ic('nav')}Nawiguj</a>` : ''}
           ${mozePin ? `<button class="hb ${navUrl ? '' : 'pri'}" id="bPin">${ic('pin')}${navUrl ? 'Zapisz pinezkę' : 'Dodaj pinezkę'}</button>` : ''}
-          <button class="hb" id="bBrak">${ic('warn')}Zgłoś brak</button>
-          <button class="hb" id="bNote">${ic('note')}Notatka</button>
-        </div>
+        </div>` : ''}
       </section>
-      ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-top:14px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
-      <section class="card bstat" style="margin-top:14px">
-        <div class="ring"><svg viewBox="0 0 100 100" role="img" aria-label="Postęp ${pct} procent"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E8F0" stroke-width="10"></circle><circle cx="50" cy="50" r="44" fill="none" stroke="#1D4ED8" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 50 50)"></circle></svg><span>${pct}%</span></div>
-        <div class="bsg"><div><span class="n">${cnt.gotowe}<small>/${urz.length}</small></span><span>urządzeń gotowych</span></div><div><span class="n">${prot.length}</span><span>protokołów${rob ? ' · ' + rob + ' robocze' : ''}</span></div><div><span class="n ${openB.length ? 'red' : ''}">${openB.length}</span><span>otwartych braków</span></div></div>
-      </section>
-      <div class="bgrid" style="margin-top:14px">
-        <button class="big" id="tPodl">${`<span class="bi">${ic('plug')}</span><span class="bn2">${urz.length}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>`}${bezProt ? `<span class="chip warn">${bezProt} bez protokołu</span>` : cnt.brak ? `<span class="chip bad">${cnt.brak} z brakiem</span>` : PUSTY}</button>
-        <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bn2">${prot.length}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>${rob ? `<span class="chip warn">${rob} robocze</span>` : PUSTY}</button>
-        <button class="big" id="tBraki"><span class="bi">${ic('warn')}</span><span class="bn2">${openB.length}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Zgłoś i zamknij</span></span>${pilne ? `<span class="chip bad">${pilne} ${odm(pilne, 'blokuje', 'blokują', 'blokuje')} pracę</span>` : PUSTY}</button>
-        <button class="big" id="tFoto"><span class="bi">${ic('cam')}</span><span class="bn2">${fotki}</span><span class="bt"><b>Zdjęcia</b><span>Wszystkie z budowy</span></span>${fotDzis ? `<span class="chip gr">+${fotDzis} dziś</span>` : PUSTY}</button>
+      <div style="margin-top:12px">${etapSwitch()}</div>
+      ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-bottom:12px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
+      <div class="bgrid">
+        <button class="big" id="tPodl"><span class="bi">${ic('plug')}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>
+          <span class="bst"><span class="sv">${cnt.gotowe} / ${urz.length} <small>podłączonych</small></span>${pasek(pct)}</span>${cnt.brak ? `<span class="chip bad">${cnt.brak} z brakiem</span>` : PUSTY}</button>
+        <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>
+          <span class="bst"><span class="sv">${protOk} / ${protWym} <small>wykonanych</small></span>${pasek(protWym ? Math.round(protOk / protWym * 100) : 0)}</span>${rob ? `<span class="chip warn">${rob} ${odm(rob, 'roboczy', 'robocze', 'roboczych')}</span>` : PUSTY}</button>
+        <div class="big" id="tBraki" role="button" tabindex="0"><span class="bi">${ic('warn')}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Lista i zamykanie</span></span>
+          <span class="bst"><span class="sv">${openB.length} <small>${odm(openB.length, 'otwarty', 'otwarte', 'otwartych')}</small></span></span>
+          <span class="brow">${pilne ? `<span class="chip bad">${pilne} ${odm(pilne, 'blokuje', 'blokują', 'blokuje')} pracę</span>` : '<span></span>'}<button class="inb bad" id="bBrak">${ic('plus')}Zgłoś brak</button></span></div>
+        <button class="big" id="tFoto"><span class="bi">${ic('cam')}</span><span class="bt"><b>Zdjęcia</b><span>Wszystkie z budowy</span></span>
+          <span class="bst"><span class="sv">${fotki} <small>${odm(fotki, 'zdjęcie', 'zdjęcia', 'zdjęć')}</small></span></span>${fotDzis ? `<span class="chip gr">+${fotDzis} dziś</span>` : PUSTY}</button>
+        <div class="big" id="tNot" role="button" tabindex="0"><span class="bi">${ic('note')}</span><span class="bt"><b>Notatki</b><span>Ustalenia z budowy</span></span>
+          <span class="bst"><span class="sv">${F.notes.length} <small>${odm(F.notes.length, 'notatka', 'notatki', 'notatek')}</small></span></span>
+          <span class="brow"><span></span><button class="inb" id="bNote">${ic('plus')}Notatka</button></span></div>
+        <button class="big" id="tDokP"><span class="bi">${ic('folder')}</span><span class="bt"><b>Dokumenty projektowe</b><span>Rzuty, schematy, dokumenty budowy</span></span>
+          <span class="bst"><span class="sv">${pliki.length} <small>${odm(pliki.length, 'plik', 'pliki', 'plików')}</small></span></span>${pliki.length ? `<span class="chip ${plikiOff === pliki.length ? 'ok' : 'gr'}">✓ ${plikiOff} offline</span>` : PUSTY}</button>
       </div>
       <section class="card more" style="margin-top:14px"><span class="lbl">Więcej</span>
-        <button class="mrow" id="mNot">${ic('note')}<b>Notatki</b><span>${notatki}</span>${ic('chev')}</button>
-        <button class="mrow" id="mPost">${ic('chart')}<b>Postęp${maEtapy() ? ' i etapy' : ''}</b><span>${pct}%</span>${ic('chev')}</button>
-        <button class="mrow" id="mDokP">${ic('folder')}<b>Dokumenty projektowe</b><span>${(pd.pliki || []).length}</span>${ic('chev')}</button>
         <button class="mrow" id="mDokT">${ic('book')}<b>Dokumenty techniczne</b><span>${tech.length}</span>${ic('chev')}</button>
+        <button class="mrow" id="mPost">${ic('chart')}<b>Postęp${maEtapy() ? ' i etapy' : ''}</b><span>${pct}%</span>${ic('chev')}</button>
       </section>`;
     bindEtap();
     $('#tPodl').onclick = () => UI.go('rzut', {});
     $('#tProt').onclick = () => UI.go('protokoly');
-    $('#tBraki').onclick = () => UI.go('braki');
+    const kaf = (el, f) => { el.onclick = e => { if (!e.target.closest('.inb')) f(); }; el.onkeydown = e => { if (e.key === 'Enter') f(); }; };
+    kaf($('#tBraki'), () => UI.go('braki'));
+    kaf($('#tNot'), () => UI.go('notatki'));
     $('#tFoto').onclick = () => UI.go('zdjecia');
-    $('#mNot').onclick = () => UI.go('notatki');
-    $('#mPost').onclick = () => UI.go('postep');
-    $('#mDokP').onclick = () => UI.go('dokumenty', { typ: 'proj' });
+    $('#tDokP').onclick = () => UI.go('dokumenty', { typ: 'proj' });
     $('#mDokT').onclick = () => UI.go('dokumenty', { typ: 'tech' });
+    $('#mPost').onclick = () => UI.go('postep');
     $('#bBrak').onclick = () => Dialogs.brak('');
     $('#bNote').onclick = () => Dialogs.notatka('');
     if ($('#bPin')) $('#bPin').onclick = () => zapiszPinezke(p);
@@ -429,9 +452,9 @@ const Views = {
 
   /* Dokumenty projektowe (pliki budowy) i techniczne (DTR z _Techniczne) – od 1.12.0 osobne ekrany */
   async dokumenty(par) {
-    const p = curProj(); if (!p) return UI.go('home');
     const tech = par.typ === 'tech';
-    UI.header(p.kod + (tech ? ' · dokumenty techniczne' : ' · dokumenty projektowe'), () => UI.wstecz('budowa'));
+    const p = curProj(); if (!p && !tech) return UI.go('home');
+    UI.header(tech ? 'dokumenty techniczne' : p.kod + ' · dokumenty projektowe', () => UI.wstecz(tech ? 'plan' : 'budowa'));
     const pliki = tech ? ((await DB.get('tech')) || []) : ((S.proj || {}).pliki || []);
     const grupy = groupBy(pliki, f => f.grupa || '');
     view.innerHTML = `<h1>${tech ? 'Dokumenty techniczne' : 'Dokumenty projektowe'}</h1>
@@ -821,7 +844,7 @@ function osobyTxt(t, prac) { return t.osoby.map(i => (prac.find(p => String(p.cu
 /* ---------- Etapy budowy ---------- */
 function etapSwitch() {
   if (!maEtapy()) return '';
-  const opt = [['', 'Wszystkie', 'cała budowa'], ...etapyOf().map(e => [e.id, e.id, e.opis])];
+  const opt = [['', 'Cała budowa', ''], ...etapyOf().map(e => [e.id, 'Etap ' + e.id, e.opis])];
   return `<div class="etapy" role="tablist" aria-label="Etap budowy">${opt.map(([id, l, o]) => `<button class="etap ${id === S.etap ? 'on' : ''}" data-e="${U.esc(id)}" role="tab" aria-selected="${id === S.etap}"><b>${U.esc(l)}</b>${o ? `<span>${U.esc(o)}</span>` : ''}</button>`).join('')}</div>`;
 }
 function bindEtap() {
@@ -1022,13 +1045,27 @@ function brakDostepu(p) {
     <div class="sfoot"><button class="btn pri" id="bdOk">Rozumiem</button></div></div></div>`;
   $('#bdOk').onclick = UI.close; $('#bdOk').focus();
 }
-async function openProject(kod) {
-  const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
-  if (!dostepDoBudowy(pp)) return brakDostepu(pp);
+async function wczytajBudowe(kod) {
   S.kod = kod;
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
   await wczytajEtap(kod);
+}
+/* powrót do ostatniego ekranu po ponownym otwarciu aplikacji (od 1.13.0) */
+async function przywrocEkran() {
+  const o = S.user && await DB.get('ostatni:' + S.user.name);
+  if (!o || !o.v || !Views[o.v]) return false;
+  if (o.v === 'protokol' && o.par && o.par.nowy && !o.par.pid) { o.v = 'protokoly'; o.par = {}; }   // nie zakładamy drugiego szkicu
+  if (o.kod) { const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === o.kod); if (!pp || !dostepDoBudowy(pp)) return false; await wczytajBudowe(o.kod); }
+  else if (!['plan', 'home', 'dokumenty'].includes(o.v)) return false;
+  UI.stos = (o.stos || []).filter(e => e && Views[e.v]);
+  UI.cur = o.v; UI.par = o.par || {}; UI.pv = null; UI.refresh();
+  return true;
+}
+async function openProject(kod) {
+  const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
+  if (!dostepDoBudowy(pp)) return brakDostepu(pp);
+  await wczytajBudowe(kod);
   const r = ((await DB.get('recent')) || []).filter(k => k !== kod); r.unshift(kod); await DB.set('recent', r.slice(0, PAMIEC_BUDOW));
   UI.go('budowa');
   if (navigator.onLine) Sync.run();
@@ -1097,22 +1134,32 @@ function settings() {
   try { await Pamiec.limit(); } catch (e) { }
   $('#topVer').textContent = 'v' + APP_VERSION;
   $('#btnSync').onclick = () => Sync.run();
+  // dolny pasek (od 1.13.0: Plan · Budowy · Dokumenty techniczne)
+  $('#nPlan').onclick = () => { UI.close(); UI.go('plan'); };
+  $('#nBud').onclick = () => { UI.close(); UI.go('home'); };
+  $('#nDok').onclick = () => { UI.close(); UI.go('dokumenty', { typ: 'tech' }); };
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });
   window.addEventListener('offline', () => UI.net());
   // systemowy przycisk „wstecz” Androida: zamyka okno albo cofa ekran tak jak strzałka w aplikacji (od 1.11.7)
-  history.pushState({ elwis: 1 }, '');
+  // od 1.13.0: Chrome na Androidzie pomija przy „wstecz” wpisy historii dodane bez dotknięcia ekranu –
+  // wpis „straży” dodajemy dopiero przy dotknięciu (z aktywacją użytkownika) i odnawiamy po każdym „wstecz”
+  let straz = false;
+  const uzbroj = () => { if (!straz) { history.pushState({ elwis: 1 }, ''); straz = true; } };
+  document.addEventListener('pointerdown', uzbroj, true);
+  document.addEventListener('keydown', uzbroj, true);
   // od 1.12.0: na ekranie głównym (plan) pytanie „Zamknąć aplikację?”; kolejne „wstecz” przy otwartym pytaniu zamyka aplikację
   window.addEventListener('popstate', () => {
-    if ($('#fotoView')) { $('#fotoView').remove(); history.pushState({ elwis: 1 }, ''); return; }
+    straz = false;
+    if ($('#fotoView')) { $('#fotoView').remove(); uzbroj(); return; }
     const okno = !!modal.innerHTML, ekran = !$('#btnBack').hidden;
-    if (okno || ekran) { history.pushState({ elwis: 1 }, ''); okno ? UI.close() : $('#btnBack').click(); return; }
+    if (okno || ekran) { uzbroj(); okno ? UI.close() : $('#btnBack').click(); return; }
     if (!S.user) return;
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="alertdialog" aria-label="Zamknąć aplikację?" style="max-width:480px">
       <div class="shead"><h3>Zamknąć aplikację?</h3></div>
       <div class="sbody"><p style="margin:0">Jesteś na ekranie głównym. Niewysłane dane zostaną na tablecie i wyślą się przy następnym uruchomieniu.</p><p class="mute" style="margin:0">Naciśnij jeszcze raz systemowe „wstecz”, aby zamknąć.</p></div>
       <div class="sfoot"><button class="btn" id="exNo">Nie, zostań</button><button class="btn pri" id="exYes">Tak, zamknij</button></div></div></div>`;
-    const zostan = () => { UI.close(); history.pushState({ elwis: 1 }, ''); };
+    const zostan = () => { UI.close(); uzbroj(); };
     $('#exNo').onclick = zostan; $('#ov').onclick = e => { if (e.target.id === 'ov') zostan(); };
     $('#exYes').onclick = () => { window.close(); history.back(); setTimeout(() => UI.toast('Naciśnij systemowe „wstecz”, aby zamknąć aplikację.'), 400); };
   });
@@ -1121,6 +1168,6 @@ function settings() {
   if (!API.ready()) return UI.go('setup');
   await Session.load();
   if (!S.user) { UI.go('login'); if (navigator.onLine) Sync.run(); return; }
-  UI.go('plan');
+  if (!(await przywrocEkran().catch(() => false))) UI.go('plan');
   if (navigator.onLine) Sync.run();
 })();

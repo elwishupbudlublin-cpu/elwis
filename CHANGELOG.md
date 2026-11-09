@@ -1,5 +1,14 @@
 # Zmiany
 
+## 1.13.0 – 2026-11-09 (aplikacja + serwer)
+- Plan: bez przycisku „Wszystkie budowy”; dolny pasek Plan · Budowy · Dokumenty techniczne (wcześniej Synchronizuj – przyciski paska nie działały, naprawione); synchronizacja ⟳ w górnym pasku z liczbą rzeczy do wysłania.
+- Plan „Wszyscy”: wybrane osoby i tryb widoku zapamiętane dla użytkownika – nie znikają po zmianie dnia ani po zamknięciu aplikacji.
+- Po ponownym otwarciu aplikacji (bez wylogowania) – powrót do ostatniego ekranu (budowa, zakładka, etap, dzień).
+- Ekran budowy: w ciemnym nagłówku tylko nazwa, adres i Nawiguj / pinezka; etapy pod nagłówkiem („Cała budowa”, „Etap A” …); bez paska statystyk – 6 kafelków ze statystykami: Urządzenia (podłączone / wszystkie), Protokoły (wykonane / wymagane), Braki (otwarte + „Zgłoś brak”), Zdjęcia, Notatki (+ „Notatka”), Dokumenty projektowe (pliki, ile offline); „Więcej”: Dokumenty techniczne, Postęp.
+- Lista budów: ciemny nagłówek „Wyszukaj budowę” z polem wyszukiwania; przy budowach postęp „podłączone / wszystkie” (serwer liczy przy pobraniu budowy i przy zmianie statusów).
+- Systemowe „wstecz”: wpis historii dodawany przy dotknięciu ekranu (Chrome na Androidzie pomijał wpis dodany przy starcie, przez co „wstecz” zamykało aplikację bez pytania).
+- Serwer 1.13.0: postęp budów (`postep: [gotowe, wszystkie]`) w bootstrap.
+
 ## 1.12.0 – 2026-11-09 (aplikacja + serwer)
 - Wygląd B: czcionki Inter i JetBrains Mono (lokalnie, działa offline), granatowy nagłówek, karty z cieniem, ikony liniowe, dolny pasek Plan · Budowy · Synchronizuj (z liczbą rzeczy do wysłania).
 - Ekran budowy: nagłówek z numerem i nazwą, adresem i kontaktem; Nawiguj / Zapisz pinezkę / Dodaj pinezkę, Zgłoś brak, Notatka; pierścień postępu; 4 główne kafelki (Urządzenia, Protokoły, Braki, Zdjęcia); sekcja „Więcej”: Notatki, Postęp i etapy, Dokumenty projektowe, Dokumenty techniczne.
