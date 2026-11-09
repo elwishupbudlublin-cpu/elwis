@@ -99,6 +99,9 @@ async function addEvent(typ, urz, d) {
   return e;
 }
 
+/* liczba rzeczy czekających na wysłanie: zdarzenia, zdjęcia, statusy zadań (od 1.12.0) */
+async function liczOczekujace() { S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length + ((await DB.get('zadKolejka')) || []).length; UI.net(); return S.pending; }
+
 /* Synchronizacja */
 const Sync = {
   timer: null,
@@ -116,6 +119,8 @@ const Sync = {
       if (String(b.schema).split('.')[0] !== '1') throw new Error('Nieznana wersja schematu danych: ' + b.schema + '. Zaktualizuj aplikację.');
       if (verLess(APP_VERSION, b.minApp)) throw new Error('Wymagana nowsza wersja aplikacji (' + b.minApp + '). Odśwież aplikację przy WiFi.');
       S.boot = b; await DB.set('boot', b);
+      // pinezki z tabletu, które serwer już wpisał do Bazy, nie są dłużej potrzebne lokalnie (od 1.12.0)
+      if (S.pinezki && Object.keys(S.pinezki).length) { for (const k of Object.keys(S.pinezki)) if ((b.projekty || []).some(p => p.kod === k && p.lokalizacja)) delete S.pinezki[k]; await DB.set('pinezki', S.pinezki); }
       // 2. zdjęcia (pojedynczo – mniejsze paczki)
       const fotki = await DB.unsentPhotos(); let fi = 0;
       for (const p of fotki) {
@@ -141,6 +146,18 @@ const Sync = {
           await DB.putEvents(marked);
         }
       }
+      // 3b. statusy zadań z kalendarza → ClickUp (od 1.12.0)
+      const kol = (await DB.get('zadKolejka')) || [];
+      if (kol.length) {
+        this.prog(0.25, 'Wysyłam statusy zadań');
+        try {
+          const r = await API.zadania(kol.map(({ nazwa, ...z }) => z));
+          const w = r.wyniki || {}, bledy = kol.filter(z => w[z.id] && !w[z.id].ok);
+          const zostaja = ((await DB.get('zadKolejka')) || []).filter(z => !w[z.id]);
+          await DB.set('zadKolejka', zostaja);
+          if (bledy.length) UI.toast('Nie zmieniono statusu: ' + bledy[0].nazwa + ' – ' + w[bledy[0].id].blad);
+        } catch (e) { if (/Nieznana operacja/.test(e.message)) S.planErr = 'Statusy zadań wymagają aktualizacji serwera ELWIS.'; else throw e; }
+      }
       // 4. dane budów: bieżąca + ostatnio używane
       // plan dnia z ClickUp (±7 dni) – przed plikami, żeby był od razu po zalogowaniu
       this.prog(0.26, 'Plan dnia');
@@ -163,7 +180,7 @@ const Sync = {
       S.syncErr = err.message; console.warn('sync', err);
     } finally {
       S.syncing = false; S.prog = null;
-      S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+      await liczOczekujace();
       UI.net(); if (!['login', 'setup', 'protokol'].includes(UI.cur)) UI.refresh();   // formularza protokołu nie przerysowujemy w trakcie pisania
     }
   },
@@ -208,7 +225,7 @@ const Sync = {
     try {
       const pl = (await DB.get('plan')) || { zadania: [] }; const proj = (S.boot && S.boot.projekty) || [];
       const miejsca = new Map([[POGODA_DOM.klucz, POGODA_DOM]]);
-      pl.zadania.forEach(t => { const b = proj.find(p => p.listaCU && p.listaCU === t.lista); const w = b && wspolrzedne(b.lokalizacja); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
+      pl.zadania.forEach(t => { const b = proj.find(p => p.listaCU && p.listaCU === t.lista); const w = b && wspolrzedne(lokBudowy(b)); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
       const wynik = {};
       for (const [klucz, w] of miejsca) {
         const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&hourly=temperature_2m,precipitation,precipitation_probability,weather_code&timezone=Europe%2FWarsaw&past_days=7&forecast_days=16`);

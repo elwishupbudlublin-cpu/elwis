@@ -1,5 +1,16 @@
 # Zmiany
 
+## 1.12.0 – 2026-11-09 (aplikacja + serwer)
+- Wygląd B: czcionki Inter i JetBrains Mono (lokalnie, działa offline), granatowy nagłówek, karty z cieniem, ikony liniowe, dolny pasek Plan · Budowy · Synchronizuj (z liczbą rzeczy do wysłania).
+- Ekran budowy: nagłówek z numerem i nazwą, adresem i kontaktem; Nawiguj / Zapisz pinezkę / Dodaj pinezkę, Zgłoś brak, Notatka; pierścień postępu; 4 główne kafelki (Urządzenia, Protokoły, Braki, Zdjęcia); sekcja „Więcej”: Notatki, Postęp i etapy, Dokumenty projektowe, Dokumenty techniczne.
+- Nowe ekrany: Notatki (z wyszukiwaniem), Zdjęcia z budowy (z opisem urządzenia / braku / notatki, filtry), Dokumenty projektowe, Dokumenty techniczne.
+- Lista urządzeń: znacznik protokołu (✓ numer / roboczy / do wykonania) i filtry Bez protokołu / Protokół roboczy / Z protokołem.
+- Pinezka GPS: zapis aktualnej pozycji (zgoda na lokalizację, ostrzeżenie przy dokładności > 50 m); offline w kolejce; serwer wpisuje do Projekty!D „Pinezka GPS (lat,lon)” – pustą każdy, istniejącą zmienia tylko biuro.
+- Plan: dotknięcie zadania otwiera okienko (opis z ClickUp, godziny, osoby, „Przejdź do budowy”) z trzema statusami: Wykonane (complete), Do kontynuacji (update required), Zadanie niepodjęte (on hold); powód i komentarz opcjonalne. Działa offline – status czeka w kolejce, serwer zmienia status w ClickUp i dodaje komentarz.
+- Zdjęcia: opis wtopiony w lewy górny róg – budowa, urządzenie (ID, typ, kondygnacja, arkusz) lub brak/notatka, data, godzina, autor.
+- Systemowe „wstecz” na planie dnia: pytanie „Zamknąć aplikację?”; kolejne „wstecz” zamyka.
+- Serwer 1.12.0: operacja `zadania` (tylko 3 statusy), zdarzenie `pinezka`, opis zadania w planie, odświeżanie pamięci planu po zmianie statusu.
+
 ## 1.11.9 – 2026-11-09 (aplikacja)
 - Plan: zadania nachodzące na siebie stoją obok siebie (tory), stykające się (koniec = początek) jedno pod drugim; krótkie zadania (< ok. 50 min) w jednej linii – godzina i nazwa.
 

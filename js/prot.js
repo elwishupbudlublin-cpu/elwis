@@ -142,7 +142,7 @@ function protKarta(id, F) {
 const ProtViews = {};
 ProtViews.protokoly = function () {
   const p = curProj(); if (!p) return UI.go('home');
-  UI.header(p.nazwa + ' · protokoły', () => UI.wstecz('budowa'));
+  UI.header(p.kod + ' · protokoły', () => UI.wstecz('budowa'));
   const F = fold(S.ev); const urz = urzE();
   const ded = Prot.dedykowaneBudowy(), poz = Prot.pozostaleBudowy();
   const zapisane = pr => Object.values(F.prot).filter(x => x.def === pr.id).sort((a, b) => a.ts < b.ts ? 1 : -1);
@@ -205,7 +205,7 @@ ProtViews.protokol = async function (par) {
   const nr = (zapisany && zapisany.nr) || rec.nr || '';
   const tylkoOdczyt = rec.stan === 'zablokowany' && !Session.isBiuro();
   let zmiana = false;   // nowy protokół zapisuje się dopiero po pierwszej zmianie
-  UI.header(p.nazwa + ' · ' + (urzId || 'protokół'), async () => { await zapiszPrzyWyjsciu(); UI.wstecz('protokoly'); });
+  UI.header(p.kod + ' · ' + (urzId || 'protokół'), async () => { await zapiszPrzyWyjsciu(); UI.wstecz('protokoly'); });
 
   const pole = (f, w, wi, sek) => {
     const v = w[f.id], key = `data-f="${U.esc(f.id)}"` + (wi != null ? ` data-w="${wi}" data-s="${U.esc(sek.id)}"` : '');

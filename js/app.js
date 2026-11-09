@@ -2,6 +2,16 @@
 const $ = (s, r = document) => r.querySelector(s);
 const view = $('#view'), modal = $('#modal');
 const ST = { 'czeka': 'czeka', 'w toku': 'wtoku', 'gotowe': 'gotowe', 'brak': 'brak' };
+/* ikony liniowe (wygląd B, od 1.12.0) */
+const IKONY = { plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
+  warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
+  note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
+  folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
+  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
+  chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
+  x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
+  plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
+const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IKONY[n] || ''}</svg>`;
 
 const UI = {
   cur: 'home', par: {},
@@ -14,6 +24,7 @@ const UI = {
     $('#btnSync').classList.toggle('spin', S.syncing);
     this.prog();
     $('#memWarn').hidden = !(S.malo && S.user);
+    if ($('#nPend')) { $('#nPend').hidden = !S.pending; $('#nPend').textContent = S.pending || ''; }
   },
   /* pasek postępu pod nagłówkiem (od 1.7.0) */
   prog() {
@@ -54,9 +65,16 @@ const UI = {
       if (side) { const a = urz.filter(u => u.arkusz === ark); side.innerHTML = legend(a, F) + attention(a, F); side.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u)); }
       this.net(); return;
     }
-    const f = Views[this.cur]; if (f) f(this.par); this.net();
+    const f = Views[this.cur]; if (f) f(this.par); this.net(); this.bnav();
   },
-  close() { modal.innerHTML = ''; }
+  close() { modal.innerHTML = ''; },
+  /* dolny pasek: Plan · Budowy · Synchronizuj (od 1.12.0) */
+  bnav() {
+    const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
+    $('#nPlan').classList.toggle('on', this.cur === 'plan');
+    $('#nBud').classList.toggle('on', this.cur !== 'plan');
+    const n = $('#nPend'); n.hidden = !S.pending; n.textContent = S.pending || '';
+  }
 };
 
 /* ---------- Widoki ---------- */
@@ -160,7 +178,10 @@ const Views = {
     const ja = prac.find(x => S.user && x.name === S.user.name);
     // wszyscy: zalogowany pierwszy, potem pozostali (biuro też – jego zadania były poza ekranem)
     const kolejnosc = [...(ja ? [ja] : []), ...prac.filter(x => x !== ja)];
-    const wszystkieZad = (pl && pl.zadania) || [];
+    // statusy wysłane z tabletu, a jeszcze niepotwierdzone przez ClickUp (od 1.12.0)
+    const kolejka = (await DB.get('zadKolejka')) || [];
+    const wszystkieZad = ((pl && pl.zadania) || []).map(t => { const q = kolejka.filter(z => z.task === t.id).pop();
+      return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
     // domyślnie w „Wszyscy” kolumny tylko osób, które mają zadania tego dnia (pozostałe – jednym dotknięciem w pasku osób)
     const ileOs = o => wszystkieZad.filter(t => naDzien(t, dzien) && t.osoby.includes(String(o.cu))).length;
     const ukryci = new Set(par.ukryj || kolejnosc.filter(o => o !== ja && !ileOs(o)).map(o => o.name));
@@ -170,7 +191,7 @@ const Views = {
     const proj = (S.boot && S.boot.projekty) || [];
     const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
     // miejsce prognozy: budowa z lokalizacją, na której zalogowany ma zadania tego dnia; inaczej Lublin
-    const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(b.lokalizacja)); return b2 ? { klucz: wspolrzedne(b2.lokalizacja).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
+    const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(lokBudowy(b))); return b2 ? { klucz: wspolrzedne(lokBudowy(b2)).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
     const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
     // zadania bez godzin z „Estimated Time” → wolne miejsca od 7:00 (osobno w każdej kolumnie; od 1.10.0)
@@ -213,21 +234,23 @@ const Views = {
       const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
       const { st, kl } = poz(top, hgt, tor);
       return `<button class="pblk${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b></button>`;
+        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}</button>`;
     };
+    // status ustawiony z tabletu (Wykonane / Do kontynuacji / Zadanie niepodjęte) – od 1.12.0
+    const pst = t => { const k = STATUS_ZAD[String(t.status || '').toLowerCase()]; return k ? `<span class="pstan ${k.kl}${t.czeka ? ' czeka' : ''}">${k.t}</span>` : ''; };
     // numer i nazwa budowy szarą małą czcionką nad nazwą zadania (od 1.11.6)
     const pbud = t => { const b = budowaZ(t); const n = b ? String(b.nazwa || '').replace(new RegExp('^' + b.kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '') : '';
       const txt = b ? `${b.kod} ${n}${b.wojskowy === 'tak' && !/\bW$/.test(n) ? ' · W' : ''}` : (t.listaNazwa || 'zadanie spoza budów ELWIS');
       return `<span class="pbud">${U.esc(txt)}</span>`; };
     // pogoda na kafelku zadania – tylko gdy budowa ma lokalizację (od 1.11.5)
-    const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(b.lokalizacja); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
+    const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(lokBudowy(b)); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
       return p ? `<span class="ptw" title="${U.esc(b.nazwa)}: 7–16 ${p.tmin}°…${p.tmax}°${p.pada ? ', pada' : ''}"><span class="ptwi">${p.ikona}</span>${p.tmin}°/${p.tmax}°</span>` : ''; };
     const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
     const blokAuto = ({ t, od, dl, bezEst }, tor) => {
       const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3);
       const { st, kl } = poz(top, hgt, tor);
       return `<button class="pblk pauto${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b><span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
     };
     // tory: zadania nachodzące na siebie dzielą szerokość kolumny; stykające się (koniec = początek) – nie
     const kolumnaHtml = k => {
@@ -244,7 +267,7 @@ const Views = {
       zamknij();
       return el.map(x => x.h(x.tor)).join('');
     };
-    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>
+    const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}
       ${t.status ? `<span class="mute">${U.esc(t.status)}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
     const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t) && !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
@@ -254,7 +277,7 @@ const Views = {
         <div class="phtop">
           <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
-          <button class="btn pbudbtn" id="pBud">🏗 Wszystkie budowy</button>
+          <button class="btn pbudbtn" id="pBud" style="display:flex;align-items:center;gap:8px">${ic('bud')}Wszystkie budowy</button>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
           ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''}" data-day="${x.k}" title="${w ? w.tmin + '°/' + w.tmax + '° (7–16)' + (w.pada ? ', pada' : '') : ''}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><span class="pmid"><b>${x.d.getDate()}</b>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span>` : ''}</span><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : ''}${w ? `<em>${w.tmin}°/${w.tmax}°</em>` : ''}${!x.n && !w ? '&nbsp;' : ''}</i></button>`; }).join('')}
@@ -302,10 +325,9 @@ const Views = {
     $('#pMy').onclick = () => idz({ all: false });
     $('#pBud').onclick = () => UI.go('home');
     view.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who); idz({ ukryj: [...u] }); });
+    // dotknięcie zadania → okienko z danymi z ClickUp, statusem i „Przejdź do budowy” (od 1.12.0)
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
-      const t = zad.find(x => x.id === b.dataset.t); const bud = t && budowaZ(t);
-      if (!bud) return UI.toast('To zadanie nie jest przypisane do budowy w ELWIS.');
-      openProject(bud.kod);
+      const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []));
     });
     // przewiń oś do „teraz” (albo do pierwszego zadania)
     const pt = view.querySelector('.pnowline') || view.querySelector('.pblk');
@@ -337,71 +359,135 @@ const Views = {
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
 
-  /* Karta budowy */
+  /* Karta budowy – wygląd B (od 1.12.0): nagłówek, nawigacja/pinezka, 4 główne kafelki, „Więcej” */
   async budowa() {
     const p = curProj(); if (!p) return UI.go('home');
     if (!dostepDoBudowy(p)) { S.kod = null; UI.go('home'); return brakDostepu(p); }
-    UI.header(p.nazwa, () => UI.wstecz('home'));
+    UI.header(p.kod + ' · budowa', () => UI.wstecz('home'));
     const pd = S.proj || {};
     const F = fold(S.ev);
     const urz = urzE();
     const cnt = liczStatusy(urz, F);
-    const openB = Object.values(F.braki).filter(b => !b.zamk && brakWEtapie(b)).length;
-    const openT = (pd.tematy || []).filter(t => t.status !== 'zamknięty').length;
-    const zakres = (p.zakres || []);
-    const has = k => zakres.some(z => U.norm(z).startsWith(U.norm(k)));
-    const maps = p.lokalizacja ? (/^https?:/.test(p.lokalizacja) ? p.lokalizacja : 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.lokalizacja)) : (p.adres ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.adres) : '');
+    const openB = Object.values(F.braki).filter(b => !b.zamk && brakWEtapie(b));
+    const pilne = openB.filter(b => b.blokuje).length;
     const pct = urz.length ? Math.round(cnt.gotowe / urz.length * 100) : 0;
-    const sheetsN = new Set(urz.map(u => u.arkusz).filter(a => a && (pd.rzuty || {})[a])).size;
+    const prot = Object.values(F.prot);
+    const rob = prot.filter(x => x.stan === 'roboczy').length;
+    const bezProt = Prot.wszystkie().length ? urz.filter(u => protZnacznik(u.id, F).k === 'do').length : 0;
+    const fotki = Object.keys(F.fotoInfo).length;
+    const dzis = U.day(); const fotDzis = Object.values(F.fotoInfo).filter(f => U.day(f.ts) === dzis).length;
+    const notatki = F.notes.length;
+    const tech = (await DB.get('tech')) || [];
+    const lok = lokBudowy(p), wsp = wspolrzedne(lok), link = /^https?:/.test(lok);
+    const cel = wsp ? wsp.lat + ',' + wsp.lon : link ? '' : p.adres;
+    const navUrl = link ? lok : cel ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(cel) : '';
+    const mozePin = !wsp && !link;
+    const nazwa = String(p.nazwa || '').replace(new RegExp('^' + p.kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
+    const C = 2 * Math.PI * 44, PUSTY = '<span class="chip" style="visibility:hidden">–</span>';   // wyrównanie kafelków bez etykiety
     view.innerHTML = etapSwitch() + `
-      <div class="grid2" style="grid-template-columns:minmax(280px,380px) 1fr">
-        <div class="stack">
-          ${p.wojskowy === 'tak' ? '<div class="badbox"><b>Obiekt wojskowy</b> – praca tylko dla osób z uprawnieniem M.</div>' : ''}
-          <div class="card stack">
-            <div><div class="mute">Adres</div>${U.esc(p.adres || '—')}</div>
-            <div><div class="mute">Kontakt na budowie</div>${U.esc(p.kontakt || '—')}</div>
-            <div><div class="mute">Uwagi dla ekip</div>${U.esc(p.uwagi || '—')}</div>
-            ${maps ? `<a class="btn pri" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${U.esc(maps)}" target="_blank" rel="noopener">Nawiguj</a>` : ''}
-          </div>
-          ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
-          <div class="card"><div class="lbl">Dokumenty pomocnicze</div>
-            <div class="stack" style="margin-top:8px" id="docs">${(pd.pliki || []).map(f => `<button class="btn sm doc" data-f="${U.esc(f.id)}" style="text-align:left"><span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('') || '<span class="mute">Brak plików.</span>'}</div></div>
-          ${dtrHtml(await DB.get('tech') || [])}
+      <section class="bhero">
+        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}${S.etap ? `<span class="bpill">etap ${U.esc(S.etap)}</span>` : ''}</div>
+        <div><h1>${U.esc(nazwa || p.nazwa)}</h1><div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div></div>
+        ${p.uwagi ? `<div class="bsub" style="color:#E5ECF6">${U.esc(p.uwagi)}</div>` : ''}
+        <div class="bhact">
+          ${navUrl ? `<a class="hb pri" href="${U.esc(navUrl)}" target="_blank" rel="noopener">${ic('nav')}Nawiguj</a>` : ''}
+          ${mozePin ? `<button class="hb ${navUrl ? '' : 'pri'}" id="bPin">${ic('pin')}${navUrl ? 'Zapisz pinezkę' : 'Dodaj pinezkę'}</button>` : ''}
+          <button class="hb" id="bBrak">${ic('warn')}Zgłoś brak</button>
+          <button class="hb" id="bNote">${ic('note')}Notatka</button>
         </div>
-        <div class="stack">
-          <h1 style="margin:0">Co dziś robisz?</h1>
-          <div class="grid2">
-            <button class="tile main" id="tPodl" ${has('podłącz') || !zakres.length ? '' : 'disabled'}><b>Podłączenia wg listy</b>
-              <span class="mute">${urz.length} urządzeń · ${sheetsN} rzutów${S.etap ? ' · etap ' + U.esc(S.etap) : ''}</span>
-              <div class="bar"><i style="width:${pct}%;background:var(--ok)"></i></div>
-              <span class="mute">${cnt.gotowe} gotowe · ${cnt['w toku']} w toku · ${cnt.brak} z brakiem</span></button>
-            <button class="tile" id="tBraki"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span class="mute">${openB} otwartych braków${Session.isBiuro() ? ' · ' + openT + ' tematów' : ''}</span></button>
-            <button class="tile" id="tPostep"><b>Postęp budowy</b><span class="mute">${pct}% urządzeń gotowe</span></button>
-            ${zakres.filter(z => !U.norm(z).startsWith('podlacz')).map(z => { const pr = Prot.lista().filter(x => U.norm(z).startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(U.norm(z)));
-              if (!pr.length) return `<button class="tile" disabled><b>${U.esc(z)}</b><span class="mute">w kolejnej wersji aplikacji</span></button>`;
-              const ps = Object.values(F.prot).filter(x => pr.some(q => q.id === x.def));
-              return `<button class="tile" data-prot="1"><b>${U.esc(z)} – protokoły</b><span class="mute">${pr.map(q => U.esc(q.nazwa)).join(', ')}</span><span class="mute">${ps.filter(x => x.stan !== 'roboczy').length} przesłanych · ${ps.filter(x => x.stan === 'roboczy').length} w trakcie</span></button>`; }).join('')}
-            ${!zakres.some(z => Prot.lista().some(x => U.norm(z).startsWith(U.norm(x.rodzaj)) || U.norm(x.rodzaj).startsWith(U.norm(z)))) && Prot.wszystkie().length ? `<button class="tile" data-prot="1"><b>Protokoły</b><span class="mute">brak dedykowanych tej budowie · ${Prot.wszystkie().length} dostępnych</span></button>` : ''}
-          </div>
-          ${maEtapy() ? `<h2 style="margin:6px 0 0">Postęp etapów</h2><div class="grid2">${etapyOf().map(e => etapTile(e, F)).join('')}</div>` : ''}
-          <div class="row"><button class="btn bad grow" id="bBrak">Zgłoś brak</button><button class="btn grow" id="bNote">Notatka z budowy</button></div>
-        </div>
-      </div>`;
+      </section>
+      ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-top:14px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
+      <section class="card bstat" style="margin-top:14px">
+        <div class="ring"><svg viewBox="0 0 100 100" role="img" aria-label="Postęp ${pct} procent"><circle cx="50" cy="50" r="44" fill="none" stroke="#E2E8F0" stroke-width="10"></circle><circle cx="50" cy="50" r="44" fill="none" stroke="#1D4ED8" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 50 50)"></circle></svg><span>${pct}%</span></div>
+        <div class="bsg"><div><span class="n">${cnt.gotowe}<small>/${urz.length}</small></span><span>urządzeń gotowych</span></div><div><span class="n">${prot.length}</span><span>protokołów${rob ? ' · ' + rob + ' robocze' : ''}</span></div><div><span class="n ${openB.length ? 'red' : ''}">${openB.length}</span><span>otwartych braków</span></div></div>
+      </section>
+      <div class="bgrid" style="margin-top:14px">
+        <button class="big" id="tPodl">${`<span class="bi">${ic('plug')}</span><span class="bn2">${urz.length}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>`}${bezProt ? `<span class="chip warn">${bezProt} bez protokołu</span>` : cnt.brak ? `<span class="chip bad">${cnt.brak} z brakiem</span>` : PUSTY}</button>
+        <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bn2">${prot.length}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>${rob ? `<span class="chip warn">${rob} robocze</span>` : PUSTY}</button>
+        <button class="big" id="tBraki"><span class="bi">${ic('warn')}</span><span class="bn2">${openB.length}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Zgłoś i zamknij</span></span>${pilne ? `<span class="chip bad">${pilne} ${odm(pilne, 'blokuje', 'blokują', 'blokuje')} pracę</span>` : PUSTY}</button>
+        <button class="big" id="tFoto"><span class="bi">${ic('cam')}</span><span class="bn2">${fotki}</span><span class="bt"><b>Zdjęcia</b><span>Wszystkie z budowy</span></span>${fotDzis ? `<span class="chip gr">+${fotDzis} dziś</span>` : PUSTY}</button>
+      </div>
+      <section class="card more" style="margin-top:14px"><span class="lbl">Więcej</span>
+        <button class="mrow" id="mNot">${ic('note')}<b>Notatki</b><span>${notatki}</span>${ic('chev')}</button>
+        <button class="mrow" id="mPost">${ic('chart')}<b>Postęp${maEtapy() ? ' i etapy' : ''}</b><span>${pct}%</span>${ic('chev')}</button>
+        <button class="mrow" id="mDokP">${ic('folder')}<b>Dokumenty projektowe</b><span>${(pd.pliki || []).length}</span>${ic('chev')}</button>
+        <button class="mrow" id="mDokT">${ic('book')}<b>Dokumenty techniczne</b><span>${tech.length}</span>${ic('chev')}</button>
+      </section>`;
     bindEtap();
     $('#tPodl').onclick = () => UI.go('rzut', {});
+    $('#tProt').onclick = () => UI.go('protokoly');
     $('#tBraki').onclick = () => UI.go('braki');
-    $('#tPostep').onclick = () => UI.go('postep');
-    view.querySelectorAll('[data-prot]').forEach(b => b.onclick = () => UI.go('protokoly'));
+    $('#tFoto').onclick = () => UI.go('zdjecia');
+    $('#mNot').onclick = () => UI.go('notatki');
+    $('#mPost').onclick = () => UI.go('postep');
+    $('#mDokP').onclick = () => UI.go('dokumenty', { typ: 'proj' });
+    $('#mDokT').onclick = () => UI.go('dokumenty', { typ: 'tech' });
     $('#bBrak').onclick = () => Dialogs.brak('');
     $('#bNote').onclick = () => Dialogs.notatka('');
+    if ($('#bPin')) $('#bPin').onclick = () => zapiszPinezke(p);
+  },
+
+  /* Dokumenty projektowe (pliki budowy) i techniczne (DTR z _Techniczne) – od 1.12.0 osobne ekrany */
+  async dokumenty(par) {
+    const p = curProj(); if (!p) return UI.go('home');
+    const tech = par.typ === 'tech';
+    UI.header(p.kod + (tech ? ' · dokumenty techniczne' : ' · dokumenty projektowe'), () => UI.wstecz('budowa'));
+    const pliki = tech ? ((await DB.get('tech')) || []) : ((S.proj || {}).pliki || []);
+    const grupy = groupBy(pliki, f => f.grupa || '');
+    view.innerHTML = `<h1>${tech ? 'Dokumenty techniczne' : 'Dokumenty projektowe'}</h1>
+      ${tech && S.techInfo ? `<p class="mute">${U.esc(S.techInfo)}</p>` : ''}
+      <p class="mute">${tech ? 'DTR i karty urządzeń – wspólne dla wszystkich budów.' : 'Rzuty, schematy i dokumenty tej budowy.'} Pliki z ✓ są w pamięci tabletu.</p>
+      ${grupy.map(([g, arr]) => `${g || grupy.length > 1 ? `<h2>${U.esc(g || 'Ogólne')}</h2>` : ''}<div class="list">${arr.map(f => `<button class="li" data-f="${U.esc(f.id)}">${ic(tech ? 'book' : 'doc')}<span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('')}</div>`).join('') || '<p class="mute">Brak plików.</p>'}`;
     view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => openFile(b.dataset.f));
-    [...(pd.pliki || []), ...((await DB.get('tech')) || [])].forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.hasFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
+    pliki.forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.hasFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
+  },
+
+  /* Notatki z budowy (od 1.12.0) */
+  notatki() {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.kod + ' · notatki', () => UI.wstecz('budowa'));
+    const q = U.norm(UI.par.q || '');
+    const F = fold(S.ev);
+    const lista = F.notes.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
+    view.innerHTML = `<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
+      <label class="search" style="margin:14px 0"><span hidden>Szukaj w notatkach</span><input type="search" id="q" value="${U.esc(UI.par.q || '')}" placeholder="słowo, urządzenie, osoba" autocomplete="off"></label>
+      <div class="stack">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(e.urz)}</button>` : ''}</div>
+        <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`;
+    $('#nNew').onclick = () => Dialogs.notatka('');
+    const inp = $('#q'); inp.oninput = () => { UI.par.q = inp.value; Views.notatki(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+    view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
+    hydrateFotos(view);
+  },
+
+  /* Wszystkie zdjęcia z budowy z opisem urządzenia / braku / notatki (od 1.12.0) */
+  zdjecia(par) {
+    const p = curProj(); if (!p) return UI.go('home');
+    UI.header(p.kod + ' · zdjęcia', () => UI.wstecz('budowa'));
+    const F = fold(S.ev);
+    const filtr = par.f || 'all', ile = par.ile || 40;
+    const wszystkie = Object.values(F.fotoInfo).sort((a, b) => a.ts < b.ts ? 1 : -1);
+    const rodz = f => f.rodzaj === 'brak' ? 'brak' : f.rodzaj === 'notatka' ? 'notatka' : 'urz';
+    const lista = wszystkie.filter(f => filtr === 'all' || rodz(f) === filtr);
+    const n = k => wszystkie.filter(f => rodz(f) === k).length;
+    view.innerHTML = `<h1>Zdjęcia z budowy (${wszystkie.length})</h1>
+      <div class="tabs">${[['all', 'Wszystkie', wszystkie.length], ['urz', 'Urządzenia', n('urz')], ['brak', 'Braki', n('brak')], ['notatka', 'Notatki', n('notatka')]].map(([k, l, c]) => `<button class="tab ${k === filtr ? 'on' : ''}" data-fl="${k}">${l} ${c}</button>`).join('')}</div>
+      ${groupBy(lista.slice(0, ile), f => U.day(f.ts)).map(([d, arr]) => `<h2>${new Date(d + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+        <div class="gal">${arr.map(f => { const o = opisZdjecia(f, F); return `<button class="gph" data-g="${U.esc(f.fid)}"><span class="gimg" data-gi="${U.esc(f.fid)}">zdjęcie na Dysku</span><span class="gcap"><b>${U.esc(o.t)}</b>${o.s ? `<span>${U.esc(o.s)}</span>` : ''}<span class="m">${U.esc(f.kto)} · ${U.fmt(f.ts)}</span></span></button>`; }).join('')}</div>`).join('') || '<p class="mute">Brak zdjęć.</p>'}
+      ${lista.length > ile ? `<div class="row" style="margin-top:14px"><button class="btn grow" id="gMore">Pokaż kolejne (${lista.length - ile})</button></div>` : ''}
+      <p class="mute">Pełna rozdzielczość tylko dla zdjęć z tego tabletu – pozostałe pobierane w podglądzie pomniejszonym.</p>`;
+    view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('zdjecia', { f: b.dataset.fl }));
+    if ($('#gMore')) $('#gMore').onclick = () => UI.go('zdjecia', { ...par, ile: ile + 40 });
+    view.querySelectorAll('[data-g]').forEach(b => b.onclick = () => Foto.podglad(b.dataset.g));
+    view.querySelectorAll('[data-gi]').forEach(async el => {
+      const fid = el.dataset.gi; const ph = await DB.getPhoto(fid), m = ph ? null : await DB.getFile('mini:' + fid);
+      if (ph || m) { const img = new Image(); img.alt = 'zdjęcie'; img.src = URL.createObjectURL((ph || m).blob); el.innerHTML = ''; el.appendChild(img); }
+    });
   },
 
   /* Rzuty + lista urządzeń */
   async rzut(par) {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · podłączenia', () => UI.wstecz('budowa'));
+    UI.header(p.kod + ' · urządzenia', () => UI.wstecz('budowa'));
     const pd = S.proj || {}; const F = fold(S.ev);
     const urz = urzE();
     const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))];
@@ -409,12 +495,12 @@ const Views = {
     const ark = sheets.includes(par.ark) ? par.ark : sheets[0] || '';
     const filt = par.f || 'all';
     const sOf = u => devStatus(u, F);
-    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : U.prefix(u.id) === filt));
+    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt));
     const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
     view.innerHTML = etapSwitch() + `
       <div class="row" style="margin-bottom:10px">
         <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
-        <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
+        <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : []), ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
       </div>
       ${mode === 'rzut' ? `
         <div class="tabs">${sheets.map(s => `<button class="tab ${s === ark ? 'on' : ''}" data-a="${U.esc(s)}">${U.esc(s)} · ${U.esc((urz.find(u => u.arkusz === s) || {}).kond || '')}</button>`).join('')}</div>
@@ -422,7 +508,7 @@ const Views = {
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
         : `<div class="list">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li" style="background:#eef1f5;font-weight:600">${U.esc(g)}</div>` + arr.map(u => `
-            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span><span class="mute">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
+            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
       ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`;
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
@@ -444,7 +530,7 @@ const Views = {
   /* Braki i tematy */
   braki(par) {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · braki', () => UI.wstecz('budowa'));
+    UI.header(p.kod + ' · braki', () => UI.wstecz('budowa'));
     const F = fold(S.ev); const showClosed = par.closed;
     const br = Object.values(F.braki).filter(b => (showClosed ? b.zamk : !b.zamk) && brakWEtapie(b)).sort((a, b) => a.ts < b.ts ? 1 : -1);
     const temE = t => { if (!maEtapy() || !S.etap || !t.urz) return true; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === t.urz); return !u || u.etap === S.etap; };
@@ -469,7 +555,7 @@ const Views = {
   /* Postęp */
   postep() {
     const p = curProj(); if (!p) return UI.go('home');
-    UI.header(p.nazwa + ' · postęp', () => UI.wstecz('budowa'));
+    UI.header(p.kod + ' · postęp', () => UI.wstecz('budowa'));
     const F = fold(S.ev); const urz = urzE(); const all = (S.proj || {}).urzadzenia || [];
     const groups = groupBy(urz, u => U.prefix(u.id));
     const today = U.day();
@@ -638,6 +724,43 @@ const Dialogs = {
     $('#ns').onclick = async () => { const t = $('#nt').value.trim(); if (!t) return; await addEvent('notatka', urz, { tekst: t, foto: photos }); UI.toast('Notatka zapisana'); UI.close(); };
   },
 
+  /* Okienko zadania z kalendarza (od 1.12.0): dane z ClickUp, 3 statusy (offline), przejście do budowy */
+  zadanie(t, bud, osoby) {
+    let wyb = null, powod = '';
+    const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null;
+    const kiedy = maGodziny(t) ? hm(a) + ' – ' + hm(b) : b ? 'do ' + b.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) + (t.godzKoniec ? ' ' + hm(b) : '') : '—';
+    const draw = () => {
+      modal.innerHTML = `<div class="ov bottom" id="ov"><section class="zsheet" role="dialog" aria-label="Zadanie">
+        <div class="grab"></div>
+        <div class="row">${bud ? `<span class="chip">${U.esc(bud.kod)} · ${U.esc(String(bud.nazwa).replace(bud.kod, '').trim())}</span>` : `<span class="chip gr">${U.esc(t.listaNazwa || 'spoza budów ELWIS')}</span>`}<span class="chip gr">${U.esc(t.status || '')}${t.czeka ? ' · czeka na wysłanie' : ''}</span></div>
+        <h2>${U.esc(t.nazwa)}</h2>
+        <div class="zfacts"><div>Kiedy<b class="m">${U.esc(kiedy)}</b>${t.est ? 'szac. ' + String(Math.round(t.est / 36e5 * 10) / 10).replace('.', ',') + ' h' : ''}</div><div>Kto<b>${U.esc(osoby || '—')}</b></div></div>
+        ${t.opis ? `<div><span class="lbl">Opis z ClickUp</span><p class="zopis">${U.esc(t.opis)}</p></div>` : ''}
+        <div><span class="lbl">Jak poszło?</span>
+          <div class="st3" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}">${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div></div>
+        ${wyb && wyb !== 'complete' ? `<div class="zwhy"><span class="lbl">Powód (opcjonalnie)</span>
+          <div class="cats">${POWODY_ZAD.map(x => `<button data-pw="${U.esc(x)}" class="${x === powod ? 'on' : ''}">${U.esc(x)}</button>`).join('')}</div>
+          <label><span class="lbl" style="display:block;margin-bottom:4px">Komentarz (opcjonalnie)</span><textarea id="zk" placeholder="Co zrobione, co zostało, warunek powrotu"></textarea></label></div>` : ''}
+        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}<button class="btn pri" id="zOk" ${wyb ? '' : 'disabled'}>Zapisz status</button></div>
+      </section></div>`;
+      $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
+      modal.querySelectorAll('[data-st]').forEach(x => x.onclick = () => { const k = $('#zk') ? $('#zk').value : ''; wyb = x.dataset.st; draw(); if (k && $('#zk')) $('#zk').value = k; });
+      modal.querySelectorAll('[data-pw]').forEach(x => x.onclick = () => { const k = $('#zk').value; powod = powod === x.dataset.pw ? '' : x.dataset.pw; draw(); $('#zk').value = k; });
+      if ($('#zX')) $('#zX').onclick = UI.close;
+      if ($('#zBud')) $('#zBud').onclick = () => { UI.close(); openProject(bud.kod); };
+      $('#zOk').onclick = async () => {
+        if (!wyb) return;
+        const kom = $('#zk') ? $('#zk').value.trim() : '';
+        const k = (await DB.get('zadKolejka')) || [];
+        k.push({ id: U.uid('z'), task: t.id, status: wyb, powod: wyb === 'complete' ? '' : powod, komentarz: wyb === 'complete' ? '' : kom, kto: S.user.name, ts: U.now(), nazwa: t.nazwa });
+        await DB.set('zadKolejka', k); await liczOczekujace();
+        UI.close(); UI.toast(navigator.onLine ? 'Status zapisany' : 'Status zapisany – wyśle się po połączeniu z siecią'); UI.refresh();
+        if (navigator.onLine) Sync.soon();
+      };
+    };
+    draw();
+  },
+
   async scan(onCode) {
     if (!('BarcodeDetector' in window) || !navigator.mediaDevices) {
       UI.toast('Ten tablet nie ma czytnika kodów – wpisz numer albo zrób zdjęcie tabliczki.'); return;
@@ -665,6 +788,8 @@ const Dialogs = {
 };
 
 /* ---------- Plan dnia ---------- */
+const STATUS_ZAD = { 'complete': { t: 'Wykonane', kl: 'complete', ic: 'check', b: 'ok' }, 'update required': { t: 'Do kontynuacji', kl: 'update', ic: 'pause', b: 'wip' }, 'on hold': { t: 'Zadanie niepodjęte', kl: 'hold', ic: 'x', b: 'no' } };
+const POWODY_ZAD = ['Brak materiału', 'Brak dostępu', 'Brak zasilania', 'Brak frontu robót', 'Koniec dnia', 'Inne'];
 const PLAN_KOLORY = ['#0b4f8a', '#1f7a4d', '#a3561b', '#6b3fa0', '#b02e4c', '#0e7c86', '#5a6b1e', '#8a5a0b'];
 function planWiek(t) {
   const d = new Date(t);
@@ -718,6 +843,41 @@ function etapTile(e, F) {
   return `<button class="tile ${S.etap === e.id ? 'main' : ''}" data-e="${U.esc(e.id)}"><b>Etap ${U.esc(e.id)}</b><span class="mute">${U.esc(e.opis || '')}</span>
     <div class="bar"><i style="width:${pct}%;background:var(--ok)"></i></div>
     <span class="mute">${pct}% · ${c.gotowe} gotowe · ${c['w toku']} w toku · ${c.brak} z brakiem · ${arr.length} urządzeń</span></button>`;
+}
+
+/* ---------- Pinezka GPS budowy (od 1.12.0) ---------- */
+// Baza: kolumna D „Pinezka GPS (lat,lon)”; zapis z tabletu czeka w S.pinezki, dopóki serwer go nie potwierdzi
+function lokBudowy(p) { return !p ? '' : (p.lokalizacja || ((S.pinezki || {})[p.kod]) || ''); }
+function zapiszPinezke(p) {
+  if (!navigator.geolocation) { UI.toast('Ten tablet nie udostępnia lokalizacji.'); return; }
+  UI.toast('Ustalam pozycję GPS…');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+    const dokl = Math.round(accuracy || 0);
+    if (dokl > 50 && !confirm(`Dokładność GPS to ok. ${dokl} m (słaby sygnał). Zapisać mimo to?\n\nLepiej wyjść na zewnątrz i spróbować ponownie.`)) return;
+    if (!confirm(`Zapisać aktualną pozycję jako pinezkę budowy ${p.kod}?\n${lat.toFixed(5)}, ${lon.toFixed(5)} (±${dokl} m)`)) return;
+    await addEvent('pinezka', '', { lat: +lat.toFixed(5), lon: +lon.toFixed(5), dokl });
+    S.pinezki = { ...(S.pinezki || {}), [p.kod]: lat.toFixed(5) + ',' + lon.toFixed(5) }; await DB.set('pinezki', S.pinezki);
+    UI.toast(navigator.onLine ? 'Pinezka zapisana' : 'Pinezka zapisana – wyśle się po połączeniu z siecią'); UI.refresh();
+  }, err => UI.toast(err.code === 1 ? 'Brak zgody na lokalizację – włącz ją w ustawieniach przeglądarki.' : 'Nie udało się ustalić pozycji GPS.'),
+  { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+/* znacznik protokołu przy urządzeniu (od 1.12.0): ok – przesłany z numerem, rob – roboczy, do – dedykowany do wykonania, '' – nie dotyczy */
+function protZnacznik(id, F) {
+  const ist = Prot.dlaUrzStan(id, F);
+  const gotowy = ist.find(x => x.stan !== 'roboczy');
+  if (gotowy) return { k: 'ok', t: '✓ ' + (gotowy.nr || 'przesłany') };
+  if (ist.length) return { k: 'rob', t: 'roboczy' };
+  return Prot.dedykowaneUrz(id).length ? { k: 'do', t: 'do wykonania' } : { k: '', t: '' };
+}
+/* opis zdjęcia w galerii: urządzenie (ID, typ, kondygnacja, arkusz) albo brak / notatka */
+function opisZdjecia(f, F) {
+  const u = f.urz && ((S.proj || {}).urzadzenia || []).find(x => x.id === f.urz);
+  if (f.rodzaj === 'brak') { const b = Object.values(F.braki).find(x => (x.foto || []).includes(f.fid) || x.kom.some(k => k.foto.includes(f.fid)));
+    return { t: 'Brak' + (b ? ' – ' + b.kat : '') + (u ? ' · ' + u.id : ''), s: b ? b.opis.slice(0, 80) : '' }; }
+  if (f.rodzaj === 'notatka') { const n = F.notes.find(e => (e.d.foto || []).includes(f.fid)); return { t: 'Notatka' + (u ? ' · ' + u.id : ''), s: n ? String(n.d.tekst || '').slice(0, 80) : '' }; }
+  if (u) return { t: u.id + ' · ' + typOf(u.id).nazwa + (f.rodzaj === 'tabliczka' ? ' · tabliczka' : ''), s: [u.kond, u.arkusz].filter(Boolean).join(' · ') };
+  return { t: f.urz && f.urz !== 'BUDOWA' ? f.urz : 'Budowa', s: '' };
 }
 
 /* ---------- Pomocnicze widoków ---------- */
@@ -813,7 +973,7 @@ const Foto = {
     const i = this.info(fid);
     await addEvent('foto_usun', i.urz || '', { fid });
     await DB.delPhoto(fid); await DB.delFile('mini:' + fid);   // niewysłane zdjęcie nie zostanie już wysłane
-    S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length; UI.net();
+    await liczOczekujace();
     UI.toast('Zdjęcie usunięte');
     if ($('#ov') && i.urz && $('#thumbs')) Dialogs.device(i.urz); else UI.refresh();
   }
@@ -829,8 +989,19 @@ function pickFile(cb) {
   const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
   i.onchange = () => { if (i.files[0]) cb(i.files[0]); }; i.click();
 }
+/* treść opisu wtapianego w zdjęcie (od 1.12.0) */
+function opisNaZdjecie(urz, rodzaj) {
+  const p = curProj() || {}, u = urz && ((S.proj || {}).urzadzenia || []).find(x => x.id === urz);
+  const l = [p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : [p.kod, p.nazwa].filter(Boolean).join(' ')];
+  const co = rodzaj === 'brak' ? 'Brak' : rodzaj === 'notatka' ? 'Notatka' : rodzaj === 'tabliczka' ? 'Tabliczka' : '';
+  if (u) l.push([u.id, typOf(u.id).nazwa, [u.kond, u.arkusz].filter(Boolean).join(' '), co].filter(Boolean).join(' · '));
+  else if (co) l.push(co + (urz && urz !== 'BUDOWA' ? ' · ' + urz : ''));
+  const d = new Date();
+  l.push(d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + hm(d) + ' · ' + (S.user ? S.user.name : ''));
+  return l.filter(Boolean);
+}
 async function storePhoto(file, urz, rodzaj) {
-  const blob = await U.compress(file);
+  const blob = await U.compress(file, 1600, 0.75, opisNaZdjecie(urz, rodzaj));
   const id = U.uid('f');
   const n = (await DB.eventsFor(S.kod)).filter(e => e.typ === 'foto' && e.urz === urz).length + 1;
   const name = rodzaj === 'tabliczka' ? `${urz}_tabliczka.jpg` : `${urz}_${U.day()}_${n}_${id.slice(-4)}.jpg`;
@@ -921,7 +1092,8 @@ function settings() {
   await API.load();
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
   S.pogoda = await DB.get('pogoda');
-  S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length;
+  S.pinezki = (await DB.get('pinezki')) || {};
+  await liczOczekujace().catch(() => { });
   try { await Pamiec.limit(); } catch (e) { }
   $('#topVer').textContent = 'v' + APP_VERSION;
   $('#btnSync').onclick = () => Sync.run();
@@ -930,9 +1102,19 @@ function settings() {
   window.addEventListener('offline', () => UI.net());
   // systemowy przycisk „wstecz” Androida: zamyka okno albo cofa ekran tak jak strzałka w aplikacji (od 1.11.7)
   history.pushState({ elwis: 1 }, '');
+  // od 1.12.0: na ekranie głównym (plan) pytanie „Zamknąć aplikację?”; kolejne „wstecz” przy otwartym pytaniu zamyka aplikację
   window.addEventListener('popstate', () => {
+    if ($('#fotoView')) { $('#fotoView').remove(); history.pushState({ elwis: 1 }, ''); return; }
     const okno = !!modal.innerHTML, ekran = !$('#btnBack').hidden;
-    if (okno || ekran) { history.pushState({ elwis: 1 }, ''); okno ? UI.close() : $('#btnBack').click(); }
+    if (okno || ekran) { history.pushState({ elwis: 1 }, ''); okno ? UI.close() : $('#btnBack').click(); return; }
+    if (!S.user) return;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="alertdialog" aria-label="Zamknąć aplikację?" style="max-width:480px">
+      <div class="shead"><h3>Zamknąć aplikację?</h3></div>
+      <div class="sbody"><p style="margin:0">Jesteś na ekranie głównym. Niewysłane dane zostaną na tablecie i wyślą się przy następnym uruchomieniu.</p><p class="mute" style="margin:0">Naciśnij jeszcze raz systemowe „wstecz”, aby zamknąć.</p></div>
+      <div class="sfoot"><button class="btn" id="exNo">Nie, zostań</button><button class="btn pri" id="exYes">Tak, zamknij</button></div></div></div>`;
+    const zostan = () => { UI.close(); history.pushState({ elwis: 1 }, ''); };
+    $('#exNo').onclick = zostan; $('#ov').onclick = e => { if (e.target.id === 'ov') zostan(); };
+    $('#exYes').onclick = () => { window.close(); history.back(); setTimeout(() => UI.toast('Naciśnij systemowe „wstecz”, aby zamknąć aplikację.'), 400); };
   });
   setInterval(() => { if (navigator.onLine && S.user) Sync.run(); }, 3 * 60e3);
   setInterval(async () => { if (S.user && S.user.exp < Date.now()) { await Session.logout(); UI.close(); UI.toast('Sesja wygasła – zaloguj się ponownie.'); UI.go('login'); } }, 60e3);

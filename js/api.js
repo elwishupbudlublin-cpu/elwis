@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.11.9';
+const APP_VERSION = '1.12.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -40,6 +40,7 @@ const API = (() => {
     project: (kod) => get('project', { kod }),
     techniczne: () => get('techniczne'),
     plan: (od, d) => get('plan', { od, do: d, kto: S.user ? S.user.name : '' }),
+    zadania: (zmiany) => post({ action: 'zadania', zmiany }),
     file: (id, part) => get('file', part === undefined ? { id } : { id, part }),
     /* Plik w częściach (serwer 1.2+); stary serwer zwraca od razu cały plik. */
     async fileFull(id, onProgress) {
@@ -74,11 +75,19 @@ const U = {
   },
   b64ToBlob(b64, mime) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: mime }); },
   blobToB64: blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); }),
-  async compress(file, max = 1600, q = 0.75) {
+  async compress(file, max = 1600, q = 0.75, opis = null) {
     const img = await createImageBitmap(file);
     const s = Math.min(1, max / Math.max(img.width, img.height));
     const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    if (opis && opis.length) {   // opis wtopiony w lewy górny róg (od 1.12.0): budowa, urządzenie, data, autor
+      const fs = Math.max(14, Math.round(Math.min(c.width, c.height) / 32)), pad = Math.round(fs * 0.6), lh = Math.round(fs * 1.3);
+      g.font = `600 ${fs}px Inter, system-ui, sans-serif`; g.textBaseline = 'top';
+      const linie = opis.map(x => String(x)).map(x => { let t = x; while (t.length > 4 && g.measureText(t).width > c.width - 4 * pad) t = t.slice(0, -2); return t === x ? t : t + '…'; });
+      const w = Math.max(...linie.map(t => g.measureText(t).width)) + 2 * pad, h = linie.length * lh + 2 * pad - (lh - fs);
+      g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(pad, pad, w, h);
+      g.fillStyle = '#fff'; linie.forEach((t, i) => g.fillText(t, 2 * pad, 2 * pad + i * lh));
+    }
     return new Promise(res => c.toBlob(res, 'image/jpeg', q));
   }
 };

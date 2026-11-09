@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.11.4';
+const SCRIPT_VERSION = '1.12.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -59,6 +59,7 @@ function handle_(p, body) {
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'foto': return out_(foto_(String(p.kod || ''), String(p.fid || '')));
       case 'push': return out_(push_(body, tablet));
+      case 'zadania': return out_(zadania_(body || {}, tablet));
       case 'docx': return out_(docx_(body || {}));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
@@ -257,7 +258,7 @@ function plan_(od, doDnia) {
   if (!re.test(od) || !re.test(doDnia)) throw new Error('Zły zakres dat');
   const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doDnia + 'T23:59:59').getTime();
   if (t1 < t0 || t1 - t0 > 31 * 864e5) throw new Error('Zakres dat do 31 dni');
-  const cacheKey = 'plan:' + od + ':' + doDnia;
+  const cacheKey = 'plan:' + (P.getProperty('PLAN_VER') || '0') + ':' + od + ':' + doDnia;   // PLAN_VER rośnie po zmianie statusu z tabletu (1.12.0)
   const cache = CacheService.getScriptCache();
   const hit = cache.get(cacheKey);
   if (hit) return JSON.parse(hit);
@@ -285,7 +286,8 @@ function plan_(od, doDnia) {
         start: t.start_date ? Number(t.start_date) : null, koniec: t.due_date ? Number(t.due_date) : null,
         godzStart: !!t.start_date_time, godzKoniec: !!t.due_date_time,
         osoby: (t.assignees || []).map(a => String(a.id)).filter(i => ids.indexOf(i) >= 0), url: t.url,
-        est: t.time_estimate ? Number(t.time_estimate) : 0   // „Estimated Time” w ms (od 1.10.0)
+        est: t.time_estimate ? Number(t.time_estimate) : 0,   // „Estimated Time” w ms (od 1.10.0)
+        opis: txt_(t.text_content).slice(0, 1500)   // opis zadania do okienka na tablecie (od 1.12.0)
       });
     });
     if (d.last_page || !(d.tasks || []).length) break;
@@ -359,7 +361,50 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka'];
+
+/* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
+   Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
+const STATUSY_TABLETU = { 'complete': 'Wykonane', 'update required': 'Do kontynuacji', 'on hold': 'Zadanie niepodjęte' };
+function zadania_(b, tablet) {
+  const token = P.getProperty('CLICKUP_TOKEN');
+  if (!token) throw new Error('Brak klucza ClickUp na serwerze');
+  const wyniki = {};
+  (b.zmiany || []).slice(0, 50).forEach(z => {
+    const id = txt_(z && z.id); if (!id) return;
+    const task = txt_(z.task), st = txt_(z.status).toLowerCase();
+    if (!/^[\w-]{4,20}$/.test(task) || !STATUSY_TABLETU[st]) { wyniki[id] = { ok: false, blad: 'Nieprawidłowe dane' }; return; }
+    const H = { headers: { Authorization: token, 'Content-Type': 'application/json' }, muteHttpExceptions: true };
+    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/task/' + task, Object.assign({ method: 'put', payload: JSON.stringify({ status: st }) }, H));
+    if (r.getResponseCode() !== 200) {
+      const m = r.getContentText();
+      wyniki[id] = { ok: false, blad: /status/i.test(m) ? 'Lista w ClickUp nie ma statusu „' + st + '”' : 'ClickUp: błąd ' + r.getResponseCode() };
+      return;
+    }
+    const linie = ['ELWIS · ' + txt_(z.kto).slice(0, 60) + ' (' + tablet + '): ' + STATUSY_TABLETU[st]];
+    if (txt_(z.powod)) linie.push('Powód: ' + txt_(z.powod).slice(0, 200));
+    if (txt_(z.komentarz)) linie.push(txt_(z.komentarz).slice(0, 2000));
+    if (linie.length > 1 || st !== 'complete')
+      UrlFetchApp.fetch('https://api.clickup.com/api/v2/task/' + task + '/comment', Object.assign({ method: 'post', payload: JSON.stringify({ comment_text: linie.join('\n'), notify_all: false }) }, H));
+    wyniki[id] = { ok: true };
+  });
+  P.setProperty('PLAN_VER', String(Date.now()));   // tablety pobiorą świeży plan
+  return { ok: true, wyniki: wyniki };
+}
+
+/* Pinezka GPS budowy z tabletu (od 1.12.0) → Projekty, kolumna D „Pinezka GPS (lat,lon)”.
+   Pustą uzupełnia każdy; istniejącą zmienia tylko rola biuro. */
+function pinezka_(kod, e, biuro) {
+  const d = e.d || {}, lat = Number(d.lat), lon = Number(d.lon);
+  if (!(lat >= 49 && lat <= 55 && lon >= 14 && lon <= 25)) return false;   // poza Polską – odrzucamy
+  const sh = baza_().getSheetByName('Projekty'); const v = sh.getDataRange().getDisplayValues();
+  for (let i = 1; i < v.length; i++) if (txt_(v[i][0]) === kod) {
+    if (txt_(v[i][3]) && !biuro[txt_(e.kto)]) return false;
+    sh.getRange(i + 1, 4).setNumberFormat(TEXT).setValue(lat.toFixed(5) + ',' + lon.toFixed(5));
+    return true;
+  }
+  return false;
+}
 
 function push_(b, tablet) {
   const p = projekt_(String(b.kod || ''));
@@ -405,6 +450,10 @@ function push_(b, tablet) {
             if (autorzyBrakow === null) autorzyBrakow = autorzyBrakow_(sh);
             if (autorzyBrakow[txt_(e.d.bid)] && autorzyBrakow[txt_(e.d.bid)] !== txt_(e.kto)) return;
           }
+        }
+        if (e.typ === 'pinezka') {
+          if (biuro === null) biuro = rolaBiuro_();
+          if (!pinezka_(p.kod, e, biuro)) return;
         }
         if (e.typ === 'foto_usun') {
           // zdjęcie usuwa autor albo rola biuro (od 1.8.0)
