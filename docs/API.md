@@ -11,10 +11,11 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `project` | GET | `kod` | `etapy[{id,opis}], urzadzenia[{id,grupa,typ,zasilanie,kond,arkusz,uwagi,x,y,sn,status,etap}], tematy[], pliki[{id,name,mime,size}], rzuty{arkusz:fileId}, ostrzezenia[]` |
 | `file` | GET | `id`, `part?` | `name, mime, size, b64` – tylko pliki z „Do wglądu” aktywnej budowy lub z `_Techniczne`. Z `part` (od 1.2.0): część nr `part` po 6 MB + `parts` (liczba części), pliki do 60 MB; bez `part`: cały plik do 20 MB |
 | `techniczne` | GET | – | `pliki[{id,name,mime,size,grupa,zm}]` – DTR z `_Techniczne` (grupa = ścieżka podfolderu), `brakFolderu` gdy brak klucza w Konfiguracji (od 1.3.0) |
-| `plan` | GET | `od`, `do` (rrrr-mm-dd, do 31 dni) | `zadania[{id,nazwa,status,zamk,lista,listaNazwa,start,koniec,godzStart,godzKoniec,osoby[],url}]` – zadania ClickUp pracowników z „ID ClickUp”, z terminem w zakresie; `brakKlucza` gdy brak CLICKUP_TOKEN (od 1.4.0) | Od 1.10.0 każde zadanie ma też `est` – „Estimated Time” z ClickUp w ms (0 = brak). Od 1.11.4 parametr `kto` (zalogowany): dla roli innej niż biuro serwer usuwa zadania i osoby z roli biuro.
+| `plan` | GET | `od`, `do` (rrrr-mm-dd, do 31 dni) | `zadania[{id,nazwa,status,zamk,lista,listaNazwa,start,koniec,godzStart,godzKoniec,osoby[],url}]` – zadania ClickUp pracowników z „ID ClickUp”, z terminem w zakresie; `brakKlucza` gdy brak CLICKUP_TOKEN (od 1.4.0) | Od 1.10.0 każde zadanie ma też `est` – „Estimated Time” z ClickUp w ms (0 = brak). Od 1.12.0 `opis` – treść opisu zadania (do 1500 znaków). Od 1.11.4 parametr `kto` (zalogowany): dla roli innej niż biuro serwer usuwa zadania i osoby z roli biuro.
 | `events` | GET | `kod, since` | `events[], last, more` – maks. 500 na raz |
 | `push` | POST (text/plain) | `kod, events[], photos[{id,name,b64}]` | `accepted[]` – ID przyjęte (także duplikaty), `numery{pid:nr}` – numery protokołów (od 1.5.0) |
 | `docx` | POST (text/plain) | `kod, pid, kto` | `name, url, nr` – Word protokołu w folderze budowy → Protokoły; tylko gdy `kto` ma rolę biuro (od 1.5.0) |
+| `zadania` | POST (text/plain) | `zmiany: [{id, task, status, powod, komentarz, kto, ts}]` | `wyniki: {id: {ok, blad}}` – status zadania ClickUp z tabletu (od 1.12.0); dozwolone tylko `complete`, `update required`, `on hold`; powód i komentarz → komentarz zadania „ELWIS · kto (tablet): …”; po zmianie serwer unieważnia pamięć planu (`PLAN_VER`) |
 
 ## Zdarzenia
 `{id, ts, kto, urz, typ, d}` – niezmienne, rozpoznawane po `id` (ponowne wysłanie nie dubluje).
@@ -30,6 +31,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `brak_edyc` | `{bid, kat?, opis?, blokuje?, foto[]?, usun?, otworz?}` – edycja braku (od 1.9.0); `usun` – autor lub biuro, `otworz` – biuro |
 | `brak_kom` | `{bid, tekst, foto[]}` – komentarz do braku (od 1.9.0) |
 | `foto_usun` | `{fid}` – usunięcie zdjęcia (od 1.8.0); serwer akceptuje od autora zdjęcia lub roli biuro i przenosi plik do kosza |
+| `pinezka` | `{lat, lon, dokl}` – pinezka GPS budowy z tabletu (od 1.12.0); serwer wpisuje `lat,lon` do Projekty, kolumna D „Pinezka GPS (lat,lon)”: pustą – każdy, istniejącą – tylko rola biuro; współrzędne spoza Polski odrzucane |
 | `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).
