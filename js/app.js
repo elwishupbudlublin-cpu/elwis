@@ -474,7 +474,7 @@ const Views = {
     const lista = F.notes.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
     view.innerHTML = `<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
       <label class="search" style="margin:14px 0"><span hidden>Szukaj w notatkach</span><input type="search" id="q" value="${U.esc(UI.par.q || '')}" placeholder="słowo, urządzenie, osoba" autocomplete="off"></label>
-      <div class="stack">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(e.urz)}</button>` : ''}</div>
+      <div class="stack">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
         <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`;
     $('#nNew').onclick = () => Dialogs.notatka('');
     const inp = $('#q'); inp.oninput = () => { UI.par.q = inp.value; Views.notatki(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
@@ -518,24 +518,38 @@ const Views = {
     const ark = sheets.includes(par.ark) ? par.ark : sheets[0] || '';
     const filt = par.f || 'all';
     const sOf = u => devStatus(u, F);
-    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt));
+    // sortowanie listy (od 1.14.0): ID ELWIS albo oznaczenie z projektu – zawsze w grupach kondygnacji; wybór zapamiętany na tablecie
+    const sortUrz = par.s || (await DB.get('sortUrz')) || 'id';
+    const q = U.norm(par.q || '');
+    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+      .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn].join(' ')).includes(q));
+    const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
+    const maOz = urz.some(u => u.oz);
     const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
     view.innerHTML = etapSwitch() + `
-      <div class="row" style="margin-bottom:10px">
+      <div class="ubar">
+      <div class="row" style="margin-bottom:${mode === 'lista' ? 8 : 0}px">
         <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
         <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : []), ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
+      </div>
+      ${mode === 'lista' ? `<div class="row">
+        <label class="search grow" style="margin:0"><span hidden>Szukaj urządzenia</span><input type="search" id="uq" value="${U.esc(par.q || '')}" placeholder="ID, oznaczenie z projektu, typ, nr seryjny" autocomplete="off"></label>
+        <div class="seg2" role="group" aria-label="Sortowanie"><span class="mute">Sortuj:</span><button class="tab ${sortUrz === 'id' ? 'on' : ''}" data-s="id">ID ELWIS</button><button class="tab ${sortUrz === 'oz' ? 'on' : ''}" data-s="oz" ${maOz ? '' : 'disabled title="Lista nie ma oznaczeń z projektu"'}>Oznaczenie proj.</button></div>
+      </div>` : ''}
       </div>
       ${mode === 'rzut' ? `
         <div class="tabs">${sheets.map(s => `<button class="tab ${s === ark ? 'on' : ''}" data-a="${U.esc(s)}">${U.esc(s)} · ${U.esc((urz.find(u => u.arkusz === s) || {}).kond || '')}</button>`).join('')}</div>
         <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
-        : `<div class="list">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li" style="background:#eef1f5;font-weight:600">${U.esc(g)}</div>` + arr.map(u => `
-            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
+        : `<div class="list" style="margin-top:10px">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(g)} <span class="mute">(${arr.length})</span></div>` + posort(arr).map(u => `
+            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
       ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`;
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
+    view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
+    if ($('#uq')) $('#uq').oninput = e => { const y = window.scrollY; UI.par.q = e.target.value; Views.rzut(UI.par).then(() => { const i = $('#uq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); window.scrollTo(0, y); }); };
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null }));
     view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
     if (mode === 'rzut' && ark) {
@@ -543,7 +557,7 @@ const Views = {
       const f = fid && await DB.getFile(fid);
       if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
       $('#noplan').remove();
-      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: u.id + ' – ' + sOf(u) }));
+      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: idOz(u) + ' – ' + sOf(u) }));
       const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); pv.ark = ark; UI.pv = pv;
       $('#zin').onclick = () => pv.zoomIn(); $('#zout').onclick = () => pv.zoomOut(); $('#zfit').onclick = () => pv.fit();
       if (par.focus) setTimeout(() => pv.focus(par.focus), 300);
@@ -611,8 +625,8 @@ const Dialogs = {
     const hasTab = st.foto.some(f => f.rodzaj === 'tabliczka');
     const br = Object.values(F.braki).filter(b => b.urz === id);
     const blocked = br.some(b => !b.zamk && b.blokuje);
-    modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(id)}">
-      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
+    modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(idOz(u))}">
+      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
       <div class="sbody">
         <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
           <div><div class="mute">Typ</div>${U.esc(u.typ)}</div><div><div class="mute">Zasilanie</div>${U.esc(u.zasilanie || '—')}</div>
@@ -688,7 +702,7 @@ const Dialogs = {
     let kat = b.kat, nowe = [], komFoto = [];
     const wroc = () => { if (after) after(); else UI.close(); UI.refresh(); };
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Brak">
-      <div class="shead"><h3>Brak – ${b.urz ? U.esc(b.urz) : b.etap ? 'etap ' + U.esc(b.etap) : 'budowa'}</h3><span class="chip ${b.zamk ? 'ok' : 'bad'}">${b.zamk ? 'zamknięty' : 'otwarty'}</span></div>
+      <div class="shead"><h3>Brak – ${b.urz ? U.esc(idOz(b.urz)) : b.etap ? 'etap ' + U.esc(b.etap) : 'budowa'}</h3><span class="chip ${b.zamk ? 'ok' : 'bad'}">${b.zamk ? 'zamknięty' : 'otwarty'}</span></div>
       <div class="sbody">
         <div class="mute">Zgłosił: ${U.esc(b.kto)} · ${U.fmt(b.ts)}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
@@ -868,6 +882,14 @@ function etapTile(e, F) {
     <span class="mute">${pct}% · ${c.gotowe} gotowe · ${c['w toku']} w toku · ${c.brak} z brakiem · ${arr.length} urządzeń</span></button>`;
 }
 
+/* ---------- Oznaczenie z projektu (kolumna „Oznaczenie proj.”, schemat 1.7, od 1.14.0) ---------- */
+function urzO(id) { return ((S.proj || {}).urzadzenia || []).find(x => x.id === id) || null; }
+function ozOf(id) { const u = typeof id === 'object' ? id : urzO(id); return u && u.oz ? u.oz : ''; }
+function idOz(id) { const i = typeof id === 'object' ? id.id : id, o = ozOf(id); return o ? i + ' · ' + o : i; }
+const ozHtml = id => { const o = ozOf(id); return o ? ` <span class="oz">${U.esc(o)}</span>` : ''; };
+// sortowanie naturalne: H2 < H10, Wk2 < Wk10
+const natCmp = (a, b) => String(a).localeCompare(String(b), 'pl', { numeric: true, sensitivity: 'base' });
+
 /* ---------- Pinezka GPS budowy (od 1.12.0) ---------- */
 // Baza: kolumna D „Pinezka GPS (lat,lon)”; zapis z tabletu czeka w S.pinezki, dopóki serwer go nie potwierdzi
 function lokBudowy(p) { return !p ? '' : (p.lokalizacja || ((S.pinezki || {})[p.kod]) || ''); }
@@ -899,7 +921,7 @@ function opisZdjecia(f, F) {
   if (f.rodzaj === 'brak') { const b = Object.values(F.braki).find(x => (x.foto || []).includes(f.fid) || x.kom.some(k => k.foto.includes(f.fid)));
     return { t: 'Brak' + (b ? ' – ' + b.kat : '') + (u ? ' · ' + u.id : ''), s: b ? b.opis.slice(0, 80) : '' }; }
   if (f.rodzaj === 'notatka') { const n = F.notes.find(e => (e.d.foto || []).includes(f.fid)); return { t: 'Notatka' + (u ? ' · ' + u.id : ''), s: n ? String(n.d.tekst || '').slice(0, 80) : '' }; }
-  if (u) return { t: u.id + ' · ' + typOf(u.id).nazwa + (f.rodzaj === 'tabliczka' ? ' · tabliczka' : ''), s: [u.kond, u.arkusz].filter(Boolean).join(' · ') };
+  if (u) return { t: idOz(u) + ' · ' + typOf(u.id).nazwa + (f.rodzaj === 'tabliczka' ? ' · tabliczka' : ''), s: [u.kond, u.arkusz].filter(Boolean).join(' · ') };
   return { t: f.urz && f.urz !== 'BUDOWA' ? f.urz : 'Budowa', s: '' };
 }
 
@@ -916,11 +938,11 @@ function attention(arr, F) {
   const b = arr.filter(u => devStatus(u, F) === 'brak');
   if (!b.length) return '';
   return `<div class="lbl">Wymaga uwagi</div><div class="list">${b.map(u => { const x = Object.values(F.braki).find(q => q.urz === u.id && !q.zamk);
-    return `<button class="li" data-u="${U.esc(u.id)}"><span class="st brak"></span><span class="grow"><b>${U.esc(u.id)}</b> ${U.esc(u.typ)}<br><span class="mute">${U.esc(x ? x.kat : '')}</span></span></button>`; }).join('')}</div>`;
+    return `<button class="li" data-u="${U.esc(u.id)}"><span class="st brak"></span><span class="grow"><b>${U.esc(u.id)}</b>${ozHtml(u)} ${U.esc(u.typ)}<br><span class="mute">${U.esc(x ? x.kat : '')}</span></span></button>`; }).join('')}</div>`;
 }
 function issueHtml(b) {
   const canClose = !b.zamk;   // od 1.9.0 brak może zamknąć każdy
-  return `<div class="issue link ${b.zamk ? 'closed' : ''}" data-bid="${U.esc(b.id)}" role="button" tabindex="0" aria-label="Otwórz brak"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
+  return `<div class="issue link ${b.zamk ? 'closed' : ''}" data-bid="${U.esc(b.id)}" role="button" tabindex="0" aria-label="Otwórz brak"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>${ozHtml(b.urz)}` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
     <div>${U.esc(b.opis)}</div>${b.foto && b.foto.length ? `<div class="thumbs" data-fotos="${U.esc(b.foto.join(','))}"></div>` : ''}<div class="mute">Zgłosił: ${U.esc(b.kto)}${b.kom && b.kom.length ? ' · ' + b.kom.length + ' kom.' : ''}${b.zm && b.zm.length ? ' · edytowano' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
     ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
 }
@@ -1017,7 +1039,7 @@ function opisNaZdjecie(urz, rodzaj) {
   const p = curProj() || {}, u = urz && ((S.proj || {}).urzadzenia || []).find(x => x.id === urz);
   const l = [p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : [p.kod, p.nazwa].filter(Boolean).join(' ')];
   const co = rodzaj === 'brak' ? 'Brak' : rodzaj === 'notatka' ? 'Notatka' : rodzaj === 'tabliczka' ? 'Tabliczka' : '';
-  if (u) l.push([u.id, typOf(u.id).nazwa, [u.kond, u.arkusz].filter(Boolean).join(' '), co].filter(Boolean).join(' · '));
+  if (u) l.push([idOz(u), typOf(u.id).nazwa, [u.kond, u.arkusz].filter(Boolean).join(' '), co].filter(Boolean).join(' · '));
   else if (co) l.push(co + (urz && urz !== 'BUDOWA' ? ' · ' + urz : ''));
   const d = new Date();
   l.push(d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + hm(d) + ' · ' + (S.user ? S.user.name : ''));

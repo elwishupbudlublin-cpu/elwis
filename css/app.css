@@ -370,3 +370,12 @@ main{padding:16px 16px 100px}
 .lstat{display:flex;flex-direction:column;gap:4px;font-size:14px;min-width:120px;text-align:right}.btc .lstat{text-align:left;margin-top:6px}
 .lstat small{color:var(--mute)}.lstat .tbar.sm{height:6px;width:120px;margin-left:auto}
 .li .chip{margin-left:6px}
+/* 1.14.0: oznaczenie z projektu, przyklejony pasek filtrów listy urządzeń */
+.oz{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#1E3A8A;background:#DBEAFE;border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.oz.big{font-size:15px;padding:2px 9px}
+.ubar{position:sticky;top:64px;z-index:6;background:var(--bg);margin:0 -16px;padding:10px 16px;box-shadow:0 6px 8px -8px rgba(14,26,43,.25)}
+.ubar .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ubar .tabs::-webkit-scrollbar{display:none}
+.ubar .tab{flex:none}
+.ubar .seg2{display:flex;align-items:center;gap:6px;flex:none}.ubar .seg2 .tab{margin:0}
+.uid{display:flex;flex-direction:column;align-items:flex-start;min-width:92px}.uid .oz{margin:2px 0 0}.uid .m{font-size:12px}
+.lgrp{background:#eef1f5;font-weight:600}

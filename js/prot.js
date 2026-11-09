@@ -177,7 +177,7 @@ ProtViews.protokoly = function () {
 /* Lista wyboru urządzenia do nowego protokołu: najpierw pasujące typem, potem pozostałe; można bez urządzenia. */
 function wybor(pr, urz) {
   const pas = urz.filter(u => Prot.pow(pr).length && Prot.pasuje(pr, u.id)), resz = urz.filter(u => pas.indexOf(u) < 0);
-  const opt = u => `<option value="${U.esc(u.id)}">${U.esc(u.id + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`;
+  const opt = u => `<option value="${U.esc(u.id)}">${U.esc(u.id + (u.oz ? ' · ' + u.oz : '') + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`;
   return `<div class="row"><select class="grow" data-selfor="${U.esc(pr.id)}"><option value="">— bez urządzenia —</option>
     ${pas.length ? `<optgroup label="Pasujące typem">${pas.map(opt).join('')}</optgroup>` : ''}${resz.length ? `<optgroup label="Pozostałe urządzenia">${resz.map(opt).join('')}</optgroup>` : ''}</select>
     <button class="btn sm pri" data-new="${U.esc(pr.id)}" data-sel="1">Wypełnij</button></div>`;
@@ -220,7 +220,7 @@ ProtViews.protokol = async function (par) {
       case 'urzadzenie': {
         const uz = sek.typ === 'tabela' ? (dane[sek.id] || []).filter((r, j) => j !== wi).map(r => r[f.id]).filter(String) : [];
         const lst = urzDoPola(f, uz, v);
-        inner = `<select ${key} ${dis}><option value="">— wybierz z listy budowy —</option>${lst.map(u => `<option value="${U.esc(u.id)}" ${u.id === v ? 'selected' : ''}>${U.esc(u.id + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`).join('')}</select>`;
+        inner = `<select ${key} ${dis}><option value="">— wybierz z listy budowy —</option>${lst.map(u => `<option value="${U.esc(u.id)}" ${u.id === v ? 'selected' : ''}>${U.esc(u.id + (u.oz ? ' · ' + u.oz : '') + ' – ' + (u.typ || '') + (u.kond ? ' · ' + u.kond : ''))}</option>`).join('')}</select>`;
         break;
       }
       case 'tekst_dlugi': inner = `<textarea ${key} ${dis}>${U.esc(v || '')}</textarea>`; break;

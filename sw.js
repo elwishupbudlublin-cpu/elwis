@@ -1,5 +1,5 @@
 /* ELWIS – service worker: aplikacja działa offline. Zmiana wersji = odświeżenie plików na tabletach. */
-const CACHE = 'elwis-1.13.0';
+const CACHE = 'elwis-1.14.0';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/db.js', 'js/api.js', 'js/state.js', 'js/plan.js', 'js/prot.js', 'js/app.js', 'icons/icon-192.png', 'icons/icon-512.png',
   ...['inter-latin', 'inter-latin-ext'].flatMap(f => [400, 500, 600, 700].map(w => `fonts/${f}-${w}-normal.woff2`)),
   ...['jetbrains-mono-latin', 'jetbrains-mono-latin-ext'].flatMap(f => [500, 600].map(w => `fonts/${f}-${w}-normal.woff2`))];

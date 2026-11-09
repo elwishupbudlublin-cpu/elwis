@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.14.0 – 2026-11-09 (aplikacja + serwer, schemat 1.7)
+- Oznaczenie z projektu (kolumna M „Oznaczenie proj.” listy urządzeń) przy ID urządzenia: lista, karta urządzenia, braki, notatki, protokoły (wybór urządzenia), podpis na rzucie, opis zdjęć i galeria.
+- Lista urządzeń: sortowanie „ID ELWIS” / „Oznaczenie proj.” (sortowanie naturalne, w grupach kondygnacji, wybór zapamiętany), wyszukiwanie po ID, oznaczeniu, typie, uwagach i nr seryjnym.
+- Pasek z przełącznikiem Rzut/Lista, filtrami, wyszukiwaniem i sortowaniem przyklejony u góry przy przewijaniu.
+- Serwer 1.14.0: czyta kolumnę M („oz”).
+
 ## 1.13.0 – 2026-11-09 (aplikacja + serwer)
 - Plan: bez przycisku „Wszystkie budowy”; dolny pasek Plan · Budowy · Dokumenty techniczne (wcześniej Synchronizuj – przyciski paska nie działały, naprawione); synchronizacja ⟳ w górnym pasku z liczbą rzeczy do wysłania.
 - Plan „Wszyscy”: wybrane osoby i tryb widoku zapamiętane dla użytkownika – nie znikają po zmianie dnia ani po zamknięciu aplikacji.
