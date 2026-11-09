@@ -226,3 +226,6 @@ input[type=date],input[type=time]{width:100%;min-height:48px;padding:10px 14px;b
 .pbud{font-size:11px;color:#8a8f98;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pblk:has(.ptw) .pt,.pblk:has(.ptw) .pbud,.pcard:has(.ptw) .pbud,.pblk:has(.ptw) b,.pcard:has(.ptw) b{padding-right:84px}
 .pweekwrap{overflow:hidden;margin-top:14px}.pweekwrap .pweek{margin-top:0;will-change:transform}
+
+/* 1.11.9: krótkie zadania w jednej linii */
+.pblk.pkr{flex-direction:row;align-items:center;gap:8px;padding:2px 8px;white-space:nowrap}.pblk.pkr .pbud,.pblk.pkr .pauton{display:none}.pblk.pkr b{overflow:hidden;text-overflow:ellipsis;font-size:13px}.pblk.pkr .pt{flex:none}

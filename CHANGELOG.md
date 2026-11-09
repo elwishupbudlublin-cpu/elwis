@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.11.9 – 2026-11-09 (aplikacja)
+- Plan: zadania nachodzące na siebie stoją obok siebie (tory), stykające się (koniec = początek) jedno pod drugim; krótkie zadania (< ok. 50 min) w jednej linii – godzina i nazwa.
+
 ## 1.11.8 – 2026-11-08 (aplikacja)
 - „Wstecz” wszędzie wraca do poprzedniego ekranu (stos nawigacji zamiast stałych powrotów): np. protokół lub rzut otwarty z karty urządzenia wraca na ekran, z którego przyszliśmy, i ponownie otwiera kartę urządzenia; po przesłaniu lub usunięciu protokołu też wraca tam, skąd go otwarto.
 - Systemowy przycisk „wstecz” Androida działa jak strzałka w aplikacji: najpierw zamyka otwarte okno, potem cofa ekran; na planie dnia zamyka aplikację.

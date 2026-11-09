@@ -203,11 +203,16 @@ const Views = {
     const budowy = new Set(mojeDzis.map(t => t.lista).filter(Boolean));
     const godz = new Date().getHours();
     const powitanie = (godz < 12 ? 'Dzień dobry' : godz < 18 ? 'Cześć' : 'Dobry wieczór') + (S.user ? ', ' + S.user.name.split(' ')[0] : '');
-    const blok = t => {
+    // położenie kafelka: nakładające się zadania obok siebie (tory), krótkie – w jednej linii (od 1.11.9)
+    const poz = (top, hgt, tor) => {
+      const st = `top:${top}px;height:${hgt}px` + (tor && tor.n > 1 ? `;left:calc(4px + (100% - 8px) * ${tor.i} / ${tor.n});right:auto;width:calc((100% - 8px) / ${tor.n} - 3px)` : '');
+      return { st, kl: hgt < 58 ? ' pkr' : '' };
+    };
+    const blok = (t, tor) => {
       const a = new Date(t.start), b2 = new Date(t.koniec);
       const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
-      const bud = budowaZ(t);
-      return `<button class="pblk ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
+      const { st, kl } = poz(top, hgt, tor);
+      return `<button class="pblk${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
         <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b></button>`;
     };
     // numer i nazwa budowy szarą małą czcionką nad nazwą zadania (od 1.11.6)
@@ -218,10 +223,26 @@ const Views = {
     const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(b.lokalizacja); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
       return p ? `<span class="ptw" title="${U.esc(b.nazwa)}: 7–16 ${p.tmin}°…${p.tmax}°${p.pada ? ', pada' : ''}"><span class="ptwi">${p.ikona}</span>${p.tmin}°/${p.tmax}°</span>` : ''; };
     const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    const blokAuto = ({ t, od, dl, bezEst }) => {
-      const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3), bud = budowaZ(t);
-      return `<button class="pblk pauto ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="top:${top}px;height:${hgt}px;--c:${kol(t)}">${pogodaZad(t)}
+    const blokAuto = ({ t, od, dl, bezEst }, tor) => {
+      const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3);
+      const { st, kl } = poz(top, hgt, tor);
+      return `<button class="pblk pauto${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
         <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b><span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+    };
+    // tory: zadania nachodzące na siebie dzielą szerokość kolumny; stykające się (koniec = początek) – nie
+    const kolumnaHtml = k => {
+      const mn = d => d.getHours() * 60 + d.getMinutes(), minDl = 30 / PX * 60;
+      const el = [...k.z.filter(maGodziny).map(t => ({ s: mn(new Date(t.start)), e: mn(new Date(t.koniec)), h: tor => blok(t, tor) })),
+        ...k.auto.map(x => ({ s: x.od, e: x.od + x.dl, h: tor => blokAuto(x, tor) }))].map(x => ({ ...x, e: Math.max(x.e, x.s + minDl) })).sort((a, b) => a.s - b.s || b.e - a.e);
+      let grupa = [], koniecGr = -1; const tory = [];
+      const zamknij = () => { const n = Math.max(1, ...grupa.map(x => x.i + 1)); grupa.forEach(x => x.tor = { i: x.i, n }); grupa = []; tory.length = 0; };
+      el.forEach(x => {
+        if (x.s >= koniecGr) zamknij();
+        let i = tory.findIndex(e => e <= x.s); if (i < 0) i = tory.length; tory[i] = x.e; x.i = i;
+        grupa.push(x); koniecGr = Math.max(koniecGr, x.e);
+      });
+      zamknij();
+      return el.map(x => x.h(x.tor)).join('');
     };
     const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>
       ${t.status ? `<span class="mute">${U.esc(t.status)}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
@@ -249,7 +270,7 @@ const Views = {
         <div class="pgrid" style="height:${(h1 - h0) * PX}px">
           <div class="phours">${Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * PX}px">${h0 + i}:00</span>`).join('')}</div>
           ${terazTop >= 0 && terazTop <= (h1 - h0) * PX ? `<div class="pnowline" style="top:${terazTop}px"><span>${hm(new Date())}</span></div>` : ''}
-          ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${k.z.filter(maGodziny).map(blok).join('')}${k.auto.map(blokAuto).join('')}</div>`).join('') || '<div class="pcol"></div>'}
+          ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${kolumnaHtml(k)}</div>`).join('') || '<div class="pcol"></div>'}
         </div>
       </div>
       ${bezGodz.length ? `<h2>Bez godziny <span class="mute">(${bezGodz.length})</span></h2><div class="pcards">${bezGodz.map(karta).join('')}</div>` : ''}`;
