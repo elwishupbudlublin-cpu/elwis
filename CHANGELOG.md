@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.15.0 – 2026-11-10 (aplikacja + serwer)
+- „+ Dodaj urządzenie” na rzucie i liście urządzeń – tylko rola biuro. Typ ze Słowników, rzut, kondygnacja, oznaczenie z projektu, uwagi; pozycja przez dotknięcie rzutu. Działa offline (nowe zdarzenie `urz_nowe`); do synchronizacji urządzenie ma ID tymczasowe, potem serwer nadaje kolejny numer dla prefiksu i dopisuje wiersz do zakładki Urządzenia. Wpisy i zdjęcia zrobione na nowym urządzeniu przed synchronizacją dostają nadane ID.
+- Przyciski rzutów opisane poziomem („-1 garaż”, „0 parter”, „1 piętro”, tekst z kolumny Kondygnacja, np. „+2 poddasze”, „dach niski”), pod spodem szarą czcionką nazwa rzutu; kolejność od najniższego poziomu do najwyższego. Na liście urządzeń te same przyciski jako filtr („Wszystkie poziomy”), grupy listy w kolejności poziomów; poziom także w karcie urządzenia, opisie zdjęć i wyborze urządzenia w protokole.
+- Serwer 1.15.0: zdarzenie `urz_nowe`, w odpowiedzi `push` mapa `nowe`.
+
 ## 1.14.1 – 2026-11-10 (aplikacja)
 - Plan dnia: oś zawsze od 7:00, najpóźniej do 24:00 – kafelki nie pokazują już godzin powyżej 24 (błąd: zadania wielodniowe i długie szacowane czasy wpasowywane za północ).
 - Zadania całodniowe (bez godzin i bez „Estimated Time”) oraz wielodniowe bez godzin: 7:00–15:00, opis „cały dzień”; stoją obok innych zadań, nie wypychają ich.

@@ -71,8 +71,17 @@ function PlanView(box, imgUrl, markers, onTap) {
     clearTimeout(tapTimer);
     if (tap) { const x = e.clientX, y = e.clientY; tapTimer = setTimeout(() => { if (tap) { tap = false; pick(x, y); } }, 450); }
   };
+  // tryb wskazywania miejsca (od 1.15.0 – „Dodaj urządzenie”): dotknięcie zwraca pozycję w ułamkach arkusza
+  let wskaz = null, pin = null;
   function pick(x, y) {
     const r = box.getBoundingClientRect();
+    if (wskaz) {
+      const fx = (x - r.left - tx) / (W * s), fy = (y - r.top - ty) / (H * s);
+      if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+      if (!pin) { pin = document.createElement('div'); pin.className = 'mk nowy'; layer.appendChild(pin); }
+      pin.style.left = (fx * 100) + '%'; pin.style.top = (fy * 100) + '%';
+      wskaz(Math.round(fx * 1e4) / 1e4, Math.round(fy * 1e4) / 1e4); return;
+    }
     let best = null, bd = HIT;
     for (const m of markers) {
       const d = Math.hypot(r.left + tx + m.x * W * s - x, r.top + ty + m.y * H * s - y);
@@ -84,7 +93,7 @@ function PlanView(box, imgUrl, markers, onTap) {
   // że kliknięcie generowane przez Androida trafiało w tło nowego okna i od razu je zamykało.
   box.addEventListener('click', e => {
     if (e.target.closest('.planctl')) return;
-    if (e.detail === 0 && e.target.classList.contains('mk')) { onTap(e.target.dataset.id); return; } // klawiatura
+    if (e.detail === 0 && e.target.classList.contains('mk') && !wskaz) { onTap(e.target.dataset.id); return; } // klawiatura
     const ok = tap; tap = false; clearTimeout(tapTimer);
     if (ok) pick(e.clientX, e.clientY);
   });
@@ -96,6 +105,7 @@ function PlanView(box, imgUrl, markers, onTap) {
     zoomIn() { const r = box.getBoundingClientRect(); zoomAt(1.3, r.width / 2, r.height / 2); },
     zoomOut() { const r = box.getBoundingClientRect(); zoomAt(1 / 1.3, r.width / 2, r.height / 2); },
     fit,
+    wskaz(fn) { wskaz = fn; box.classList.toggle('wskaz', !!fn); if (!fn && pin) { pin.remove(); pin = null; } },
     focus(id) {
       const m = markers.find(x => x.id === id); if (!m) return;
       const r = box.getBoundingClientRect(); s = Math.max(s, Math.min(r.width / W, r.height / H) * 3);

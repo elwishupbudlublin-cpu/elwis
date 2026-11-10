@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.14.0';
+const SCRIPT_VERSION = '1.15.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -364,7 +364,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe'];
 
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
@@ -409,10 +409,38 @@ function pinezka_(kod, e, biuro) {
   return false;
 }
 
+/* Nowe urządzenie z tabletu (od 1.15.0) – tylko rola biuro. Serwer nadaje ID = prefiks + kolejny numer dla prefiksu
+   i dopisuje wiersz na końcu zakładki Urządzenia (schemat bez zmian). Zwraca nadane ID albo '' (odrzucone). */
+function urzNowe_(p, e, biuro) {
+  const d = e.d || {};
+  if (!biuro[txt_(e.kto)]) return '';
+  const pre = txt_(d.prefix).toUpperCase();
+  const typ = slowniki_().typy.find(t => t.prefix === pre);
+  if (!/^[A-Z]{1,6}$/.test(pre) || !typ) return '';
+  const sh = SpreadsheetApp.openById(p.lista).getSheetByName('Urządzenia');
+  const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => txt_(r[0])) : [];
+  const re = new RegExp('^' + pre + '(\\d+)$', 'i');
+  let max = 0; ids.forEach(x => { const m = x.match(re); if (m) max = Math.max(max, Number(m[1])); });
+  const id = pre + (max + 1);
+  const xy = v => (v === '' || v == null || isNaN(Number(v))) ? '' : String(Math.min(1, Math.max(0, Number(v))));
+  const etap = txt_(d.etap), etapy = p.etapy.map(x => x.id);
+  sh.getRange(sh.getLastRow() + 1, 1, 1, 13).setNumberFormat(TEXT).setValues([[id, typ.nazwa, '', '', txt_(d.kond).slice(0, 40), txt_(d.arkusz).slice(0, 40),
+    txt_(d.uwagi).slice(0, 500), xy(d.x), xy(d.y), '', 'czeka', etapy.indexOf(etap) >= 0 ? etap : '', txt_(d.oz).slice(0, 40)]]);
+  return id;
+}
+/* ID tymczasowe z tabletu → ID nadane przez serwer (ze zdarzeń urz_nowe w zakładce Zdarzenia) */
+function mapaTmp_(sh) {
+  const m = {};
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 7).getDisplayValues().forEach(r => {
+    if (txt_(r[5]) !== 'urz_nowe') return; const d = safeJson_(r[6]); if (d.tmp && txt_(r[4])) m[d.tmp] = txt_(r[4]);
+  });
+  return m;
+}
+
 function push_(b, tablet) {
   const p = projekt_(String(b.kod || ''));
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
-  let numery = {};
+  let numery = {}, nowe = {};
   try {
     // zdjęcia → Zdjęcia/rrrr-mm-dd/
     (b.photos || []).forEach(ph => {
@@ -436,7 +464,27 @@ function push_(b, tablet) {
       numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
       const usuniete = [], zdjeciaDoKosza = [];
       let biuro = null, autorzy = null, autorzyBrakow = null;
+      // nowe urządzenia (od 1.15.0): najpierw nadanie ID, potem zamiana ID tymczasowych w pozostałych zdarzeniach
+      let mapa = null;
+      const maTmp = evs.some(e => /~/.test(txt_(e.urz)) || e.typ === 'urz_nowe');
+      if (maTmp) {
+        mapa = mapaTmp_(sh);
+        evs.filter(e => e.typ === 'urz_nowe' && !have[e.id]).forEach(e => {
+          if (biuro === null) biuro = rolaBiuro_();
+          const tmp = txt_(e.d && e.d.tmp), id = urzNowe_(p, e, biuro);
+          if (id) { mapa[tmp] = id; e.urz = id; } else e.odrzuc = true;
+        });
+        const tmpy = Object.keys(mapa);
+        evs.forEach(e => {
+          if (e.typ === 'urz_nowe') return;
+          if (mapa[txt_(e.urz)]) e.urz = mapa[txt_(e.urz)];
+          if (tmpy.length && e.d) { let js = JSON.stringify(e.d); tmpy.forEach(t => { js = js.split(t).join(mapa[t]); }); e.d = JSON.parse(js); }
+        });
+        nowe = {}; evs.forEach(e => { const t = txt_(e.d && e.d.tmp); if (e.typ === 'urz_nowe' && mapa[t]) nowe[t] = mapa[t]; });
+        Object.keys(mapa).forEach(t => { if (evs.some(e => JSON.stringify(e).indexOf(t) >= 0)) nowe[t] = mapa[t]; });
+      }
       evs.forEach(e => {
+        if (e.odrzuc) return;   // nowe urządzenie od osoby spoza roli biuro / z nieznanym typem
         accepted.push(e.id);
         if (have[e.id]) return;
         if (e.typ === 'protokol' && e.d && e.d.stan === 'usuniety') {
@@ -475,7 +523,7 @@ function push_(b, tablet) {
       if (usuniete.length) koszWord_(p, usuniete);
       if (zdjeciaDoKosza.length) zdjeciaDoKosza.forEach(fid => { const f = plikZdjecia_(p, fid); if (f) f.setTrashed(true); });
     }
-    return { ok: true, accepted: accepted, numery: numery };
+    return { ok: true, accepted: accepted, numery: numery, nowe: nowe };
   } finally { lock.releaseLock(); }
 }
 

@@ -64,7 +64,10 @@ const UI = {
     if (e.dlg) Dialogs.device(e.dlg);
   },
   refresh() {
-    if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box)) {   // bez przeładowania rzutu (zachowuje powiększenie)
+    // bez przeładowania rzutu (zachowuje powiększenie) – chyba że zmieniła się lista znaczników (nowe urządzenie, ID nadane przez serwer)
+    const znaczniki = this.pv && [...this.pv.box.querySelectorAll('.mk[data-id]')].map(b => b.dataset.id);
+    if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box) && znaczniki.every(id => urzE().some(u => u.id === id))
+      && !urzE().some(u => u._nowe && u.arkusz === this.pv.ark && u.x !== '' && u.x != null && !znaczniki.includes(u.id))) {
       const F = fold(S.ev); const urz = urzE();
       this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; return { cls: ST[st], label: id + ' – ' + st }; });
       const side = $('.planbox .side'); const ark = this.pv.ark;
@@ -530,15 +533,18 @@ const Views = {
     UI.header(p.kod + ' · urządzenia', () => UI.wstecz('budowa'));
     const pd = S.proj || {}; const F = fold(S.ev);
     const urz = urzE();
-    const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))];
+    // rzuty od najniższego poziomu do najwyższego (od 1.15.0)
+    const sheets = [...new Set(urz.map(u => u.arkusz).filter(Boolean))].sort((a, b) => (poziomNr(kondArkusza(a, urz)) - poziomNr(kondArkusza(b, urz))) || natCmp(a, b));
     const mode = par.mode || 'rzut';
-    const ark = sheets.includes(par.ark) ? par.ark : sheets[0] || '';
+    const ark = sheets.includes(par.ark) ? par.ark : mode === 'lista' ? '' : sheets[0] || '';
+    const biuro = Session.isBiuro();
+    const arkBtn = (a, on) => `<button class="tab tpoz ${on ? 'on' : ''}" data-a="${U.esc(a)}">${U.esc(poziomTxt(kondArkusza(a, urz)))}<span class="tsub">${U.esc(a)}</span></button>`;
     const filt = par.f || 'all';
     const sOf = u => devStatus(u, F);
     // sortowanie listy (od 1.14.0): ID ELWIS albo oznaczenie z projektu – zawsze w grupach kondygnacji; wybór zapamiętany na tablecie
     const sortUrz = par.s || (await DB.get('sortUrz')) || 'id';
     const q = U.norm(par.q || '');
-    const vis = urz.filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+    const vis = urz.filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
       .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
@@ -548,18 +554,21 @@ const Views = {
       <div class="row" style="margin-bottom:${mode === 'lista' ? 8 : 0}px">
         <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
         <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : []), ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
+        ${biuro ? '<button class="btn sm pri" id="uAdd" title="Tylko rola biuro">+ Dodaj urządzenie</button>' : ''}
       </div>
+      ${mode === 'lista' && sheets.length > 1 ? `<div class="tabs" style="margin:8px 0 0"><button class="tab tpoz ${!ark ? 'on' : ''}" data-a="">Wszystkie poziomy<span class="tsub">${sheets.length} rzutów</span></button>${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>` : ''}
       ${mode === 'lista' ? `<div class="row">
         <label class="search grow" style="margin:0"><span hidden>Szukaj urządzenia</span><input type="search" id="uq" value="${U.esc(par.q || '')}" placeholder="ID, oznaczenie z projektu, typ, nr seryjny" autocomplete="off"></label>
         <div class="seg2" role="group" aria-label="Sortowanie"><span class="mute">Sortuj:</span><button class="tab ${sortUrz === 'id' ? 'on' : ''}" data-s="id">ID ELWIS</button><button class="tab ${sortUrz === 'oz' ? 'on' : ''}" data-s="oz" ${maOz ? '' : 'disabled title="Lista nie ma oznaczeń z projektu"'}>Oznaczenie proj.</button></div>
       </div>` : ''}
       </div>
       ${mode === 'rzut' ? `
-        <div class="tabs">${sheets.map(s => `<button class="tab ${s === ark ? 'on' : ''}" data-a="${U.esc(s)}">${U.esc(s)} · ${U.esc((urz.find(u => u.arkusz === s) || {}).kond || '')}</button>`).join('')}</div>
+        <div class="tabs">${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>
+        ${par.wskaz ? `<div class="wskazbar">${ic('plus')} <b class="grow">Dotknij miejsce nowego urządzenia na rzucie ${U.esc(ark)}</b><button class="btn sm" id="wAnul">Anuluj</button></div>` : ''}
         <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
-        : `<div class="list" style="margin-top:10px">${groupBy(vis, u => u.kond + ' · ' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(g)} <span class="mute">(${arr.length})</span></div>` + posort(arr).map(u => `
+        : `<div class="list" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
             <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
       ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`;
     bindEtap();
@@ -567,7 +576,10 @@ const Views = {
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
     if ($('#uq')) $('#uq').oninput = e => { const y = window.scrollY; UI.par.q = e.target.value; Views.rzut(UI.par).then(() => { const i = $('#uq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); window.scrollTo(0, y); }); };
-    view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null }));
+    view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: null }));
+    // dodanie urządzenia – rola biuro (od 1.15.0): na rzucie najpierw wskazanie miejsca, na liście od razu formularz
+    if ($('#uAdd')) $('#uAdd').onclick = () => mode === 'rzut' && ark ? UI.go('rzut', { ...par, wskaz: { ark } }) : Dialogs.noweUrz({ ark });
+    if ($('#wAnul')) $('#wAnul').onclick = () => UI.go('rzut', { ...par, wskaz: null });
     view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
     if (mode === 'rzut' && ark) {
       const fid = (pd.rzuty || {})[ark];
@@ -578,6 +590,7 @@ const Views = {
       const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); pv.ark = ark; UI.pv = pv;
       $('#zin').onclick = () => pv.zoomIn(); $('#zout').onclick = () => pv.zoomOut(); $('#zfit').onclick = () => pv.fit();
       if (par.focus) setTimeout(() => pv.focus(par.focus), 300);
+      if (par.wskaz) pv.wskaz((x, y) => { pv.wskaz(null); Dialogs.noweUrz({ ...par.wskaz, ark, x, y }); });
     }
   },
 
@@ -645,9 +658,10 @@ const Dialogs = {
     modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(idOz(u))}">
       <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
       <div class="sbody">
+        ${czyTmp(id) ? '<div class="card mute">Nowe urządzenie dodane na tablecie – numer nada serwer przy synchronizacji.</div>' : ''}
         <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
           <div><div class="mute">Typ</div>${U.esc(u.typ)}</div><div><div class="mute">Zasilanie</div>${U.esc(u.zasilanie || '—')}</div>
-          <div><div class="mute">Kondygnacja</div>${U.esc(u.kond || '—')}</div><div><div class="mute">Arkusz</div>${U.esc(u.arkusz || '—')}</div>
+          <div><div class="mute">Kondygnacja</div>${U.esc(u.kond ? poziomTxt(u.kond) : '—')}</div><div><div class="mute">Arkusz</div>${U.esc(u.arkusz || '—')}</div>
           ${maEtapy() || u.etap ? `<div style="grid-column:1/3"><div class="mute">Etap budowy</div>${U.esc(u.etap ? etapOpis(u.etap) : '— (brak przypisania)')}</div>` : ''}
           ${u.uwagi ? `<div style="grid-column:1/3"><div class="mute">Uwagi</div>${U.esc(u.uwagi)}</div>` : ''}
         </div>
@@ -684,6 +698,48 @@ const Dialogs = {
     $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); const z = UI.cur; UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }, { dlg: z !== 'rzut' ? id : null }); };
     bindIssue(modal, () => Dialogs.device(id));
     thumbs($('#thumbs'), st.foto); hydrateFotos(modal);
+  },
+
+  /* Nowe urządzenie (od 1.15.0) – tylko rola biuro; działa offline (zdarzenie urz_nowe), ID nada serwer */
+  noweUrz(o) {
+    if (!Session.isBiuro()) return;
+    o = o || {};
+    const urz = urzE(), wszystkie = (S.proj || {}).urzadzenia || [];
+    const typy = (S.boot.slowniki.typy || []);
+    const arkusze = [...new Set([...wszystkie.map(u => u.arkusz).filter(Boolean), ...Object.keys((S.proj || {}).rzuty || {})])]
+      .sort((a, b) => (poziomNr(kondArkusza(a, wszystkie)) - poziomNr(kondArkusza(b, wszystkie))) || natCmp(a, b));
+    const kondy = [...new Set(wszystkie.map(u => u.kond).filter(Boolean))].sort((a, b) => poziomNr(a) - poziomNr(b));
+    const pref = o.prefix || (urz[0] ? U.prefix(urz[0].id) : (typy[0] || {}).prefix || '');
+    const ma = o.x != null && o.x !== '';
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Dodaj urządzenie">
+      <div class="shead"><h3>Dodaj urządzenie</h3><span class="mute">${maEtapy() && S.etap ? 'Etap ' + U.esc(S.etap) : ''}</span></div>
+      <div class="sbody">
+        <label><span class="f" style="display:block">Typ (ze Słowników)</span><select id="nuT">${typy.map(t => `<option value="${U.esc(t.prefix)}" ${t.prefix === pref ? 'selected' : ''}>${U.esc(t.prefix + ' – ' + t.nazwa)}</option>`).join('')}</select></label>
+        <div class="row"><label class="grow"><span class="f" style="display:block">Rzut</span><select id="nuA"><option value="">— bez rzutu —</option>${arkusze.map(a => `<option value="${U.esc(a)}" ${a === o.ark ? 'selected' : ''}>${U.esc(poziomTxt(kondArkusza(a, wszystkie)) + ' · ' + a)}</option>`).join('')}</select></label>
+          <label class="grow"><span class="f" style="display:block">Kondygnacja</span><input id="nuK" list="nuKl" value="${U.esc(o.kond != null ? o.kond : o.ark ? kondArkusza(o.ark, wszystkie) : '')}" placeholder="np. -1, 0, dach"><datalist id="nuKl">${kondy.map(k => `<option value="${U.esc(k)}">${U.esc(poziomTxt(k))}</option>`).join('')}</datalist></label></div>
+        <div class="row"><b class="grow" id="nuP">${ma ? 'Pozycja na rzucie: ustawiona ✓' : 'Pozycja na rzucie: brak'}</b><button class="btn sm" id="nuW">${ma ? 'Zmień miejsce' : 'Wskaż na rzucie'}</button></div>
+        <label><span class="f" style="display:block">Oznaczenie z projektu</span><input id="nuO" value="${U.esc(o.oz || '')}" placeholder="np. Wk5, OD1, WI-1.3"></label>
+        <label><span class="f" style="display:block">Uwagi (np. model, zasilanie)</span><textarea id="nuU">${U.esc(o.uwagi || '')}</textarea></label>
+        <p class="mute" style="margin:0">ID (prefiks + kolejny numer) nada serwer przy synchronizacji. Do tego czasu urządzenie ma numer tymczasowy.</p>
+      </div>
+      <div class="sfoot"><button class="btn" id="nuX">Anuluj</button><button class="btn pri" id="nuS">Dodaj</button></div></div></div>`;
+    const stan = () => ({ prefix: $('#nuT').value, ark: $('#nuA').value, kond: $('#nuK').value.trim(), oz: $('#nuO').value.trim(), uwagi: $('#nuU').value.trim(), x: o.x, y: o.y });
+    $('#nuA').onchange = () => { const a = $('#nuA').value; if (a) $('#nuK').value = kondArkusza(a, wszystkie); if (a !== o.ark) { o.x = o.y = null; $('#nuP').textContent = 'Pozycja na rzucie: brak'; } };
+    $('#nuW').onclick = () => {
+      const st = stan(); if (!st.ark) { UI.toast('Najpierw wybierz rzut.'); return; }
+      UI.close(); UI.go('rzut', { ...(UI.cur === 'rzut' ? UI.par : {}), mode: 'rzut', ark: st.ark, wskaz: st, focus: null });
+    };
+    $('#nuX').onclick = UI.close;
+    $('#nuS').onclick = async () => {
+      const st = stan(); if (!st.prefix) { UI.toast('Wybierz typ.'); return; }
+      const tmp = st.prefix + '~' + Math.random().toString(36).slice(2, 6);
+      const d = { tmp, prefix: st.prefix, kond: st.kond, arkusz: st.ark, oz: st.oz, uwagi: st.uwagi };
+      if (st.ark && st.x != null && st.x !== '') { d.x = st.x; d.y = st.y; }
+      if (maEtapy() && S.etap) d.etap = S.etap;
+      await addEvent('urz_nowe', tmp, d);
+      UI.close(); UI.toast('Urządzenie dodane – numer nada serwer przy synchronizacji');
+      if (UI.cur === 'rzut') UI.go('rzut', { ...UI.par, wskaz: null, ark: st.ark || UI.par.ark, focus: d.x != null ? tmp : null }); else UI.refresh();
+    };
   },
 
   brak(urz) {
@@ -904,6 +960,27 @@ function urzO(id) { return ((S.proj || {}).urzadzenia || []).find(x => x.id === 
 function ozOf(id) { const u = typeof id === 'object' ? id : urzO(id); return u && u.oz ? u.oz : ''; }
 function idOz(id) { const i = typeof id === 'object' ? id.id : id, o = ozOf(id); return o ? i + ' · ' + o : i; }
 const ozHtml = id => { const o = ozOf(id); return o ? ` <span class="oz">${U.esc(o)}</span>` : ''; };
+/* Poziom kondygnacji (od 1.15.0): opis na przyciskach i nagłówkach oraz kolejność od najniższego do najwyższego.
+   Liczba → „-1 garaż”, „0 parter”, „1 piętro”; tekst z kolumny Kondygnacja (np. „+2 poddasze”, „dach niski”) – bez zmian. */
+function poziomNr(k) {
+  const t = String(k || '').trim().toLowerCase(), m = t.match(/^[+-]?\d+/);
+  if (m) return Number(m[0]);
+  if (/dach/.test(t)) return 1000 + (/wys/.test(t) ? 2 : /nis/.test(t) ? 0 : 1);
+  if (/podd|strych/.test(t)) return 900;
+  if (/parter/.test(t)) return 0;
+  if (/gara|piwn|podziem/.test(t)) return -1;
+  return t ? 500 : 2000;
+}
+function poziomTxt(k) {
+  const t = String(k || '').trim(); if (!t) return 'bez kondygnacji';
+  if (/^[+-]?\d+$/.test(t)) { const n = Number(t); return n < 0 ? n + ' garaż' : n === 0 ? '0 parter' : n + ' piętro'; }
+  return t;
+}
+/* kondygnacja rzutu = najczęstsza kondygnacja urządzeń na arkuszu */
+function kondArkusza(ark, lista) {
+  const c = {}; lista.filter(u => u.arkusz === ark).forEach(u => { c[u.kond] = (c[u.kond] || 0) + 1; });
+  return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || '';
+}
 // sortowanie naturalne: H2 < H10, Wk2 < Wk10
 const natCmp = (a, b) => String(a).localeCompare(String(b), 'pl', { numeric: true, sensitivity: 'base' });
 
@@ -938,7 +1015,7 @@ function opisZdjecia(f, F) {
   if (f.rodzaj === 'brak') { const b = Object.values(F.braki).find(x => (x.foto || []).includes(f.fid) || x.kom.some(k => k.foto.includes(f.fid)));
     return { t: 'Brak' + (b ? ' – ' + b.kat : '') + (u ? ' · ' + u.id : ''), s: b ? b.opis.slice(0, 80) : '' }; }
   if (f.rodzaj === 'notatka') { const n = F.notes.find(e => (e.d.foto || []).includes(f.fid)); return { t: 'Notatka' + (u ? ' · ' + u.id : ''), s: n ? String(n.d.tekst || '').slice(0, 80) : '' }; }
-  if (u) return { t: idOz(u) + ' · ' + typOf(u.id).nazwa + (f.rodzaj === 'tabliczka' ? ' · tabliczka' : ''), s: [u.kond, u.arkusz].filter(Boolean).join(' · ') };
+  if (u) return { t: idOz(u) + ' · ' + typOf(u.id).nazwa + (f.rodzaj === 'tabliczka' ? ' · tabliczka' : ''), s: [u.kond && poziomTxt(u.kond), u.arkusz].filter(Boolean).join(' · ') };
   return { t: f.urz && f.urz !== 'BUDOWA' ? f.urz : 'Budowa', s: '' };
 }
 
@@ -1056,7 +1133,7 @@ function opisNaZdjecie(urz, rodzaj) {
   const p = curProj() || {}, u = urz && ((S.proj || {}).urzadzenia || []).find(x => x.id === urz);
   const l = [p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : [p.kod, p.nazwa].filter(Boolean).join(' ')];
   const co = rodzaj === 'brak' ? 'Brak' : rodzaj === 'notatka' ? 'Notatka' : rodzaj === 'tabliczka' ? 'Tabliczka' : '';
-  if (u) l.push([idOz(u), typOf(u.id).nazwa, [u.kond, u.arkusz].filter(Boolean).join(' '), co].filter(Boolean).join(' · '));
+  if (u) l.push([idOz(u), typOf(u.id).nazwa, [u.kond && poziomTxt(u.kond), u.arkusz].filter(Boolean).join(' '), co].filter(Boolean).join(' · '));
   else if (co) l.push(co + (urz && urz !== 'BUDOWA' ? ' · ' + urz : ''));
   const d = new Date();
   l.push(d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + hm(d) + ' · ' + (S.user ? S.user.name : ''));
@@ -1088,6 +1165,7 @@ async function wczytajBudowe(kod) {
   S.kod = kod;
   S.proj = await DB.get('proj:' + kod) || null;
   S.ev = await DB.eventsFor(kod);
+  dolaczNowe();
   await wczytajEtap(kod);
 }
 /* powrót do ostatniego ekranu po ponownym otwarciu aplikacji (od 1.13.0) */

@@ -13,7 +13,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `techniczne` | GET | – | `pliki[{id,name,mime,size,grupa,zm}]` – DTR z `_Techniczne` (grupa = ścieżka podfolderu), `brakFolderu` gdy brak klucza w Konfiguracji (od 1.3.0) |
 | `plan` | GET | `od`, `do` (rrrr-mm-dd, do 31 dni) | `zadania[{id,nazwa,status,zamk,lista,listaNazwa,start,koniec,godzStart,godzKoniec,osoby[],url}]` – zadania ClickUp pracowników z „ID ClickUp”, z terminem w zakresie; `brakKlucza` gdy brak CLICKUP_TOKEN (od 1.4.0) | Od 1.10.0 każde zadanie ma też `est` – „Estimated Time” z ClickUp w ms (0 = brak). Od 1.12.0 `opis` – treść opisu zadania (do 1500 znaków). Od 1.11.4 parametr `kto` (zalogowany): dla roli innej niż biuro serwer usuwa zadania i osoby z roli biuro.
 | `events` | GET | `kod, since` | `events[], last, more` – maks. 500 na raz |
-| `push` | POST (text/plain) | `kod, events[], photos[{id,name,b64}]` | `accepted[]` – ID przyjęte (także duplikaty), `numery{pid:nr}` – numery protokołów (od 1.5.0) |
+| `push` | POST (text/plain) | `kod, events[], photos[{id,name,b64}]` | `accepted[]` – ID przyjęte (także duplikaty), `numery{pid:nr}` – numery protokołów (od 1.5.0), `nowe{tmp:id}` – ID nadane nowym urządzeniom (od 1.15.0) |
 | `docx` | POST (text/plain) | `kod, pid, kto` | `name, url, nr` – Word protokołu w folderze budowy → Protokoły; tylko gdy `kto` ma rolę biuro (od 1.5.0) |
 | `zadania` | POST (text/plain) | `zmiany: [{id, task, status, powod, komentarz, kto, ts}]` | `wyniki: {id: {ok, blad}}` – status zadania ClickUp z tabletu (od 1.12.0); dozwolone tylko `complete`, `update required`, `on hold`; powód i komentarz → komentarz zadania „ELWIS · kto (tablet): …”; po zmianie serwer unieważnia pamięć planu (`PLAN_VER`) |
 
@@ -32,6 +32,7 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `brak_kom` | `{bid, tekst, foto[]}` – komentarz do braku (od 1.9.0) |
 | `foto_usun` | `{fid}` – usunięcie zdjęcia (od 1.8.0); serwer akceptuje od autora zdjęcia lub roli biuro i przenosi plik do kosza |
 | `pinezka` | `{lat, lon, dokl}` – pinezka GPS budowy z tabletu (od 1.12.0); serwer wpisuje `lat,lon` do Projekty, kolumna D „Pinezka GPS (lat,lon)”: pustą – każdy, istniejącą – tylko rola biuro; współrzędne spoza Polski odrzucane |
+| `urz_nowe` | `{tmp, prefix, kond, arkusz, x, y, oz, uwagi, etap}` – nowe urządzenie z tabletu (od 1.15.0, tylko rola biuro, także offline). `urz` = ID tymczasowe `<prefiks>~xxxx`. Serwer nadaje ID = prefiks + kolejny numer dla prefiksu, dopisuje wiersz na końcu zakładki Urządzenia (Grupa = nazwa typu ze Słowników, Status = czeka) i zamienia ID tymczasowe w pozostałych zdarzeniach; tablet wysyła te zdarzenia przed zdjęciami i po odpowiedzi zamienia ID u siebie. Zdarzenie od osoby spoza roli biuro albo z prefiksem spoza Słowników – nieprzyjęte |
 | `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).

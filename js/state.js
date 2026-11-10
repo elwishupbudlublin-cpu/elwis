@@ -89,11 +89,43 @@ function devStatus(u, F) {
   return done ? 'w toku' : 'czeka';
 }
 
+/* Urządzenia dodane z tabletu (od 1.15.0, zdarzenie `urz_nowe`, tylko rola biuro): widoczne od razu – także offline,
+   zanim serwer dopisze je do listy urządzeń. Do czasu synchronizacji mają ID tymczasowe `<prefiks>~xxxx`. */
+function czyTmp(id) { return /~/.test(String(id || '')); }
+function dolaczNowe() {
+  if (!S.proj) return;
+  const lst = (S.proj.urzadzenia || []).filter(u => !u._nowe);
+  const ids = new Set(lst.map(u => u.id));
+  (S.ev || []).filter(e => e.typ === 'urz_nowe').forEach(e => {
+    const d = e.d || {}, id = e.urz || d.tmp; if (!id || ids.has(id)) return;
+    ids.add(id);
+    lst.push({ id, grupa: typOf(id).nazwa, typ: '', zasilanie: '', kond: d.kond || '', arkusz: d.arkusz || '', uwagi: d.uwagi || '',
+      x: d.x == null ? '' : d.x, y: d.y == null ? '' : d.y, sn: '', status: 'czeka', etap: d.etap || '', oz: d.oz || '', _nowe: true });
+  });
+  S.proj.urzadzenia = lst;
+}
+/* ID nadane przez serwer → zamiana ID tymczasowych w zdarzeniach i nazwach zdjęć na tablecie */
+async function zamienTmp(kod, mapa, przyjete) {
+  const tmp = Object.keys(mapa || {});
+  const zam = str => tmp.reduce((a, t) => a.split(t).join(mapa[t]), str);
+  const ev = await DB.eventsFor(kod), zm = [];
+  for (const e of ev) {
+    const js = JSON.stringify({ urz: e.urz, d: e.d });
+    const nowy = tmp.length ? zam(js) : js;
+    const ok = e.typ === 'urz_nowe' && przyjete.has(e.id) && !e.synced;
+    if (nowy !== js || ok) { const o = JSON.parse(nowy); zm.push({ ...e, urz: o.urz, d: o.d, ...(ok ? { synced: 1 } : {}) }); }
+  }
+  if (zm.length) await DB.putEvents(zm);
+  if (tmp.length) for (const ph of await DB.unsentPhotos()) if (ph.kod === kod && tmp.some(t => ph.name.includes(t))) await DB.putPhoto({ ...ph, name: zam(ph.name) });
+  if (kod === S.kod) { S.ev = await DB.eventsFor(kod); dolaczNowe(); }
+}
+
 /* Dodanie zdarzenia (offline) */
 async function addEvent(typ, urz, d) {
   const e = { id: U.uid('e'), ts: U.now(), kto: S.user.name, tablet: (API.cfg() || {}).tablet || '', kod: S.kod, urz: urz || '', typ, d, synced: 0 };
   await DB.putEvent(e);
   S.ev.push(e);
+  if (typ === 'urz_nowe') dolaczNowe();
   S.pending++;
   Sync.soon();
   return e;
@@ -121,6 +153,13 @@ const Sync = {
       S.boot = b; await DB.set('boot', b);
       // pinezki z tabletu, które serwer już wpisał do Bazy, nie są dłużej potrzebne lokalnie (od 1.12.0)
       if (S.pinezki && Object.keys(S.pinezki).length) { for (const k of Object.keys(S.pinezki)) if ((b.projekty || []).some(p => p.kod === k && p.lokalizacja)) delete S.pinezki[k]; await DB.set('pinezki', S.pinezki); }
+      // 1b. nowe urządzenia z tabletu – najpierw, żeby zdjęcia i wpisy dostały ID nadane przez serwer (od 1.15.0)
+      const noweU = (await DB.unsynced()).filter(e => e.typ === 'urz_nowe');
+      for (const kod of [...new Set(noweU.map(e => e.kod))]) {
+        this.prog(0.04, 'Nowe urządzenia');
+        const r = await API.push(kod, noweU.filter(e => e.kod === kod).map(({ synced, ...e }) => e), []);
+        await zamienTmp(kod, r.nowe || {}, new Set(r.accepted || []));
+      }
       // 2. zdjęcia (pojedynczo – mniejsze paczki)
       const fotki = await DB.unsentPhotos(); let fi = 0;
       for (const p of fotki) {
@@ -211,7 +250,7 @@ const Sync = {
       since = r.last; await DB.set('seq:' + kod, since);
       if (!r.more) break;
     }
-    if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); }
+    if (kod === S.kod) { S.proj = p; S.ev = await DB.eventsFor(kod); dolaczNowe(); }
     await Pamiec.oznacz(kod);
     await Pamiec.zmierz(kod, ids);
   },
