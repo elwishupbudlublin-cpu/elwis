@@ -205,24 +205,42 @@ const Views = {
     const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(lokBudowy(b))); return b2 ? { klucz: wspolrzedne(lokBudowy(b2)).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
     const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
-    // zadania bez godzin z „Estimated Time” → wolne miejsca od 7:00 (osobno w każdej kolumnie; od 1.10.0)
-    const wpasowane = new Set();
+    // oś dnia 7:00–24:00 (od 1.14.1); każde zadanie → odcinek tego dnia [s, e] w minutach
+    //  • z godzinami, jeden dzień – wg godzin (przycięte do 7–24)
+    //  • z godzinami, kilka dni – 1. dzień od startu, środkowe 7–15, ostatni do końca
+    //  • całodniowe (bez godzin, bez „Estimated Time”) i wielodniowe bez godzin – 7:00–15:00
+    //  • bez godzin z „Estimated Time” – wpasowane w wolne miejsca od 7:00, najpóźniej do 24:00
+    const D_OD = 7 * 60, D_DO = 24 * 60, CAL_DO = 15 * 60;
+    const mnD = d => d.getHours() * 60 + d.getMinutes();
+    const przytnij = (s, e) => { s = Math.min(Math.max(s, D_OD), D_DO - 30); e = Math.min(Math.max(e, s + 30), D_DO); return [s, e]; };
+    const odcinek = t => {
+      const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null;
+      const dA = a ? U.day(a) : dzien, dB = b ? U.day(b) : dzien;
+      if (t.godzStart && t.godzKoniec && a && b) {
+        if (dA === dB) return { rodz: 'fix', se: przytnij(mnD(a), mnD(b)) };
+        const s = dzien === dA ? mnD(a) : D_OD, e = dzien === dB ? mnD(b) : (dzien === dA && s >= CAL_DO ? D_DO : CAL_DO);
+        return { rodz: 'fix', wiel: true, se: przytnij(s, e) };
+      }
+      if (dA === dB && t.est > 0) return { rodz: 'auto' };
+      return { rodz: 'cal', wiel: dA !== dB, se: [D_OD, CAL_DO] };
+    };
     kolumny.forEach(k => {
-      const zajete = k.z.filter(maGodziny).map(t => { const a = new Date(t.start), b = new Date(t.koniec); return [a.getHours() * 60 + a.getMinutes(), b.getHours() * 60 + b.getMinutes()]; });
-      k.auto = [];
-      // najpierw zadania z szacowanym czasem, potem bez – te dostają czas dobrany do wielkości kafelka (1,5 h)
-      k.z.filter(t => !maGodziny(t)).sort((a, b) => (b.est > 0) - (a.est > 0)).forEach(t => {
-        const dl = t.est > 0 ? Math.max(15, Math.round(t.est / 60000)) : 90;
-        let od = 7 * 60;
+      k.el = [];
+      k.z.forEach(t => { const o = odcinek(t); if (o.rodz !== 'auto') k.el.push({ t, ...o, s: o.se[0], e: o.se[1] }); });
+      // wolne miejsca liczone tylko względem zadań z godzinami (całodniowe stoją obok – nie wypychają innych)
+      const zajete = k.el.filter(x => x.rodz === 'fix').map(x => [x.s, x.e]);
+      k.z.filter(t => odcinek(t).rodz === 'auto').forEach(t => {
+        const dl = Math.min(D_DO - D_OD, Math.max(15, Math.round(t.est / 60000)));
+        let od = D_OD;
         for (let i = 0; i < 200; i++) { const kol = zajete.find(([a, b]) => od < b && od + dl > a); if (!kol) break; od = kol[1]; }
-        zajete.push([od, od + dl]); k.auto.push({ t, od, dl, bezEst: !(t.est > 0) }); wpasowane.add(t.id);
+        if (od + dl > D_DO) od = D_DO - dl;   // nie mieści się przed północą → ostatnie miejsce, obok innych
+        zajete.push([od, od + dl]); k.el.push({ t, rodz: 'auto', s: od, e: od + dl });
       });
     });
-    let h0 = 6, h1 = 18;
-    kolumny.forEach(k => {
-      k.z.filter(maGodziny).forEach(t => { h0 = Math.min(h0, new Date(t.start).getHours()); h1 = Math.max(h1, Math.ceil((new Date(t.koniec).getHours() * 60 + new Date(t.koniec).getMinutes()) / 60)); });
-      k.auto.forEach(x => { h1 = Math.max(h1, Math.ceil((x.od + x.dl) / 60)); });
-    });
+    const wpasowane = new Set(kolumny.flatMap(k => k.el.map(x => x.t.id)));
+    const h0 = 7; let h1 = 18;
+    kolumny.forEach(k => k.el.forEach(x => { h1 = Math.max(h1, Math.ceil(x.e / 60)); }));
+    h1 = Math.min(24, h1);
     const PX = 64;
     // pasek 7 dni przesuwany o pojedyncze dni (od 1.10.2): par.od = pierwszy widoczny dzień; domyślnie wybrany dzień w środku
     const d0 = new Date(dzien + 'T12:00');
@@ -240,13 +258,6 @@ const Views = {
       const st = `top:${top}px;height:${hgt}px` + (tor && tor.n > 1 ? `;left:calc(4px + (100% - 8px) * ${tor.i} / ${tor.n});right:auto;width:calc((100% - 8px) / ${tor.n} - 3px)` : '');
       return { st, kl: hgt < 58 ? ' pkr' : '' };
     };
-    const blok = (t, tor) => {
-      const a = new Date(t.start), b2 = new Date(t.koniec);
-      const top = ((a.getHours() - h0) * 60 + a.getMinutes()) / 60 * PX, hgt = Math.max(30, (b2 - a) / 36e5 * PX - 3);
-      const { st, kl } = poz(top, hgt, tor);
-      return `<button class="pblk${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">${hm(a)}–${hm(b2)}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}</button>`;
-    };
     // status ustawiony z tabletu (Wykonane / Do kontynuacji / Zadanie niepodjęte) – od 1.12.0
     const pst = t => { const k = STATUS_ZAD[String(t.status || '').toLowerCase()]; return k ? `<span class="pstan ${k.kl}${t.czeka ? ' czeka' : ''}">${k.t}</span>` : ''; };
     // numer i nazwa budowy szarą małą czcionką nad nazwą zadania (od 1.11.6)
@@ -257,17 +268,23 @@ const Views = {
     const pogodaZad = t => { const b = budowaZ(t), w = b && wspolrzedne(lokBudowy(b)); const p = w && pogodaDnia(dzien, { klucz: w.klucz, miejsce: b.nazwa });
       return p ? `<span class="ptw" title="${U.esc(b.nazwa)}: 7–16 ${p.tmin}°…${p.tmax}°${p.pada ? ', pada' : ''}"><span class="ptwi">${p.ikona}</span>${p.tmin}°/${p.tmax}°</span>` : ''; };
     const hmMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    const blokAuto = ({ t, od, dl, bezEst }, tor) => {
-      const top = (od - h0 * 60) / 60 * PX, hgt = Math.max(30, dl / 60 * PX - 3);
+    const dzTyg = d => d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '');
+    const blok = (x, tor) => {
+      const { t, rodz, s, e } = x;
+      const top = (s - h0 * 60) / 60 * PX, hgt = Math.max(30, (e - s) / 60 * PX - 3);
       const { st, kl } = poz(top, hgt, tor);
-      return `<button class="pblk pauto${kl} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">~${hmMin(od)}–${hmMin(od + dl)} · ${bezEst ? 'czas nieokreślony' : String(Math.round(dl / 6) / 10).replace('.', ',') + ' h'}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}<span class="pauton">Kierownik nie określił pory dnia</span></button>`;
+      const a = t.start ? new Date(t.start) : null, b2 = t.koniec ? new Date(t.koniec) : null;
+      let czas;
+      if (rodz === 'fix') czas = x.wiel ? `${dzTyg(a)} ${hm(a)} – ${dzTyg(b2)} ${hm(b2)}` : `${hm(a)}–${hm(b2)}`;
+      else if (rodz === 'auto') czas = `~${hmMin(s)}–${hmMin(e)} · ${String(Math.round((e - s) / 6) / 10).replace('.', ',')} h`;
+      else czas = 'cały dzień' + (x.wiel && a && b2 ? ` · ${a.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}–${b2.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}` : '');
+      return `<button class="pblk${kl}${rodz === 'auto' ? ' pauto' : ''} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
+        <span class="pt">${czas}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}${rodz === 'auto' ? '<span class="pauton">Kierownik nie określił pory dnia</span>' : ''}</button>`;
     };
     // tory: zadania nachodzące na siebie dzielą szerokość kolumny; stykające się (koniec = początek) – nie
     const kolumnaHtml = k => {
-      const mn = d => d.getHours() * 60 + d.getMinutes(), minDl = 30 / PX * 60;
-      const el = [...k.z.filter(maGodziny).map(t => ({ s: mn(new Date(t.start)), e: mn(new Date(t.koniec)), h: tor => blok(t, tor) })),
-        ...k.auto.map(x => ({ s: x.od, e: x.od + x.dl, h: tor => blokAuto(x, tor) }))].map(x => ({ ...x, e: Math.max(x.e, x.s + minDl) })).sort((a, b) => a.s - b.s || b.e - a.e);
+      const minDl = 30 / PX * 60;
+      const el = k.el.map(x => ({ x, s: x.s, e: Math.max(x.e, x.s + minDl) })).sort((a, b) => a.s - b.s || b.e - a.e);
       let grupa = [], koniecGr = -1; const tory = [];
       const zamknij = () => { const n = Math.max(1, ...grupa.map(x => x.i + 1)); grupa.forEach(x => x.tor = { i: x.i, n }); grupa = []; tory.length = 0; };
       el.forEach(x => {
@@ -276,11 +293,11 @@ const Views = {
         grupa.push(x); koniecGr = Math.max(koniecGr, x.e);
       });
       zamknij();
-      return el.map(x => x.h(x.tor)).join('');
+      return el.map(y => blok(y.x, y.tor)).join('');
     };
     const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}
       ${t.status ? `<span class="mute">${U.esc(t.status)}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
-    const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !maGodziny(t) && !wpasowane.has(t.id))))];
+    const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
     const inicjaly = n => n.split(' ').map(w => w[0]).join('');
     view.innerHTML = `

@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.14.1 – 2026-11-10 (aplikacja)
+- Plan dnia: oś zawsze od 7:00, najpóźniej do 24:00 – kafelki nie pokazują już godzin powyżej 24 (błąd: zadania wielodniowe i długie szacowane czasy wpasowywane za północ).
+- Zadania całodniowe (bez godzin i bez „Estimated Time”) oraz wielodniowe bez godzin: 7:00–15:00, opis „cały dzień”; stoją obok innych zadań, nie wypychają ich.
+- Zadania wielodniowe z godzinami: 1. dzień od godziny startu, środkowe dni 7–15, ostatni do godziny końca; na kafelku dni i godziny (np. „pn 08:00 – śr 16:00”).
+- Zadania z „Estimated Time” bez godzin: wpasowane od 7:00, gdy brak miejsca przed północą – ostatnie miejsce przed 24:00 obok innych.
+
 ## 1.14.0 – 2026-11-09 (aplikacja + serwer, schemat 1.7)
 - Oznaczenie z projektu (kolumna M „Oznaczenie proj.” listy urządzeń) przy ID urządzenia: lista, karta urządzenia, braki, notatki, protokoły (wybór urządzenia), podpis na rzucie, opis zdjęć i galeria.
 - Lista urządzeń: sortowanie „ID ELWIS” / „Oznaczenie proj.” (sortowanie naturalne, w grupach kondygnacji, wybór zapamiętany), wyszukiwanie po ID, oznaczeniu, typie, uwagach i nr seryjnym.
