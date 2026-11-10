@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.20.1 – 2026-11-10 (aplikacja)
+- Poprawka: na ekranie Plan wróciła oś godzin i układ kolumn (błąd z 1.17.0 – pomyłkowo zmieniona nazwa klasy siatki planu).
+
 ## 1.20.0 – 2026-11-10 (aplikacja + serwer)
 - Priorytety liczone także dla budów wpisanych do Bazy z „Aktywna = nie” i ID listy ClickUp (projekty czekające na skill „nowa budowa”): oceniane z zadań ClickUp, a gdy mają już listę urządzeń – także z danych z budowy. Na kafelku dopisek „poza ELWIS”; w zakładce Budowy nadal widać tylko budowy aktywne.
 - Listy z przestrzeni „PROJ …”, których nie ma jeszcze w Bazie, dalej trafiają na ekran (zabezpieczenie przed pominięciem nowego projektu).

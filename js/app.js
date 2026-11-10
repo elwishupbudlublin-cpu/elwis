@@ -323,7 +323,7 @@ const Views = {
       ${wszyscy ? `<div class="ppeople">${kolejnosc.map(o => { const n = zad.filter(t => t.osoby.includes(String(o.cu))).length; return `<button class="pperson ${ukryci.has(o.name) ? '' : 'on'}" data-who="${U.esc(o.name)}"><span class="av">${U.esc(inicjaly(o.name))}</span>${U.esc(o.name)}${o === ja ? ' (ty)' : ''}<span class="pn">${n}</span></button>`; }).join('')}</div>` : ''}
       <div class="ptime" style="--n:${kolumny.length || 1}">
         ${wszyscy ? `<div class="pheads">${kolumny.map(k => `<div class="phead">${U.esc(k.o.name)}</div>`).join('')}</div>` : ''}
-        <div class="prgrid" style="height:${(h1 - h0) * PX}px">
+        <div class="pgrid" style="height:${(h1 - h0) * PX}px">
           <div class="phours">${Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * PX}px">${h0 + i}:00</span>`).join('')}</div>
           ${terazTop >= 0 && terazTop <= (h1 - h0) * PX ? `<div class="pnowline" style="top:${terazTop}px"><span>${hm(new Date())}</span></div>` : ''}
           ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${kolumnaHtml(k)}</div>`).join('') || '<div class="pcol"></div>'}
