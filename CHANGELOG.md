@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.19.0 – 2026-11-10 (aplikacja + serwer)
+- Priorytety obejmują wszystkie projekty z przestrzeni ClickUp „PROJ …” (także oferty z kodem `RRpNNN`), nie tylko budowy z Bazy. Budowa spoza Bazy ma dopisek „tylko ClickUp”, jest oceniana z zadań (terminy, zamówienia, zależności, przerwane, bez ekipy), a kafelek otwiera listę w ClickUp.
+- Pomijane są tylko projekty, w których wszystkie zadania są zakończone.
+- Serwer pobiera zadania jednym zapytaniem na przestrzenie (otwarte + zamknięte z 12 tygodni) zamiast osobno dla każdej listy – mniej zapytań do ClickUp.
+
 ## 1.18.0 – 2026-11-10 (aplikacja + serwer, schemat 1.8)
 - Ekran „Wydajność ekip” (tylko rola biuro): wykres trendu tygodniowego / miesięcznego z porównaniem ekip w 4 kategoriach – podłączenia (% normy dnia), terminowość zadań, kompletność wpisów (nr seryjne), przestoje (braki blokujące); karta ekipy z wynikiem, strzałką trendu i zmierzonym czasem na typ urządzenia.
 - Progi alarmowe i normy czasu w Bazie → Konfiguracja (`progi`, `normy_min`); przekroczony próg = alarm na ekranach Priorytety i Wydajność ekip.

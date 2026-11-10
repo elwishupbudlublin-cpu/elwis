@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.18.0';
+const SCRIPT_VERSION = '1.19.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -833,35 +833,42 @@ function minusRob_(t, n) { while (n > 0) { t -= DZIEN; if (rob_(t)) n--; } retur
 function poniedzialek_(ts) { const d = new Date(String(ts).slice(0, 10) + 'T12:00:00Z'); const w = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - w * DZIEN).toISOString().slice(0, 10); }
 function pref_(id) { return (String(id).match(/^[A-Za-z]+/) || [''])[0].toUpperCase(); }
 
-function zadaniaList_(projekty) {
-  const token = P.getProperty('CLICKUP_TOKEN'); const out = {};
-  if (!token) return out;
+/* Zadania wszystkich przestrzeni projektowych ClickUp (nazwa zaczyna się od „PROJ”), od 1.19.0 – tylko odczyt:
+   otwarte zadania + zamknięte w ostatnich 12 tygodniach (terminowość). Lista bez otwartych zadań nie trafia do wyniku. */
+function zadaniaWszystkie_() {
+  const token = P.getProperty('CLICKUP_TOKEN'); if (!token) return { ok: false, listy: {} };
   const H = { headers: { Authorization: token }, muteHttpExceptions: true };
-  const url = (id, pg) => 'https://api.clickup.com/api/v2/list/' + encodeURIComponent(id) + '/task?include_closed=true&subtasks=true&page=' + pg;
-  let kolejka = projekty.filter(p => p.listaCU).map(p => ({ kod: p.kod, id: p.listaCU, pg: 0 }));
-  for (let runda = 0; runda < 6 && kolejka.length; runda++) {
-    const nast = [];
-    for (let i = 0; i < kolejka.length; i += 20) {
-      const part = kolejka.slice(i, i + 20);
-      const res = UrlFetchApp.fetchAll(part.map(k => Object.assign({ url: url(k.id, k.pg) }, H)));
-      res.forEach((r, j) => {
-        const k = part[j];
-        if (r.getResponseCode() !== 200) { out[k.kod] = out[k.kod] || null; return; }
-        const d = JSON.parse(r.getContentText());
-        out[k.kod] = (out[k.kod] || []).concat(d.tasks || []);
-        if (!d.last_page && (d.tasks || []).length) nast.push({ kod: k.kod, id: k.id, pg: k.pg + 1 });
-      });
-      if (i + 20 < kolejka.length) Utilities.sleep(1500);
-    }
-    kolejka = nast;
-  }
-  return out;
+  const get = u => { const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/' + u, H); if (r.getResponseCode() === 429) { Utilities.sleep(20000); return get(u); } if (r.getResponseCode() !== 200) throw new Error('ClickUp ' + r.getResponseCode()); return JSON.parse(r.getContentText()); };
+  try {
+    let team = P.getProperty('CLICKUP_TEAM');
+    if (!team) { team = String(get('team').teams[0].id); P.setProperty('CLICKUP_TEAM', team); }
+    const prz = (get('team/' + team + '/space?archived=false').spaces || []).filter(x => /^\s*PROJ/i.test(x.name)).map(x => x.id);
+    if (!prz.length) return { ok: true, listy: {}, team: team };
+    const sp = prz.map(i => 'space_ids[]=' + encodeURIComponent(i)).join('&'), listy = {}, seen = {};
+    const zbierz = extra => {
+      for (let pg = 0; pg < 60; pg++) {
+        const d = get('team/' + team + '/task?subtasks=true&page=' + pg + '&' + sp + extra);
+        (d.tasks || []).forEach(t => { if (seen[t.id] || !t.list) return; seen[t.id] = 1; const l = listy[t.list.id] = listy[t.list.id] || { nazwa: t.list.name, zad: [], otw: 0 }; l.zad.push(t); if (!(t.status && /closed|done/.test(t.status.type))) l.otw++; });
+        if (d.last_page || !(d.tasks || []).length) break;
+      }
+    };
+    zbierz('&include_closed=false');
+    zbierz('&include_closed=true&date_done_gt=' + (Date.now() - 12 * 7 * DZIEN));
+    return { ok: true, listy: listy, team: team };
+  } catch (e) { return { ok: false, listy: {}, blad: String(e.message || e) }; }
 }
 
 function przeliczPriorytety() {
   const start = Date.now(), k = konfig_();
   const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
-  const projekty = aktywne_(), zadania = zadaniaList_(projekty);
+  const cu = zadaniaWszystkie_();
+  const projekty = aktywne_().slice(), wBazie = {}; projekty.forEach(p => { if (p.listaCU) wBazie[p.listaCU] = 1; });
+  // budowy tylko z ClickUp (od 1.19.0): listy przestrzeni PROJ spoza Bazy, które mają choć jedno otwarte zadanie
+  Object.keys(cu.listy).forEach(id => {
+    const l = cu.listy[id]; if (wBazie[id] || !l.otw) return;
+    const m = txt_(l.nazwa).match(/^(\d{2}[_p]\d{3})\s*(.*)$/i);
+    projekty.push({ kod: m ? m[1] : '', nazwa: m ? m[2] : txt_(l.nazwa), listaCU: id, zakres: [], tylkoCU: true });
+  });
   const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
   const prac = rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => txt_(r[0]));
   const ekipaOs = {}, ekipaCu = {};
@@ -879,7 +886,7 @@ function przeliczPriorytety() {
     const pow = []; const dodaj = (poz, txt, url, kiedy) => pow.push({ poz: poz, txt: String(txt).slice(0, 160), url: url || '', kiedy: kiedy || 0 });
     /* --- Baza: urządzenia i zdarzenia --- */
     let wszystkie = 0, gotowe = 0, zostaloMin = 0, zostaloSzt = 0, tempo = 0, protGot = 0, maZdarzenia = false;
-    try {
+    if (!p.tylkoCU) try {
       const ss = SpreadsheetApp.openById(p.lista), shU = ss.getSheetByName('Urządzenia');
       const urz = shU && shU.getLastRow() > 1 ? shU.getRange(2, 1, shU.getLastRow() - 1, 11).getDisplayValues().filter(r => txt_(r[0])) : [];
       const stat = {}; urz.forEach(r => {
@@ -926,7 +933,7 @@ function przeliczPriorytety() {
     } catch (e) { dodaj(1, 'Lista urządzeń niedostępna'); }
 
     /* --- ClickUp: terminy, zamówienia, zależności --- */
-    const zad = zadania[p.kod]; let koniec = 0, nast = null, koniecZamk = false;
+    const zad = p.listaCU && cu.ok ? ((cu.listy[p.listaCU] || {}).zad || []) : null; let koniec = 0, nast = null, koniecZamk = false;
     if (!p.listaCU) dodaj(1, 'Brak listy ClickUp w Bazie');
     else if (!zad) dodaj(1, 'Lista ClickUp niedostępna');
     else {
@@ -942,7 +949,7 @@ function przeliczPriorytety() {
       const dniK = koniec ? dniRob_(dzis, koniec) : null, dKal = koniec ? Math.ceil((koniec - dzis) / DZIEN) : null;
       const zapas = koniec ? dniK - potrzeba : null;
       p._ = { dKal: dKal, zapas: zapas, potrzeba: potrzeba };
-      if (!koniec) dodaj(1, 'Brak terminu „Koniec umowny projektu”');
+      if (!koniec) dodaj(1, 'Brak otwartego zadania „Koniec umowny projektu” z terminem');
       else if (!koniecZamk && (otw.length || zostaloSzt)) {
         if (dKal < 0) dodaj(2, 'Termin umowny minął ' + (-dKal) + ' dni temu, praca nieskończona', km.url, koniec);
         else if (zapas < 0) dodaj(2, 'Za mało czasu: potrzeba ok. ' + potrzeba + ' dni rob., zostało ' + dniK, km.url, koniec);
@@ -989,6 +996,7 @@ function przeliczPriorytety() {
     pow.sort((a, b) => b.poz - a.poz || (a.kiedy || 9e15) - (b.kiedy || 9e15));
     const x = p._ || {};
     wynik.push({ kod: p.kod, nazwa: p.nazwa, poz: pow.length ? pow[0].poz : 0, koniec: koniec && !koniecZamk ? dzien_(koniec) : '', dni: koniecZamk ? null : x.dKal, zapas: koniecZamk ? null : x.zapas,
+      tylkoCU: !!p.tylkoCU, url: p.listaCU && cu.team ? 'https://app.clickup.com/' + cu.team + '/v/li/' + p.listaCU : '',
       postep: [gotowe, wszystkie], tempo: tempo, trzeba: x.trzeba || 0, powody: pow.slice(0, 8).map(q => ({ poz: q.poz, txt: q.txt, url: q.url })), ile: pow.length,
       nast: nast ? data_(nast.due) + ' ' + String(nast.txt).slice(0, 60) : '' });
     delete p._;

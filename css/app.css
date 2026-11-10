@@ -402,3 +402,4 @@ main{padding:16px 16px 100px}
 .wleg{gap:16px;flex-wrap:wrap;font-size:13px;margin-top:6px}.wleg .row{gap:6px}
 .wkar.al{outline:2px solid var(--bad)}.wkol{width:12px;height:12px;border-radius:50%}
 .wnum{font-size:30px;font-weight:700;margin:4px 0}.wup{color:var(--ok)}.wdn{color:var(--bad)}.wtyp{font-size:12px;margin-top:6px}
+.pcu{font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:1px 6px;white-space:nowrap}

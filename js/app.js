@@ -484,11 +484,11 @@ const Views = {
     const filtr = par.f == null ? -1 : par.f, lista = pr.filter(p => filtr < 0 || p.poz === filtr);
     const KL = ['ok', 'warn', 'bad'], dni = p => p.dni == null ? (p.koniec ? '' : 'brak terminu końca') : p.dni < 0 ? `${-p.dni} dni po terminie` : `koniec za ${p.dni} dni`;
     const kaf = p => `<div class="pkaf p${p.poz}">
-        <button class="pkh" data-pk="${U.esc(p.kod)}"><span class="grow"><b class="m bkd">${U.esc(p.kod)}</b> <b>${U.esc(p.nazwa)}</b></span>${dni(p) ? `<span class="chip ${KL[p.poz]}">${U.esc(dni(p))}</span>` : ''}</button>
+        <button class="pkh" ${p.tylkoCU ? `data-purl="${U.esc(p.url || '')}"` : `data-pk="${U.esc(p.kod)}"`}><span class="grow"><b class="m bkd">${U.esc(p.kod)}</b> <b>${U.esc(p.nazwa)}</b>${p.tylkoCU ? ' <span class="mute pcu">tylko ClickUp</span>' : ''}</span>${dni(p) ? `<span class="chip ${KL[p.poz]}">${U.esc(dni(p))}</span>` : ''}</button>
         ${p.powody.length ? `<div class="ppow p${p.powody[0].poz}">${U.esc(p.powody[0].txt)}</div>` : `<div class="mute">W normie${p.nast ? ' · następne: ' + U.esc(p.nast) : ''}</div>`}
         ${p.kom ? `<div class="pkom">${ic('note')} ${U.esc(p.kom)}</div>` : ''}
-        <div class="mute psub">Podłączone ${p.postep[0]}/${p.postep[1]}${p.zapas != null ? ` · zapas ${p.zapas} dni rob.` : ''}${p.tempo ? ` · tempo ${String(p.tempo).replace('.', ',')}/dzień` : ''}${p.ile > 1 ? ` · <button class="lnk" data-wiecej="${U.esc(p.kod)}">+ ${p.ile - 1} ${p.ile - 1 === 1 ? 'powód' : 'powody'}</button>` : ''}</div>
-        <div class="pwiecej" id="pw-${U.esc(p.kod)}" hidden>${p.powody.slice(1).map(q => `<div class="ppow p${q.poz}">${q.url ? `<a href="${U.esc(q.url)}" target="_blank" rel="noopener">${U.esc(q.txt)}</a>` : U.esc(q.txt)}</div>`).join('')}${p.powody[0] && p.powody[0].url ? `<a class="btn sm" href="${U.esc(p.powody[0].url)}" target="_blank" rel="noopener">Otwórz zadanie w ClickUp</a>` : ''}</div>
+        <div class="mute psub">${p.tylkoCU ? 'Bez danych z budowy' : `Podłączone ${p.postep[0]}/${p.postep[1]}`}${p.zapas != null ? ` · zapas ${p.zapas} dni rob.` : ''}${p.tempo ? ` · tempo ${String(p.tempo).replace('.', ',')}/dzień` : ''}${p.ile > 1 ? ` · <button class="lnk" data-wiecej="${U.esc(p.kod || p.url)}">+ ${p.ile - 1} ${p.ile - 1 === 1 ? 'powód' : 'powody'}</button>` : ''}</div>
+        <div class="pwiecej" id="pw-${U.esc(p.kod || p.url)}" hidden>${p.powody.slice(1).map(q => `<div class="ppow p${q.poz}">${q.url ? `<a href="${U.esc(q.url)}" target="_blank" rel="noopener">${U.esc(q.txt)}</a>` : U.esc(q.txt)}</div>`).join('')}${p.powody[0] && p.powody[0].url ? `<a class="btn sm" href="${U.esc(p.powody[0].url)}" target="_blank" rel="noopener">Otwórz zadanie w ClickUp</a>` : ''}</div>
       </div>`;
     view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Priorytety</h1><button class="btn sm pri" id="pOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div>
         <div class="mute" style="color:#dbe7ff">${r ? `${pr.length} budów · przeliczono ${U.esc(kiedy)}${r.pominiete ? ` · ${r.pominiete} nieprzeliczonych` : ''}` : 'Brak danych – połącz się z siecią i zsynchronizuj.'}</div>
@@ -501,6 +501,7 @@ const Views = {
     view.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => UI.go('priorytety', { f: Number(b.dataset.pf) }, { zastap: true }));
     view.querySelectorAll('[data-wiecej]').forEach(b => b.onclick = () => { const e = document.getElementById('pw-' + b.dataset.wiecej); e.hidden = !e.hidden; });
     view.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => openProject(b.dataset.pk));
+    view.querySelectorAll('[data-purl]').forEach(b => b.onclick = () => { if (b.dataset.purl) window.open(b.dataset.purl, '_blank', 'noopener'); });
     $('#pWyd').onclick = () => UI.go('wydajnosc');
     $('#pOdsw').onclick = async () => {
       if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
