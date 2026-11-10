@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.20.0 – 2026-11-10 (aplikacja + serwer)
+- Priorytety liczone także dla budów wpisanych do Bazy z „Aktywna = nie” i ID listy ClickUp (projekty czekające na skill „nowa budowa”): oceniane z zadań ClickUp, a gdy mają już listę urządzeń – także z danych z budowy. Na kafelku dopisek „poza ELWIS”; w zakładce Budowy nadal widać tylko budowy aktywne.
+- Listy z przestrzeni „PROJ …”, których nie ma jeszcze w Bazie, dalej trafiają na ekran (zabezpieczenie przed pominięciem nowego projektu).
+
 ## 1.19.0 – 2026-11-10 (aplikacja + serwer)
 - Priorytety obejmują wszystkie projekty z przestrzeni ClickUp „PROJ …” (także oferty z kodem `RRpNNN`), nie tylko budowy z Bazy. Budowa spoza Bazy ma dopisek „tylko ClickUp”, jest oceniana z zadań (terminy, zamówienia, zależności, przerwane, bez ekipy), a kafelek otwiera listę w ClickUp.
 - Pomijane są tylko projekty, w których wszystkie zadania są zakończone.

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.19.0';
+const SCRIPT_VERSION = '1.20.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -862,7 +862,16 @@ function przeliczPriorytety() {
   const start = Date.now(), k = konfig_();
   const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
   const cu = zadaniaWszystkie_();
-  const projekty = aktywne_().slice(), wBazie = {}; projekty.forEach(p => { if (p.listaCU) wBazie[p.listaCU] = 1; });
+  // budowy z Bazy: aktywne (pełne dane z ELWIS) oraz nieaktywne z ID listy ClickUp (od 1.20.0 – wpisane do Bazy przed uruchomieniem skilla „nowa budowa”; oceniane z zadań)
+  const akt = {}; aktywne_().forEach(p => { akt[p.kod] = p; });
+  const projekty = [], wBazie = {};
+  rowsT_(baza_().getSheetByName('Projekty')).forEach(r => {
+    const kod = txt_(r[0]), cuId = txt_(r[9]); if (!kod && !cuId) return;
+    const a = tak_(r[5]) && akt[kod];
+    if (!a && !cuId) return;
+    if (cuId) wBazie[cuId] = 1;
+    projekty.push(a ? Object.assign({}, a) : { kod: kod, nazwa: txt_(r[1]), listaCU: cuId, lista: idFromUrl_(r[10]), zakres: [], tylkoCU: true });
+  });
   // budowy tylko z ClickUp (od 1.19.0): listy przestrzeni PROJ spoza Bazy, które mają choć jedno otwarte zadanie
   Object.keys(cu.listy).forEach(id => {
     const l = cu.listy[id]; if (wBazie[id] || !l.otw) return;
@@ -883,10 +892,11 @@ function przeliczPriorytety() {
 
   projekty.forEach(p => {
     if (Date.now() - start > 4.5 * 60000) { pominiete++; return; }
+    if (p.tylkoCU && cu.ok && !(cu.listy[p.listaCU] || {}).otw) return;   // poza ELWIS i wszystkie zadania zakończone – pomijamy
     const pow = []; const dodaj = (poz, txt, url, kiedy) => pow.push({ poz: poz, txt: String(txt).slice(0, 160), url: url || '', kiedy: kiedy || 0 });
     /* --- Baza: urządzenia i zdarzenia --- */
     let wszystkie = 0, gotowe = 0, zostaloMin = 0, zostaloSzt = 0, tempo = 0, protGot = 0, maZdarzenia = false;
-    if (!p.tylkoCU) try {
+    if (p.lista) try {
       const ss = SpreadsheetApp.openById(p.lista), shU = ss.getSheetByName('Urządzenia');
       const urz = shU && shU.getLastRow() > 1 ? shU.getRange(2, 1, shU.getLastRow() - 1, 11).getDisplayValues().filter(r => txt_(r[0])) : [];
       const stat = {}; urz.forEach(r => {
@@ -995,7 +1005,7 @@ function przeliczPriorytety() {
     if (wszystkie && gotowe === wszystkie && !protGot && p.zakres.length && !koniecZamk) dodaj(p._ && p._.dKal != null && p._.dKal <= progi.koniec_pilne ? 2 : 1, 'Podłączone 100%, brak protokołów');
     pow.sort((a, b) => b.poz - a.poz || (a.kiedy || 9e15) - (b.kiedy || 9e15));
     const x = p._ || {};
-    wynik.push({ kod: p.kod, nazwa: p.nazwa, poz: pow.length ? pow[0].poz : 0, koniec: koniec && !koniecZamk ? dzien_(koniec) : '', dni: koniecZamk ? null : x.dKal, zapas: koniecZamk ? null : x.zapas,
+    wynik.push({ kod: p.kod, nazwa: p.kod && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa.slice(p.kod.length).trim() : p.nazwa, poz: pow.length ? pow[0].poz : 0, koniec: koniec && !koniecZamk ? dzien_(koniec) : '', dni: koniecZamk ? null : x.dKal, zapas: koniecZamk ? null : x.zapas,
       tylkoCU: !!p.tylkoCU, url: p.listaCU && cu.team ? 'https://app.clickup.com/' + cu.team + '/v/li/' + p.listaCU : '',
       postep: [gotowe, wszystkie], tempo: tempo, trzeba: x.trzeba || 0, powody: pow.slice(0, 8).map(q => ({ poz: q.poz, txt: q.txt, url: q.url })), ile: pow.length,
       nast: nast ? data_(nast.due) + ' ' + String(nast.txt).slice(0, 60) : '' });
