@@ -144,6 +144,7 @@ const Sync = {
     if (S.syncing || !API.ready()) return;
     if (!navigator.onLine) { UI.net(); return; }
     S.syncing = true; S.syncErr = null; UI.net();
+    S.pomiar = { start: Date.now(), bajty: 0, budowy: 0 };   // czas synchronizacji → Tablety, kolumna Stan pamięci (od 1.16.0)
     try {
       // 1. konfiguracja i słowniki
       this.prog(0.01, 'Konfiguracja');
@@ -208,6 +209,7 @@ const Sync = {
       const limit = await Pamiec.limit();
       const ile = Math.min(full ? PAMIEC_BUDOW : 6, Math.max(limit, 1));
       const kody = [...new Set([S.kod, ...recent.slice(0, ile)].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
+      S.pomiar.budowy = kody.length;
       for (let j = 0; j < kody.length; j++) await this.pullProject(kody[j], full, (f, t) => this.prog(0.3 + 0.5 * (j + f) / kody.length, `Budowa ${j + 1}/${kody.length}` + (t ? ' · ' + t : '')));
       // 5. DTR wspólne dla wszystkich budów
       await this.pullTech(full, (f, t) => this.prog(0.8 + 0.18 * f, t));
@@ -215,6 +217,7 @@ const Sync = {
       await Pamiec.porzadki();
       await Pamiec.sprawdz();
       S.lastSync = Date.now(); await DB.set('lastSync', S.lastSync);
+      await DB.set('ostatniPomiar', { s: Math.round((Date.now() - S.pomiar.start) / 1000), budowy: S.pomiar.budowy, mb: Math.round(S.pomiar.bajty / 1048576 * 10) / 10, pelna: !!full, ts: Date.now() });
     } catch (err) {
       S.syncErr = err.message; console.warn('sync', err);
     } finally {
@@ -232,15 +235,19 @@ const Sync = {
     const ids = [...new Set([...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size <= 60e6).map(f => f.id)])];
     const brak = [];
     for (const id of ids) if (full || !(await DB.hasFile(id))) brak.push(id);
-    for (let i = 0; i < brak.length; i++) {
-      pr(0.05 + 0.85 * i / brak.length, `pliki ${i + 1}/${brak.length}`);
-      try { await pobierzPlik(brak[i], (c, n) => pr(0.05 + 0.85 * (i + c / n) / brak.length, `pliki ${i + 1}/${brak.length} · ${Math.round(c / n * 100)}%`)); }
-      catch (e) { console.warn('file', brak[i], e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; break; } }
-    }
+    const stan = brak.map(() => 0); let stop = false;
+    const odswiez = () => { const g = stan.reduce((a, b) => a + b, 0); pr(0.05 + 0.85 * g / Math.max(1, brak.length), `pliki ${Math.floor(g)}/${brak.length}`); };
+    await pula(brak.map((id, i) => async () => {
+      if (stop) return;
+      try { await pobierzPlik(id, (c, n) => { stan[i] = c / n; odswiez(); }); stan[i] = 1; odswiez(); }
+      catch (e) { console.warn('file', id, e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; stop = true; } }
+    }), POBIERANIE_NARAZ);
     pr(0.92, 'wpisy z innych tabletów');
     // zdarzenia z innych tabletów
     let since = (await DB.get('seq:' + kod)) || 0;
-    for (let guard = 0; guard < 50; guard++) {
+    // serwer podaje liczbę zdarzeń budowy (od 1.16.0) – gdy nic nie przybyło, nie pytamy
+    const zd = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod) || {};
+    for (let guard = 0; guard < 50 && !(zd.zd != null && since >= zd.zd); guard++) {
       const r = await API.events(kod, since);
       if (r.events.length) {
         const local = new Set((await DB.eventsFor(kod)).map(e => e.id));
@@ -300,15 +307,14 @@ const Sync = {
       if (!full && !changed && await DB.hasFile(f.id)) continue;
       doPobrania.push(f);
     }
-    const razem = doPobrania.reduce((a, f) => a + (f.size || 0), 0) || 1; let gotowe = 0;
-    for (let i = 0; i < doPobrania.length; i++) {
-      const f = doPobrania[i];
-      const opis = (c) => `DTR ${i + 1}/${doPobrania.length} · ${mbTxt(gotowe + c)} / ${mbTxt(razem)}`;
-      pr(gotowe / razem, opis(0));
-      try { await pobierzPlik(f.id, (c, n) => pr((gotowe + f.size * c / n) / razem, opis(f.size * c / n))); }
-      catch (e) { console.warn('dtr', f.id, e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; break; } }
-      gotowe += f.size || 0;
-    }
+    const razem = doPobrania.reduce((a, f) => a + (f.size || 0), 0) || 1;
+    const stan = doPobrania.map(() => 0); let stop = false, ile = 0;
+    const odswiez = () => { const g = stan.reduce((a, b) => a + b, 0); pr(g / razem, `DTR ${ile}/${doPobrania.length} · ${mbTxt(g)} / ${mbTxt(razem)}`); };
+    await pula(doPobrania.map((f, i) => async () => {
+      if (stop) return;
+      try { await pobierzPlik(f.id, (c, n) => { stan[i] = (f.size || 0) * c / n; odswiez(); }); stan[i] = f.size || 0; ile++; odswiez(); }
+      catch (e) { console.warn('dtr', f.id, e); if (/quota|QuotaExceeded/i.test(String(e && (e.name || e.message)))) { S.malo = true; stop = true; } }
+    }), POBIERANIE_NARAZ);
   }
 };
 
@@ -338,7 +344,9 @@ const Pamiec = {
   async sprawdz() { const s = await this.stan(); S.malo = S.malo || s.malo; if (S.malo) UI.toast('Mało miejsca na tablecie – zgłoś to administratorowi (Łukasz P)'); return s; },
   async opisStanu() {
     const s = await this.stan(); if (!s.quota) return '';
-    return (s.malo ? 'MAŁO MIEJSCA · ' : '') + `wolne ${mbTxt(s.wolne)} z ${mbTxt(s.quota)} · budowy ${s.budowy} (limit ${s.limit}) · v${APP_VERSION}`;
+    const p = await DB.get('ostatniPomiar');
+    const sync = p ? ` · ost. synchr. ${p.s} s${p.pelna ? ' (pełna)' : ''}, ${p.budowy} bud., ${String(p.mb).replace('.', ',')} MB` : '';
+    return (s.malo ? 'MAŁO MIEJSCA · ' : '') + `wolne ${mbTxt(s.wolne)} z ${mbTxt(s.quota)} · budowy ${s.budowy} (limit ${s.limit}) · v${APP_VERSION}` + sync;
   },
   async lista() {
     let l = await DB.get('offline');
@@ -407,9 +415,18 @@ async function wczytajEtap(kod) {
 async function ustawEtap(e) { S.etap = e; await DB.set('etap:' + S.kod, e); }
 
 /* Pobranie pliku z serwera (w częściach) do pamięci tabletu */
+/* Kilka plików naraz (od 1.16.0) – narzut serwera na każde zapytanie (ok. 2–3 s) nakłada się zamiast sumować */
+const POBIERANIE_NARAZ = 3;
+async function pula(zadania, n) {
+  let i = 0; const wynik = [];
+  const praca = async () => { while (i < zadania.length) { const k = i++; wynik[k] = await zadania[k](); } };
+  await Promise.all(Array.from({ length: Math.min(n, zadania.length) }, praca));
+  return wynik;
+}
 async function pobierzPlik(id, onProgress) {
   const f = await API.fileFull(id, onProgress);
   await DB.putFile(id, { blob: f.blob, mime: f.mime, name: f.name });
+  if (S.pomiar) S.pomiar.bajty += (f.blob && f.blob.size) || 0;
   return f;
 }
 

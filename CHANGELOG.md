@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.16.0 – 2026-11-10 (aplikacja + serwer)
+- Szybsza synchronizacja: pliki (rzuty, dokumenty, DTR) pobierane po 3 naraz – narzut serwera na każde zapytanie nakłada się zamiast sumować (pierwsze pobranie 30 budów ok. 2× szybciej).
+- Serwer pamięta listę tabletów (60 s) i aktywnych budów (5 min) – każde zapytanie nie czyta Bazy od nowa; nowa / wyłączona budowa widoczna na tabletach najpóźniej po 5 min (pinezka – od razu).
+- Serwer podaje w `bootstrap` liczbę zdarzeń każdej budowy (`zd`); tablet nie pyta o nowe wpisy budowy, w której nic nie przybyło.
+- Pomiar: czas ostatniej synchronizacji, liczba budów i pobrane MB dopisywane do Tablety → Stan pamięci.
+- Historia urządzenia: wpis „dodano urządzenie”.
+
 ## 1.15.0 – 2026-11-10 (aplikacja + serwer)
 - „+ Dodaj urządzenie” na rzucie i liście urządzeń – tylko rola biuro. Typ ze Słowników, rzut, kondygnacja, oznaczenie z projektu, uwagi; pozycja przez dotknięcie rzutu. Działa offline (nowe zdarzenie `urz_nowe`); do synchronizacji urządzenie ma ID tymczasowe, potem serwer nadaje kolejny numer dla prefiksu i dopisuje wiersz do zakładki Urządzenia. Wpisy i zdjęcia zrobione na nowym urządzeniu przed synchronizacją dostają nadane ID.
 - Przyciski rzutów opisane poziomem („-1 garaż”, „0 parter”, „1 piętro”, tekst z kolumny Kondygnacja, np. „+2 poddasze”, „dach niski”), pod spodem szarą czcionką nazwa rzutu; kolejność od najniższego poziomu do najwyższego. Na liście urządzeń te same przyciski jako filtr („Wszystkie poziomy”), grupy listy w kolejności poziomów; poziom także w karcie urządzenia, opisie zdjęć i wyborze urządzenia w protokole.

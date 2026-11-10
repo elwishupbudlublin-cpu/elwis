@@ -1056,7 +1056,7 @@ function bindIssue(root, after) {
 }
 function histTxt(e) {
   const d = e.d || {};
-  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ;
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ;
 }
 async function thumbs(el, foto) {
   if (!el) return;

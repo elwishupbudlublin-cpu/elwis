@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.15.0';
+const SCRIPT_VERSION = '1.16.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -93,10 +93,18 @@ function konfig_() {
   return c;
 }
 
+/* Pamięć podręczna serwera (od 1.16.0): lista tabletów 60 s, aktywne budowy 5 min – każde zapytanie nie musi czytać Bazy.
+   Wyłączenie tabletu / budowy działa najpóźniej po tym czasie; zapis pinezki czyści pamięć budów od razu. */
+const CACHE = CacheService.getScriptCache();
+function zCache_(klucz, sek, fn) {
+  const c = CACHE.get(klucz); if (c) return JSON.parse(c);
+  const v = fn(); try { CACHE.put(klucz, JSON.stringify(v), sek); } catch (e) { } return v;
+}
 function auth_(key) {
   if (!key) return null;
-  const r = rowsT_(baza_().getSheetByName('Tablety')).find(x => txt_(x[1]) === String(key) && tak_(x[3]));
-  return r ? txt_(r[0]) : null;
+  const t = zCache_('tablety', 60, () => rowsT_(baza_().getSheetByName('Tablety')).filter(x => tak_(x[3])).map(x => [txt_(x[1]), txt_(x[0])]));
+  const r = t.find(x => x[0] === String(key));
+  return r ? r[1] : null;
 }
 
 /** Stan pamięci zgłoszony przez tablet (od 1.7.0) → Tablety, kolumna F „Stan pamięci” (schemat 1.6). */
@@ -107,7 +115,7 @@ function stanPamieci_(key, v) {
     const keys = sh.getRange(2, 2, Math.max(sh.getLastRow() - 1, 1), 1).getDisplayValues();
     const i = keys.findIndex(r => txt_(r[0]) === String(key)); if (i < 0) return;
     const czas = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm');
-    sh.getRange(i + 2, 6).setNumberFormat(TEXT).setValue((czas + ' · ' + String(v)).replace(/[=+@]/g, ' ').slice(0, 200));
+    sh.getRange(i + 2, 6).setNumberFormat(TEXT).setValue((czas + ' · ' + String(v)).replace(/[=+@]/g, ' ').slice(0, 300));
   } catch (e) { /* zgłoszenie stanu nie może blokować synchronizacji */ }
 }
 function sha_(s) {
@@ -116,6 +124,9 @@ function sha_(s) {
 }
 
 function aktywne_() {
+  return zCache_('aktywne', 300, aktywneBaza_);
+}
+function aktywneBaza_() {
   return rowsT_(baza_().getSheetByName('Projekty'))
     .filter(r => tak_(r[5]) && txt_(r[0]) && ['tak', 'nie'].indexOf(txt_(r[11]).toLowerCase()) >= 0)
     .map(r => ({
@@ -160,7 +171,8 @@ function bootstrap_(tablet) {
     .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])),
       cu: txt_(r[5]), m: tak_(r[7]) || txt_(r[2]) === 'biuro' }));
   const postep = safeJson_(P.getProperty('POSTEP') || '{}');
-  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; return o; });
+  const liczniki = safeJson_(P.getProperty('ZDARZENIA') || '{}');   // liczba zdarzeń budowy (od 1.16.0) – tablet pomija pytanie o nowe wpisy, gdy nic nie przybyło
+  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; if (liczniki[p.kod] != null) o.zd = liczniki[p.kod]; return o; });
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
@@ -356,6 +368,7 @@ function events_(kod, since) {
   const p = projekt_(kod);
   const sh = zdarzeniaSheet_(p);
   const last = sh.getLastRow() - 1; // liczba zdarzeń
+  zapiszLicznik_(kod, last);
   if (since >= last) return { ok: true, events: [], last: last, more: false };
   const n = Math.min(500, last - since);
   const v = sh.getRange(since + 2, 1, n, 7).getDisplayValues();
@@ -404,6 +417,7 @@ function pinezka_(kod, e, biuro) {
   for (let i = 1; i < v.length; i++) if (txt_(v[i][0]) === kod) {
     if (txt_(v[i][3]) && !biuro[txt_(e.kto)]) return false;
     sh.getRange(i + 1, 4).setNumberFormat(TEXT).setValue(lat.toFixed(5) + ',' + lon.toFixed(5));
+    CACHE.remove('aktywne');
     return true;
   }
   return false;
@@ -519,6 +533,7 @@ function push_(b, tablet) {
         if (e.urz) touched[e.urz] = true;
       });
       if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
+      zapiszLicznik_(p.kod, sh.getLastRow() - 1);
       przelicz_(p, Object.keys(touched));
       if (usuniete.length) koszWord_(p, usuniete);
       if (zdjeciaDoKosza.length) zdjeciaDoKosza.forEach(fid => { const f = plikZdjecia_(p, fid); if (f) f.setTrashed(true); });
@@ -553,6 +568,10 @@ function przelicz_(p, ids) {
     v[i][10] = status;
   });
   zapiszPostep_(p.kod, v.filter(r => txt_(r[0])).map(r => txt_(r[10])));
+}
+
+function zapiszLicznik_(kod, n) {
+  try { const m = safeJson_(P.getProperty('ZDARZENIA') || '{}'); if (m[kod] === n) return; m[kod] = n; P.setProperty('ZDARZENIA', JSON.stringify(m)); } catch (e) { }
 }
 
 /* Postęp budów do listy budów na tablecie (od 1.13.0): [gotowe, wszystkie] w pamięci skryptu, liczone przy pobraniu budowy i przy zmianie statusów */
