@@ -81,9 +81,12 @@ const UI = {
   bnav() {
     const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
     const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
+    const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc';
+    $('#nPrio').hidden = !Session.isBiuro(); b.classList.toggle('n4', Session.isBiuro());
+    $('#nPrio').classList.toggle('on', prio);
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
     $('#nDok').classList.toggle('on', dok);
-    $('#nBud').classList.toggle('on', this.cur !== 'plan' && !dok);
+    $('#nBud').classList.toggle('on', this.cur !== 'plan' && !dok && !prio);
     const n = $('#nPend'); n.hidden = !S.pending; n.textContent = S.pending || '';
   }
 };
@@ -320,7 +323,7 @@ const Views = {
       ${wszyscy ? `<div class="ppeople">${kolejnosc.map(o => { const n = zad.filter(t => t.osoby.includes(String(o.cu))).length; return `<button class="pperson ${ukryci.has(o.name) ? '' : 'on'}" data-who="${U.esc(o.name)}"><span class="av">${U.esc(inicjaly(o.name))}</span>${U.esc(o.name)}${o === ja ? ' (ty)' : ''}<span class="pn">${n}</span></button>`; }).join('')}</div>` : ''}
       <div class="ptime" style="--n:${kolumny.length || 1}">
         ${wszyscy ? `<div class="pheads">${kolumny.map(k => `<div class="phead">${U.esc(k.o.name)}</div>`).join('')}</div>` : ''}
-        <div class="pgrid" style="height:${(h1 - h0) * PX}px">
+        <div class="prgrid" style="height:${(h1 - h0) * PX}px">
           <div class="phours">${Array.from({ length: h1 - h0 + 1 }, (_, i) => `<span style="top:${i * PX}px">${h0 + i}:00</span>`).join('')}</div>
           ${terazTop >= 0 && terazTop <= (h1 - h0) * PX ? `<div class="pnowline" style="top:${terazTop}px"><span>${hm(new Date())}</span></div>` : ''}
           ${kolumny.map(k => `<div class="pcol" aria-label="Plan: ${U.esc(k.o.name)}">${kolumnaHtml(k)}</div>`).join('') || '<div class="pcol"></div>'}
@@ -471,6 +474,90 @@ const Views = {
   },
 
   /* Dokumenty projektowe (pliki budowy) i techniczne (DTR z _Techniczne) – od 1.12.0 osobne ekrany */
+  /* Priorytety budów (od 1.17.0) – tylko rola biuro; wynik silnika reguł z serwera, kafelki w kolejności wymaganego działania */
+  async priorytety(par) {
+    if (!Session.isBiuro()) return UI.go('plan');
+    UI.header('priorytety', () => UI.wstecz('plan'));
+    const r = await DB.get('prio');
+    const kiedy = r && r.czas ? new Date(r.czas).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const pr = (r && r.projekty) || [], n = z => pr.filter(p => p.poz === z).length;
+    const filtr = par.f == null ? -1 : par.f, lista = pr.filter(p => filtr < 0 || p.poz === filtr);
+    const KL = ['ok', 'warn', 'bad'], dni = p => p.dni == null ? (p.koniec ? '' : 'brak terminu końca') : p.dni < 0 ? `${-p.dni} dni po terminie` : `koniec za ${p.dni} dni`;
+    const kaf = p => `<div class="pkaf p${p.poz}">
+        <button class="pkh" data-pk="${U.esc(p.kod)}"><span class="grow"><b class="m bkd">${U.esc(p.kod)}</b> <b>${U.esc(p.nazwa)}</b></span>${dni(p) ? `<span class="chip ${KL[p.poz]}">${U.esc(dni(p))}</span>` : ''}</button>
+        ${p.powody.length ? `<div class="ppow p${p.powody[0].poz}">${U.esc(p.powody[0].txt)}</div>` : `<div class="mute">W normie${p.nast ? ' · następne: ' + U.esc(p.nast) : ''}</div>`}
+        ${p.kom ? `<div class="pkom">${ic('note')} ${U.esc(p.kom)}</div>` : ''}
+        <div class="mute psub">Podłączone ${p.postep[0]}/${p.postep[1]}${p.zapas != null ? ` · zapas ${p.zapas} dni rob.` : ''}${p.tempo ? ` · tempo ${String(p.tempo).replace('.', ',')}/dzień` : ''}${p.ile > 1 ? ` · <button class="lnk" data-wiecej="${U.esc(p.kod)}">+ ${p.ile - 1} ${p.ile - 1 === 1 ? 'powód' : 'powody'}</button>` : ''}</div>
+        <div class="pwiecej" id="pw-${U.esc(p.kod)}" hidden>${p.powody.slice(1).map(q => `<div class="ppow p${q.poz}">${q.url ? `<a href="${U.esc(q.url)}" target="_blank" rel="noopener">${U.esc(q.txt)}</a>` : U.esc(q.txt)}</div>`).join('')}${p.powody[0] && p.powody[0].url ? `<a class="btn sm" href="${U.esc(p.powody[0].url)}" target="_blank" rel="noopener">Otwórz zadanie w ClickUp</a>` : ''}</div>
+      </div>`;
+    view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Priorytety</h1><button class="btn sm pri" id="pOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div>
+        <div class="mute" style="color:#dbe7ff">${r ? `${pr.length} budów · przeliczono ${U.esc(kiedy)}${r.pominiete ? ` · ${r.pominiete} nieprzeliczonych` : ''}` : 'Brak danych – połącz się z siecią i zsynchronizuj.'}</div>
+        <div class="pseg" style="margin-top:10px"><button class="on">Budowy</button><button id="pWyd">Wydajność ekip</button></div></section>
+      ${r && r.brakKlucza ? '<div class="card mute">Brak klucza ClickUp na serwerze – priorytety liczone tylko z danych z budów.</div>' : ''}
+      ${r && r.komentarz ? `<div class="card pkom">${ic('note')} ${U.esc(r.komentarz)}</div>` : ''}
+      ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
+      <div class="tabs" style="margin:10px 0">${[[-1, 'Wszystkie ' + pr.length], [2, 'Pilne ' + n(2)], [1, 'Uwaga ' + n(1)], [0, 'W normie ' + n(0)]].map(([k, l]) => `<button class="tab ${k === filtr ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}</div>
+      <div class="prgrid">${lista.map(kaf).join('') || '<div class="card mute">Brak budów w tej grupie.</div>'}</div>`;
+    view.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => UI.go('priorytety', { f: Number(b.dataset.pf) }, { zastap: true }));
+    view.querySelectorAll('[data-wiecej]').forEach(b => b.onclick = () => { const e = document.getElementById('pw-' + b.dataset.wiecej); e.hidden = !e.hidden; });
+    view.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => openProject(b.dataset.pk));
+    $('#pWyd').onclick = () => UI.go('wydajnosc');
+    $('#pOdsw').onclick = async () => {
+      if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
+      $('#pOdsw').disabled = true; $('#pOdsw').textContent = 'Przeliczam… (do kilku minut)';
+      try { await DB.set('prio', await API.priorytety(true)); UI.toast('Przeliczono'); } catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); }
+      if (UI.cur === 'priorytety') UI.refresh();
+    };
+  },
+  /* Wydajność ekip (od 1.18.0) – tylko rola biuro: trend tygodniowy / miesięczny w 4 kategoriach, porównanie ekip */
+  async wydajnosc(par) {
+    if (!Session.isBiuro()) return UI.go('plan');
+    const ekN = e => /^\d+$/.test(e) ? 'Ekipa ' + e : e;
+    UI.header('wydajność ekip', () => UI.wstecz('priorytety'));
+    const r = await DB.get('prio'), w = (r && r.wyd) || { tyg: [], serie: [] };
+    const KAT = { podl: ['Podłączenia', '% normy dnia'], term: ['Terminowość', '% zadań w terminie'], kompl: ['Kompletność wpisów', '% z nr seryjnym'], prz: ['Przestoje', 'braki blokujące'] };
+    const kat = KAT[par.k] ? par.k : 'podl', mies = par.o === 'm';
+    // okresy: tygodnie albo miesiące (średnia z tygodni; przestoje – suma)
+    let okresy = w.tyg.map((t, i) => ({ et: t.slice(8, 10) + '.' + t.slice(5, 7), idx: [i] }));
+    if (mies) { const m = {}; w.tyg.forEach((t, i) => { (m[t.slice(0, 7)] = m[t.slice(0, 7)] || []).push(i); }); okresy = Object.keys(m).sort().map(k => ({ et: k.slice(5, 7) + '.' + k.slice(2, 4), idx: m[k] })); }
+    const wart = (s, o) => {
+      const d = o.idx.map(i => s.dane[i]).filter(x => x && x[kat] != null); if (!d.length) return null;
+      const dni = d.reduce((a, x) => a + (x.dni || 0), 0), suma = d.reduce((a, x) => a + x[kat], 0);
+      return { v: kat === 'prz' ? suma : Math.round(suma / d.length), malo: dni < (mies ? 5 : 2) };
+    };
+    const KOL = ['#1D4ED8', '#D97706', '#15803D', '#B91C1C', '#7C3AED', '#0E7490'], DASH = ['', '6 4', '2 4', '10 3 2 3', '', '6 4'];
+    const serie = w.serie.map((s, i) => ({ ek: s.ekipa, kol: KOL[i % 6], dash: DASH[i % 6], p: okresy.map(o => wart(s, o)), typy: s.typy || [] }));
+    const maks = Math.max(kat === 'prz' ? 3 : 100, ...serie.flatMap(s => s.p.filter(Boolean).map(x => x.v)));
+    const X0 = 44, X1 = 572, Y0 = 20, Y1 = 220, x = i => okresy.length < 2 ? (X0 + X1) / 2 : X0 + (X1 - X0) * i / (okresy.length - 1), y = v => Y1 - (Y1 - Y0) * v / maks;
+    const siatka = [0, 0.25, 0.5, 0.75, 1].map(f => `<line x1="${X0}" x2="${X1}" y1="${y(maks * f)}" y2="${y(maks * f)}" stroke="#E2E8F0"/><text x="${X0 - 6}" y="${y(maks * f) + 4}" text-anchor="end" class="wt">${Math.round(maks * f)}</text>`).join('');
+    const linie = serie.map(s => {
+      const odc = []; let cur = []; s.p.forEach((q, i) => { if (q) cur.push(`${x(i).toFixed(1)},${y(q.v).toFixed(1)}`); else { if (cur.length) odc.push(cur); cur = []; } }); if (cur.length) odc.push(cur);
+      return odc.map(o => `<polyline points="${o.join(' ')}" fill="none" stroke="${s.kol}" stroke-width="2.5" stroke-dasharray="${s.dash}"/>`).join('') +
+        s.p.map((q, i) => q ? `<circle cx="${x(i).toFixed(1)}" cy="${y(q.v).toFixed(1)}" r="4" fill="${q.malo ? '#fff' : s.kol}" stroke="${s.kol}" stroke-width="2"><title>${U.esc(ekN(s.ek))} · ${okresy[i].et}: ${q.v}${q.malo ? ' (mało danych)' : ''}</title></circle>` : '').join('');
+    }).join('');
+    const osX = okresy.map((o, i) => `<text x="${x(i)}" y="${Y1 + 18}" text-anchor="middle" class="wt">${o.et}</text>`).join('');
+    const karta = s => {
+      const d = s.p.filter(Boolean), ost = d[d.length - 1], wcz = d.slice(-5, -1), sr = wcz.length ? wcz.reduce((a, q) => a + q.v, 0) / wcz.length : null;
+      const lepiej = kat === 'prz' ? -1 : 1, roz = ost && sr != null ? (ost.v - sr) * lepiej : 0, strz = !ost || sr == null || Math.abs(ost.v - sr) < Math.max(1, sr * 0.05) ? '→' : roz > 0 ? '↑' : '↓';
+      const al = ((r && r.alarmy) || []).some(a => a.ekipa === s.ek);
+      return `<div class="card wkar${al ? ' al' : ''}"><div class="row"><span class="wkol" style="background:${s.kol}"></span><b class="grow">${U.esc(ekN(s.ek))}</b>${al ? '<span class="chip bad">alarm</span>' : ''}</div>
+        <div class="wnum">${ost ? ost.v + (kat === 'prz' ? '' : '%') : '—'} <span class="${strz === '↑' ? 'wup' : strz === '↓' ? 'wdn' : 'mute'}">${strz}</span></div>
+        <div class="mute">${ost && ost.malo ? 'mało danych · ' : ''}${sr != null ? 'średnia z poprzednich: ' + Math.round(sr) + (kat === 'prz' ? '' : '%') : 'brak wcześniejszych danych'}</div>
+        ${s.typy.length ? `<div class="mute wtyp">${s.typy.sort((a, b) => b.n - a.n).slice(0, 4).map(t => `${U.esc(t.typ)}: ${t.czas} min (norma ${t.norma}, n=${t.n})`).join(' · ')}</div>` : ''}</div>`;
+    };
+    view.innerHTML = `<section class="phero"><h1>Wydajność ekip</h1><div class="mute" style="color:#dbe7ff">${r && r.czas ? 'Stan na ' + new Date(r.czas).toLocaleDateString('pl-PL') + ' · widok tylko dla biura' : 'Brak danych – zsynchronizuj.'}</div>
+        <div class="pseg" style="margin-top:10px"><button id="wBud">Budowy</button><button class="on">Wydajność ekip</button></div></section>
+      ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
+      <div class="tabs" style="margin:10px 0">${Object.keys(KAT).map(k => `<button class="tab ${k === kat ? 'on' : ''}" data-wk="${k}">${KAT[k][0]}</button>`).join('')}
+        <span style="width:12px"></span><button class="tab ${!mies ? 'on' : ''}" data-wo="t">Tygodnie</button><button class="tab ${mies ? 'on' : ''}" data-wo="m">Miesiące</button></div>
+      ${serie.length ? `<div class="card"><div class="mute" style="margin-bottom:4px">${KAT[kat][0]} – ${KAT[kat][1]} · puste kółko = mało danych</div>
+        <svg viewBox="0 0 600 250" class="wchart" role="img" aria-label="Wykres: ${KAT[kat][0]} wg ekip">${siatka}${linie}${osX}</svg>
+        <div class="row wleg">${serie.map(s => `<span class="row"><svg width="28" height="8"><line x1="0" x2="28" y1="4" y2="4" stroke="${s.kol}" stroke-width="3" stroke-dasharray="${s.dash}"/></svg>${U.esc(ekN(s.ek))}</span>`).join('')}</div></div>
+        <div class="grid2" style="margin-top:12px">${serie.map(karta).join('')}</div>` : '<div class="card mute">Brak wpisów ekip z ostatnich 12 tygodni.</div>'}`;
+    $('#wBud').onclick = () => UI.go('priorytety');
+    view.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, k: b.dataset.wk }, { zastap: true }));
+    view.querySelectorAll('[data-wo]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, o: b.dataset.wo }, { zastap: true }));
+  },
   async dokumenty(par) {
     const tech = par.typ === 'tech';
     const p = curProj(); if (!p && !tech) return UI.go('home');
@@ -1255,6 +1342,7 @@ function settings() {
   $('#nPlan').onclick = () => { UI.close(); UI.go('plan'); };
   $('#nBud').onclick = () => { UI.close(); UI.go('home'); };
   $('#nDok').onclick = () => { UI.close(); UI.go('dokumenty', { typ: 'tech' }); };
+  $('#nPrio').onclick = () => { UI.close(); UI.go('priorytety'); };
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });
   window.addEventListener('offline', () => UI.net());

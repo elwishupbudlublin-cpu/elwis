@@ -1,5 +1,15 @@
 # Zmiany
 
+## 1.18.0 – 2026-11-10 (aplikacja + serwer, schemat 1.8)
+- Ekran „Wydajność ekip” (tylko rola biuro): wykres trendu tygodniowego / miesięcznego z porównaniem ekip w 4 kategoriach – podłączenia (% normy dnia), terminowość zadań, kompletność wpisów (nr seryjne), przestoje (braki blokujące); karta ekipy z wynikiem, strzałką trendu i zmierzonym czasem na typ urządzenia.
+- Progi alarmowe i normy czasu w Bazie → Konfiguracja (`progi`, `normy_min`); przekroczony próg = alarm na ekranach Priorytety i Wydajność ekip.
+- Komentarz z analizy Claude (`analiza_claude` w Konfiguracji) widoczny na ekranie Priorytety i na kafelkach budów.
+
+## 1.17.0 – 2026-11-10 (aplikacja + serwer)
+- Ekran „Priorytety” (tylko rola biuro, czwarty przycisk dolnego paska): kafelki wszystkich aktywnych budów w kolejności wymaganego działania – pilne, uwaga, w normie.
+- Silnik reguł na serwerze (operacja `priorytety`, tylko odczyt): termin „Koniec umowny projektu” i zapas dni roboczych, zamówienia (po terminie / najpóźniejszy dzień zamówienia), zadania po terminie, przerwane i niepodjęte, start bez ekipy, zadania blokujące inne (zależności ClickUp), braki blokujące, tempo podłączeń wobec potrzebnego, brak protokołów, punkty „Do weryfikacji po rozpoznaniu”.
+- Przeliczanie co godzinę (funkcja `instalacjaPriorytetow` uruchamiana raz z edytora) albo przyciskiem „Przelicz teraz”; wynik dostępny offline.
+
 ## 1.16.0 – 2026-11-10 (aplikacja + serwer)
 - Szybsza synchronizacja: pliki (rzuty, dokumenty, DTR) pobierane po 3 naraz – narzut serwera na każde zapytanie nakłada się zamiast sumować (pierwsze pobranie 30 budów ok. 2× szybciej).
 - Serwer pamięta listę tabletów (60 s) i aktywnych budów (5 min) – każde zapytanie nie czyta Bazy od nowa; nowa / wyłączona budowa widoczna na tabletach najpóźniej po 5 min (pinezka – od razu).

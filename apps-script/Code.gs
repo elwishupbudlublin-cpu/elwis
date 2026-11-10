@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.16.0';
+const SCRIPT_VERSION = '1.18.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -61,6 +61,7 @@ function handle_(p, body) {
       case 'push': return out_(push_(body, tablet));
       case 'zadania': return out_(zadania_(body || {}, tablet));
       case 'docx': return out_(docx_(body || {}));
+      case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
   } catch (err) {
@@ -801,4 +802,243 @@ function archiwizuj() {
   const kopia = id => { const f = DriveApp.getFileById(id); f.makeCopy(day + ' ' + f.getName(), arch); };
   kopia(P.getProperty('BAZA_ID'));
   rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
+}
+
+/* ===================== Priorytety budów i wydajność ekip (od 1.17.0) =====================
+ * Silnik reguł – tylko odczyt: zadania list ClickUp aktywnych budów + zakładki Urządzenia / Zdarzenia.
+ * Wynik w pamięci skryptu (właściwości PRIO_n), liczony wyzwalaczem co godzinę (instalacjaPriorytetow) albo na żądanie roli biuro.
+ * Ustawienia w Bazie → Konfiguracja (schemat 1.8): `normy_min` („H:30; SZ:480”), `progi` („koniec_pilne:14; …”), `analiza_claude`. */
+const NORMY_DOM = { H: 30, R: 45, P: 20, S: 60, W: 60, O: 90, N: 90, SZN: 360, SZ: 480, SP: 240, CO: 360, C: 480, K: 30, Z: 45, DC: 20, DL: 20, DT: 30, I: 30 };
+const PROGI_DOM = { koniec_pilne: 14, koniec_uwaga: 30, start: 7, dostawa: 14, uruch_dni: 2, zamkn_dni: 1, czas_wydluzenie: 20, terminowosc: 80 };
+function pary_(s, dom) {
+  const o = Object.assign({}, dom);
+  txt_(s).split(';').forEach(x => { const i = x.indexOf(':'); if (i < 0) return; const k = x.slice(0, i).trim(), v = Number(x.slice(i + 1).trim().replace(',', '.')); if (k && !isNaN(v)) o[k] = v; });
+  return o;
+}
+function instalacjaPriorytetow() {
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'przeliczPriorytety')) ScriptApp.newTrigger('przeliczPriorytety').timeBased().everyHours(1).create();
+  przeliczPriorytety();
+  Logger.log('OK. Priorytety przeliczane co godzinę.');
+}
+const DZIEN = 864e5;
+function dzien_(t) { return Utilities.formatDate(new Date(t), 'Europe/Warsaw', 'yyyy-MM-dd'); }
+function rob_(d) { const w = new Date(d).getUTCDay(); return w !== 0 && w !== 6; }
+/** dni robocze od a do b (b > a → dodatnie) */
+function dniRob_(a, b) {
+  const s = a < b ? 1 : -1; let n = 0;
+  for (let t = Math.min(a, b) + DZIEN; t <= Math.max(a, b); t += DZIEN) if (rob_(t)) n++;
+  return s * n;
+}
+function minusRob_(t, n) { while (n > 0) { t -= DZIEN; if (rob_(t)) n--; } return t; }
+function poniedzialek_(ts) { const d = new Date(String(ts).slice(0, 10) + 'T12:00:00Z'); const w = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - w * DZIEN).toISOString().slice(0, 10); }
+function pref_(id) { return (String(id).match(/^[A-Za-z]+/) || [''])[0].toUpperCase(); }
+
+function zadaniaList_(projekty) {
+  const token = P.getProperty('CLICKUP_TOKEN'); const out = {};
+  if (!token) return out;
+  const H = { headers: { Authorization: token }, muteHttpExceptions: true };
+  const url = (id, pg) => 'https://api.clickup.com/api/v2/list/' + encodeURIComponent(id) + '/task?include_closed=true&subtasks=true&page=' + pg;
+  let kolejka = projekty.filter(p => p.listaCU).map(p => ({ kod: p.kod, id: p.listaCU, pg: 0 }));
+  for (let runda = 0; runda < 6 && kolejka.length; runda++) {
+    const nast = [];
+    for (let i = 0; i < kolejka.length; i += 20) {
+      const part = kolejka.slice(i, i + 20);
+      const res = UrlFetchApp.fetchAll(part.map(k => Object.assign({ url: url(k.id, k.pg) }, H)));
+      res.forEach((r, j) => {
+        const k = part[j];
+        if (r.getResponseCode() !== 200) { out[k.kod] = out[k.kod] || null; return; }
+        const d = JSON.parse(r.getContentText());
+        out[k.kod] = (out[k.kod] || []).concat(d.tasks || []);
+        if (!d.last_page && (d.tasks || []).length) nast.push({ kod: k.kod, id: k.id, pg: k.pg + 1 });
+      });
+      if (i + 20 < kolejka.length) Utilities.sleep(1500);
+    }
+    kolejka = nast;
+  }
+  return out;
+}
+
+function przeliczPriorytety() {
+  const start = Date.now(), k = konfig_();
+  const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
+  const projekty = aktywne_(), zadania = zadaniaList_(projekty);
+  const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
+  const prac = rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => txt_(r[0]));
+  const ekipaOs = {}, ekipaCu = {};
+  const nazwaEk = v => txt_(v).replace(/\s*\(.*\)\s*/g, '').replace(/^ekipa\s*/i, '').trim();   // „Ekipa 1 (lider)” → „1”
+  prac.forEach(r => { const ek = nazwaEk(r[1]); if (txt_(r[2]) === 'biuro' || !ek || /biuro/i.test(ek)) return; ekipaOs[txt_(r[0])] = ek; if (txt_(r[5])) ekipaCu[txt_(r[5])] = ek; });
+  const dzis = Date.now(), dzisD = dzien_(dzis);
+  const W = { tyg: {}, typ: {} };   // wydajność: tydzień → ekipa → liczniki; ekipa → typ → [norma, czas, n]
+  const w_ = (tydz, ek) => { const t = W.tyg[tydz] = W.tyg[tydz] || {}; return t[ek] = t[ek] || { nm: 0, dni: {}, k: [0, 0], prz: 0, t: [0, 0] }; };
+  const granica = poniedzialek_(new Date(dzis - 12 * 7 * DZIEN).toISOString());
+  const wynik = []; let pominiete = 0;
+  const data_ = t => { const d = new Date(t); return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2); };
+
+  projekty.forEach(p => {
+    if (Date.now() - start > 4.5 * 60000) { pominiete++; return; }
+    const pow = []; const dodaj = (poz, txt, url, kiedy) => pow.push({ poz: poz, txt: String(txt).slice(0, 160), url: url || '', kiedy: kiedy || 0 });
+    /* --- Baza: urządzenia i zdarzenia --- */
+    let wszystkie = 0, gotowe = 0, zostaloMin = 0, zostaloSzt = 0, tempo = 0, protGot = 0, maZdarzenia = false;
+    try {
+      const ss = SpreadsheetApp.openById(p.lista), shU = ss.getSheetByName('Urządzenia');
+      const urz = shU && shU.getLastRow() > 1 ? shU.getRange(2, 1, shU.getLastRow() - 1, 11).getDisplayValues().filter(r => txt_(r[0])) : [];
+      const stat = {}; urz.forEach(r => {
+        const id = txt_(r[0]), s = txt_(r[10]); stat[id] = s; wszystkie++;
+        if (s === 'gotowe') { gotowe++; return; }
+        zostaloSzt++; zostaloMin += (normy[pref_(id)] || 30) * (s === 'w toku' ? 0.5 : 1);
+      });
+      const shZ = ss.getSheetByName('Zdarzenia');
+      const ev = shZ && shZ.getLastRow() > 1 ? shZ.getRange(2, 1, shZ.getLastRow() - 1, 7).getDisplayValues()
+        .map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), kto: txt_(r[2]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) })).sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) : [];
+      maZdarzenia = ev.length > 0;
+      const braki = {}, ost = {}, sn = {}, prot = {};
+      ev.forEach(e => {
+        const ek = ekipaOs[e.kto], d = e.ts.slice(0, 10), tydz = d >= granica ? poniedzialek_(e.ts) : '';
+        if (ek && tydz) w_(tydz, ek).dni[d] = 1;
+        if (e.typ === 'brak') { braki[e.id] = { open: true, blok: !!e.d.blokuje, ts: e.ts }; if (ek && tydz && e.d.blokuje) w_(tydz, ek).prz++; }
+        if (e.typ === 'brak_zamk' && braki[e.d.bid]) braki[e.d.bid].open = false;
+        if (e.typ === 'brak_edyc' && braki[e.d.bid]) { if (e.d.usun) delete braki[e.d.bid]; else if (e.d.otworz) braki[e.d.bid].open = true; }
+        if (e.typ === 'krok' && e.d.wart) ost[e.urz] = e;
+        if (e.typ === 'nr' && e.d.sn) sn[e.urz] = true;
+        if (e.typ === 'protokol' && e.d.pid) prot[e.d.pid] = e.d.stan;
+      });
+      protGot = Object.keys(prot).filter(x => prot[x] === 'gotowy' || prot[x] === 'zablokowany').length;
+      const okno = new Date(dzis - 14 * DZIEN).toISOString(); let wOknie = 0;
+      const dzienEkipy = {};   // ekipa|dzień → [prefiksy ukończonych urządzeń]
+      Object.keys(ost).forEach(id => {
+        if (stat[id] !== 'gotowe') return;
+        const e = ost[id]; if (e.ts >= okno) wOknie++;
+        const ek = ekipaOs[e.kto], d = e.ts.slice(0, 10); if (!ek || d < granica) return;
+        const pr = pref_(id), o = w_(poniedzialek_(e.ts), ek);
+        o.nm += normy[pr] || 30;
+        const wym = (typy[pr] || {}).sn; o.k[1]++; if (!wym || sn[id]) o.k[0]++;
+        (dzienEkipy[ek + '|' + d] = dzienEkipy[ek + '|' + d] || []).push(pr);
+      });
+      Object.keys(dzienEkipy).forEach(kl => {   // rzeczywisty czas na urządzenie: 480 min dnia dzielone proporcjonalnie do norm
+        const ek = kl.split('|')[0], lista = dzienEkipy[kl], suma = lista.reduce((a, pr) => a + (normy[pr] || 30), 0);
+        lista.forEach(pr => { const n = normy[pr] || 30; const t = (W.typ[ek] = W.typ[ek] || {}); const x = t[pr] = t[pr] || [n, 0, 0]; x[1] += 480 * n / suma; x[2]++; });
+      });
+      tempo = Math.round(wOknie / 10 * 10) / 10;
+      const blok = Object.keys(braki).filter(b => braki[b].open && braki[b].blok).length;
+      const stare = Object.keys(braki).filter(b => braki[b].open && !braki[b].blok && braki[b].ts < new Date(dzis - 7 * DZIEN).toISOString()).length;
+      if (blok) dodaj(2, blok + (blok === 1 ? ' brak blokujący pracę' : ' braki blokujące pracę'));
+      if (stare) dodaj(1, 'Otwarte braki starsze niż 7 dni: ' + stare);
+    } catch (e) { dodaj(1, 'Lista urządzeń niedostępna'); }
+
+    /* --- ClickUp: terminy, zamówienia, zależności --- */
+    const zad = zadania[p.kod]; let koniec = 0, nast = null, koniecZamk = false;
+    if (!p.listaCU) dodaj(1, 'Brak listy ClickUp w Bazie');
+    else if (!zad) dodaj(1, 'Lista ClickUp niedostępna');
+    else {
+      const poId = {}; zad.forEach(t => { poId[t.id] = t; });
+      const rodzic = {}; zad.forEach(t => { if (t.parent && poId[t.parent]) rodzic[t.parent] = true; });
+      const zamk = t => !!(t.status && /closed|done/.test(t.status.type));
+      const faza = t => { let x = t, n = 0; while (x.parent && poId[x.parent] && n++ < 6) x = poId[x.parent]; return txt_(x.name).toLowerCase(); };
+      const km = zad.find(t => /koniec umown/i.test(t.name));
+      if (km && km.due_date) { koniec = Number(km.due_date); koniecZamk = zamk(km); }
+      const otw = zad.filter(t => !zamk(t) && !rodzic[t.id] && t !== km);
+      const uruchOtw = otw.some(t => /uruchom|pomiar/.test(faza(t)));
+      const potrzeba = Math.ceil(zostaloMin / 480) + (uruchOtw || zostaloSzt ? progi.uruch_dni : 0) + (otw.length ? progi.zamkn_dni : 0);
+      const dniK = koniec ? dniRob_(dzis, koniec) : null, dKal = koniec ? Math.ceil((koniec - dzis) / DZIEN) : null;
+      const zapas = koniec ? dniK - potrzeba : null;
+      p._ = { dKal: dKal, zapas: zapas, potrzeba: potrzeba };
+      if (!koniec) dodaj(1, 'Brak terminu „Koniec umowny projektu”');
+      else if (!koniecZamk && (otw.length || zostaloSzt)) {
+        if (dKal < 0) dodaj(2, 'Termin umowny minął ' + (-dKal) + ' dni temu, praca nieskończona', km.url, koniec);
+        else if (zapas < 0) dodaj(2, 'Za mało czasu: potrzeba ok. ' + potrzeba + ' dni rob., zostało ' + dniK, km.url, koniec);
+        else if (dKal <= progi.koniec_pilne) dodaj(2, 'Koniec umowny za ' + dKal + ' dni, praca nieskończona', km.url, koniec);
+        else if (dKal <= progi.koniec_uwaga) dodaj(1, 'Koniec umowny za ' + dKal + ' dni', km.url, koniec);
+        const dniMont = Math.max(1, dniK - progi.uruch_dni - progi.zamkn_dni), trzeba = Math.round(zostaloSzt / dniMont * 10) / 10;
+        p._.trzeba = trzeba;
+        if (zostaloSzt && maZdarzenia && tempo > 0 && trzeba > tempo) dodaj(dKal <= progi.koniec_pilne ? 2 : 1, 'Tempo podłączeń ' + String(tempo).replace('.', ',') + '/dzień, potrzeba ' + String(trzeba).replace('.', ',') + '/dzień – przyspieszyć lub dołożyć ekipę');
+      }
+      otw.forEach(t => {
+        const f = faza(t), due = t.due_date ? Number(t.due_date) : 0, st = t.start_date ? Number(t.start_date) : 0, s = txt_(t.status && t.status.status).toLowerCase();
+        const zamow = /zam[oó]w|logisty/.test(f) || /^zam[oó]wi/i.test(t.name);
+        if (zamow) {
+          const najp = koniec && !koniecZamk ? minusRob_(koniec, p._.potrzeba) - progi.dostawa * DZIEN : 0;
+          if (due && due < dzis) dodaj(2, 'Zamówienie po terminie (' + data_(due) + '): ' + t.name, t.url, due);
+          else if (najp && najp <= dzis) dodaj(2, 'Zamówić natychmiast (dostawa ok. ' + progi.dostawa + ' dni): ' + t.name, t.url, najp);
+          else if (najp && najp <= dzis + progi.start * DZIEN) dodaj(1, 'Zamówić najpóźniej ' + data_(najp) + ': ' + t.name, t.url, najp);
+          else if (due && due <= dzis + progi.start * DZIEN) dodaj(1, 'Zamówienie do ' + data_(due) + ': ' + t.name, t.url, due);
+        } else if (due && due < dzis - DZIEN / 2) {
+          dodaj(/monta|wykonaw|uruchom|pomiar/.test(f) ? 2 : 1, 'Po terminie ' + Math.ceil((dzis - due) / DZIEN) + ' dni: ' + t.name, t.url, due);
+        }
+        if (s === 'update required') { const od = Math.floor((dzis - Number(t.date_updated || dzis)) / DZIEN); dodaj(od >= 3 ? 2 : 1, 'Przerwane (Do kontynuacji) od ' + od + ' dni: ' + t.name, t.url, due); }
+        if (s === 'on hold') dodaj(1, 'Zadanie niepodjęte: ' + t.name, t.url, due);
+        const kiedy = st || due;
+        if (!zamow && kiedy && kiedy >= dzis && kiedy <= dzis + progi.start * DZIEN && !(t.assignees || []).length && /monta|wykonaw|uruchom|pomiar/.test(f)) dodaj(1, data_(kiedy) + ' bez ekipy: ' + t.name, t.url, kiedy);
+        if (due && due >= dzis && (!nast || due < nast.due)) nast = { due: due, txt: t.name };
+      });
+      const zal = {}; zad.forEach(t => (t.dependencies || []).forEach(d => { zal[d.task_id + '>' + d.depends_on] = d; }));   // zadanie blokujące inne z bliskim terminem
+      Object.keys(zal).forEach(kl => {
+        const d = zal[kl], t = poId[d.depends_on], cz = poId[d.task_id]; if (!t || !cz || zamk(t) || zamk(cz)) return;
+        const kc = Number(cz.start_date || cz.due_date || 0); if (!kc || kc > dzis + progi.start * DZIEN) return;
+        dodaj(kc < dzis ? 2 : 1, 'Blokuje „' + cz.name + '” (' + data_(kc) + '): ' + t.name, t.url, kc);
+      });
+      const wer = zad.find(t => /do weryfikacji po rozpoznaniu/i.test(t.name) && !zamk(t));
+      if (wer) { let n = 0; (wer.checklists || []).forEach(c => (c.items || []).forEach(i => { if (!i.resolved) n++; })); if (n) dodaj(1, 'Do weryfikacji po rozpoznaniu: ' + n + ' pkt', wer.url); }
+      zad.forEach(t => {   // terminowość ekip: zadania zamknięte w ostatnich 12 tygodniach
+        if (!zamk(t) || rodzic[t.id] || !t.date_closed || !t.due_date) return;
+        const dc = Number(t.date_closed), tydz = poniedzialek_(new Date(dc).toISOString()); if (tydz < granica) return;
+        const eks = {}; (t.assignees || []).forEach(a => { const ek = ekipaCu[String(a.id)]; if (ek) eks[ek] = 1; });
+        Object.keys(eks).forEach(ek => { const o = w_(tydz, ek); o.t[1]++; if (dc <= Number(t.due_date) + DZIEN) o.t[0]++; });
+      });
+    }
+    if (wszystkie && gotowe === wszystkie && !protGot && p.zakres.length && !koniecZamk) dodaj(p._ && p._.dKal != null && p._.dKal <= progi.koniec_pilne ? 2 : 1, 'Podłączone 100%, brak protokołów');
+    pow.sort((a, b) => b.poz - a.poz || (a.kiedy || 9e15) - (b.kiedy || 9e15));
+    const x = p._ || {};
+    wynik.push({ kod: p.kod, nazwa: p.nazwa, poz: pow.length ? pow[0].poz : 0, koniec: koniec && !koniecZamk ? dzien_(koniec) : '', dni: koniecZamk ? null : x.dKal, zapas: koniecZamk ? null : x.zapas,
+      postep: [gotowe, wszystkie], tempo: tempo, trzeba: x.trzeba || 0, powody: pow.slice(0, 8).map(q => ({ poz: q.poz, txt: q.txt, url: q.url })), ile: pow.length,
+      nast: nast ? data_(nast.due) + ' ' + String(nast.txt).slice(0, 60) : '' });
+    delete p._;
+  });
+  wynik.sort((a, b) => b.poz - a.poz || (a.dni == null ? 9e9 : a.dni) - (b.dni == null ? 9e9 : b.dni) || (a.kod < b.kod ? -1 : 1));
+
+  /* --- wydajność ekip: serie tygodniowe + alarmy --- */
+  const tyg = Object.keys(W.tyg).sort().slice(-12), ekipy = {};
+  tyg.forEach(t => Object.keys(W.tyg[t]).forEach(e => { ekipy[e] = 1; }));
+  const proc = (a, b) => b ? Math.round(a / b * 100) : null;
+  const serie = Object.keys(ekipy).sort().map(ek => ({
+    ekipa: ek, dane: tyg.map(t => {
+      const o = W.tyg[t][ek]; if (!o) return null; const dni = Object.keys(o.dni).length;
+      return { dni: dni, podl: dni ? Math.round(o.nm / (dni * 480) * 100) : null, term: proc(o.t[0], o.t[1]), ileT: o.t[1], kompl: proc(o.k[0], o.k[1]), prz: o.prz };
+    }),
+    typy: Object.keys(W.typ[ek] || {}).map(pr => { const x = W.typ[ek][pr]; return { typ: pr, norma: x[0], czas: Math.round(x[1] / x[2]), n: x[2] }; })
+  }));
+  const alarmy = [];
+  serie.forEach(s => {
+    const zD = s.dane.filter(d => d && d.podl != null && d.dni >= 2);
+    if (zD.length >= 4) {
+      const ost2 = zD.slice(-2), wcz = zD.slice(-6, -2), sr = wcz.reduce((a, d) => a + d.podl, 0) / wcz.length, prog = sr * (1 - progi.czas_wydluzenie / 100);
+      if (sr > 0 && ost2.every(d => d.podl < prog)) alarmy.push({ ekipa: s.ekipa, txt: ekN_(s.ekipa) + ': wydajność podłączeń 2 tygodnie z rzędu niższa o ponad ' + progi.czas_wydluzenie + '% od własnej średniej (' + ost2.map(d => d.podl + '%').join(', ') + ' wobec ' + Math.round(sr) + '%)' });
+    }
+    const ost = s.dane.filter(d => d && d.term != null && d.ileT >= 3).slice(-1)[0];
+    if (ost && ost.term < progi.terminowosc) alarmy.push({ ekipa: s.ekipa, txt: ekN_(s.ekipa) + ': terminowość ' + ost.term + '% (próg ' + progi.terminowosc + '%)' });
+  });
+  const res = { czas: Date.now(), projekty: wynik, pominiete: pominiete, alarmy: alarmy, wyd: { tyg: tyg, serie: serie }, progi: progi, brakKlucza: !P.getProperty('CLICKUP_TOKEN') };
+  zapiszDuze_('PRIO', JSON.stringify(res));
+  return res;
+}
+function ekN_(e) { return /^\d+$/.test(e) ? 'Ekipa ' + e : e; }
+function zapiszDuze_(nazwa, json) {
+  const stare = Number(P.getProperty(nazwa + '_N') || 0), n = Math.ceil(json.length / 8000), o = {};
+  for (let i = 0; i < n; i++) o[nazwa + '_' + i] = json.slice(i * 8000, (i + 1) * 8000);
+  o[nazwa + '_N'] = String(n); P.setProperties(o);
+  for (let i = n; i < stare; i++) P.deleteProperty(nazwa + '_' + i);
+}
+function czytajDuze_(nazwa) {
+  const n = Number(P.getProperty(nazwa + '_N') || 0); if (!n) return null;
+  const all = P.getProperties(); let s = ''; for (let i = 0; i < n; i++) s += all[nazwa + '_' + i] || '';
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+/** Operacja `priorytety` – tylko rola biuro. `odswiez=1` przelicza od razu (do kilku minut). */
+function priorytety_(kto, odswiez) {
+  if (!rolaBiuro_()[txt_(kto)]) throw new Error('Priorytety – tylko rola biuro');
+  let r = odswiez ? null : czytajDuze_('PRIO');
+  if (!r) r = przeliczPriorytety();
+  const kom = {}; txt_(konfig_().analiza_claude).split(/\n+/).forEach(l => { const m = l.match(/^\s*([0-9]{2}[_p][0-9]{3})\s*[:–-]\s*(.+)$/); if (m) kom[m[1]] = m[2].slice(0, 300); else if (l.trim() && !kom._) kom._ = l.trim().slice(0, 400); });
+  r.projekty.forEach(p => { if (kom[p.kod]) p.kom = kom[p.kod]; });
+  r.komentarz = kom._ || '';
+  return Object.assign({ ok: true }, r);
 }
