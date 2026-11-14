@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.21.0 – 2026-11-14 (aplikacja)
+- Konfiguracja tabletu: przycisk „Skanuj QR” przy adresie serwera – adres `…/exec` wczytuje się z kodu QR wygenerowanego na komputerze (np. Chrome → Udostępnij → Utwórz kod QR). Działa także w trybie kiosku, bez przepisywania długiego adresu. Klucz tabletu wpisuje się jak dotąd.
+
 ## 1.20.1 – 2026-11-10 (aplikacja)
 - Poprawka: na ekranie Plan wróciła oś godzin i układ kolumn (błąd z 1.17.0 – pomyłkowo zmieniona nazwa klasy siatki planu).
 

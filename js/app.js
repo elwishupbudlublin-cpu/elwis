@@ -102,7 +102,8 @@ const Views = {
         <p class="mute">Jednorazowo, przy WiFi. Adres i klucz tabletu podaje biuro (zakładka Tablety w Bazie projektów).</p>
         <div class="card">
           <label class="f" for="cUrl">Adres serwera ELWIS</label>
-          <input id="cUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+          <div class="row"><input id="cUrl" class="grow" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+            <button class="btn" id="cScan" type="button">Skanuj QR</button></div>
           <label class="f" for="cKey">Klucz tabletu</label>
           <input id="cKey" type="text" autocomplete="off" placeholder="np. T2-…">
           <label class="f" for="cName">Nazwa tabletu</label>
@@ -112,6 +113,14 @@ const Views = {
         </div>
         <p class="mute">Wersja aplikacji ${APP_VERSION}</p>
       </div>`;
+    // od 1.21.0: adres serwera z kodu QR (kod robi się na komputerze z adresu …/exec; adres nie trafia do repozytorium)
+    $('#cScan').onclick = () => Dialogs.scan(code => {
+      const m = String(code || '').trim().match(/https:\/\/script\.google(usercontent)?\.com\/\S+/);
+      if (!m) { $('#cMsg').textContent = 'Kod QR nie zawiera adresu serwera ELWIS (https://script.google.com/…/exec).'; return; }
+      $('#cUrl').value = m[0];
+      $('#cMsg').textContent = /\/exec$/.test(m[0]) ? 'Adres serwera wczytany z kodu QR.' : 'Adres wczytany – sprawdź, czy kończy się na /exec.';
+      $('#cKey').focus();
+    });
     $('#cGo').onclick = async () => {
       const url = $('#cUrl').value.trim(), key = $('#cKey').value.trim(), tablet = $('#cName').value.trim();
       if (!/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(url) || !key) { $('#cMsg').textContent = 'Podaj adres (https://…) i klucz.'; return; }
