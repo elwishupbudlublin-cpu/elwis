@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.21.1 – 2026-11-14 (aplikacja)
+- Poprawka 1.21.0: kod QR zrobiony w przeglądarce otwartej na adresie `…/exec` zawierał adres przekierowania `script.googleusercontent.com/…/echo` (jednorazowa odpowiedź serwera – zawsze „Nieznany lub wyłączony klucz tabletu”). Taki adres jest teraz odrzucany przy skanowaniu i przy połączeniu, z podpowiedzią, skąd wziąć właściwy.
+
 ## 1.21.0 – 2026-11-14 (aplikacja)
 - Konfiguracja tabletu: przycisk „Skanuj QR” przy adresie serwera – adres `…/exec` wczytuje się z kodu QR wygenerowanego na komputerze (np. Chrome → Udostępnij → Utwórz kod QR). Działa także w trybie kiosku, bez przepisywania długiego adresu. Klucz tabletu wpisuje się jak dotąd.
 

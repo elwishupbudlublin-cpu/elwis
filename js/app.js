@@ -115,7 +115,10 @@ const Views = {
       </div>`;
     // od 1.21.0: adres serwera z kodu QR (kod robi się na komputerze z adresu …/exec; adres nie trafia do repozytorium)
     $('#cScan').onclick = () => Dialogs.scan(code => {
-      const m = String(code || '').trim().match(/https:\/\/script\.google(usercontent)?\.com\/\S+/);
+      const t = String(code || '').trim();
+      // 1.21.1: QR z przeglądarki otwartej na …/exec bywa adresem przekierowania script.googleusercontent.com/…/echo – jednorazowym, nie serwerem
+      if (/script\.googleusercontent\.com/.test(t)) { $('#cMsg').textContent = 'To adres przekierowania, nie serwera. Zrób kod QR z adresu …/exec (wklej go w polu okna „Utwórz kod QR”).'; return; }
+      const m = t.match(/https:\/\/script\.google\.com\/macros\/\S+/);
       if (!m) { $('#cMsg').textContent = 'Kod QR nie zawiera adresu serwera ELWIS (https://script.google.com/…/exec).'; return; }
       $('#cUrl').value = m[0];
       $('#cMsg').textContent = /\/exec$/.test(m[0]) ? 'Adres serwera wczytany z kodu QR.' : 'Adres wczytany – sprawdź, czy kończy się na /exec.';
@@ -124,6 +127,7 @@ const Views = {
     $('#cGo').onclick = async () => {
       const url = $('#cUrl').value.trim(), key = $('#cKey').value.trim(), tablet = $('#cName').value.trim();
       if (!/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(url) || !key) { $('#cMsg').textContent = 'Podaj adres (https://…) i klucz.'; return; }
+      if (/script\.googleusercontent\.com/.test(url)) { $('#cMsg').textContent = 'To adres przekierowania, nie serwera. Wpisz adres …/exec z Apps Script (Wdróż → Zarządzaj wdrożeniami).'; return; }
       $('#cMsg').textContent = 'Łączę…';
       try {
         const b = await API.test(url, key);
