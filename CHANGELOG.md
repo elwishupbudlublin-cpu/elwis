@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.23.2 – 2026-11-16 (aplikacja)
+- Plan „Wszyscy”: po dotknięciu osoby w pasku osób pasek zostaje w tym samym miejscu (wcześniej przewijał się na początek).
+
 ## 1.23.1 – 2026-11-16 (aplikacja)
 - Kafelek „Urządzenia” na ekranie budowy: te same liczniki co na liście budów (uruchomione / podłączone / rozpoczęte / wszystkie, pasek w trzech odcieniach, „⚠ N usterek”) – dla wybranego etapu.
 

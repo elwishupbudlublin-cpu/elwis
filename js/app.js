@@ -370,7 +370,8 @@ const Views = {
     const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
-    view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
+    { const pp = view.querySelector('.ppeople'); if (pp && ppScroll) pp.scrollLeft = ppScroll; }   // 1.23.2: pasek osób zostaje w miejscu po wyborze osoby
+    view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { ppScroll = b.closest('.ppeople').scrollLeft; const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
       await zapiszWid({ wybrani: kolejnosc.filter(o => !u.has(o.name)).map(o => o.name) }); idz({ ukryj: [...u] }); });
     // dotknięcie zadania → okienko z danymi z ClickUp, statusem i „Przejdź do budowy” (od 1.12.0)
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
@@ -750,6 +751,8 @@ const Views = {
     bindEtap();
   }
 };
+
+let ppScroll = 0;   // przewinięcie paska osób w planie „Wszyscy” (od 1.23.2)
 
 /* Liczniki budowy (od 1.23.0) – te same zasady co na serwerze (przelicz_) */
 function liczBudowy(urz, F) {
