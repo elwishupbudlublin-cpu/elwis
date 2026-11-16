@@ -920,6 +920,7 @@ const Dialogs = {
       <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan">Na rzucie</button></div>
     </div></div>`;
     modal.querySelectorAll('[data-sys]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.sys));
+    modal.querySelectorAll('[data-otw]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.otw));   // od 1.28.0: braki systemu → karta urządzenia
     $('#dx').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
     modal.querySelectorAll('.step').forEach(b => b.onclick = async () => {
       const i = +b.dataset.k; const s = st.kroki[i]; const kr = U.krok(t.kroki[i]);

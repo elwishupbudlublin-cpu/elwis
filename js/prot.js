@@ -91,6 +91,24 @@ function urzSystemu(urzId) {
   return ((S.proj || {}).urzadzenia || []).filter(u => u.id !== urzId && sysList(u).indexOf(urzId) >= 0 && (!S.etap || !u.etap || u.etap === S.etap))
     .sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.id, b.id));
 }
+/* Gotowość systemu szafy do protokołu (od 1.28.0): każde urządzenie systemu ma wszystkie kroki i – gdy typ wymaga – nr seryjny.
+   Zwraca { czl: urządzenia systemu, braki: [{id, txt}] }; czl pusty = szafa bez systemu (protokół bez ograniczeń, jak dotąd). */
+function gotowoscSystemu(id, F) {
+  F = F || fold(S.ev);
+  const czl = urzSystemu(id), braki = [];
+  czl.forEach(u => {
+    const t = typOf(u.id), st = F.dev[u.id], kroki = t.kroki || [];
+    const brakKr = kroki.filter((k, i) => !(st && st.kroki[i] && st.kroki[i].val)).map(k => U.krok(k).n);
+    const sn = (st && st.sn) || u.sn || '';
+    const txt = [brakKr.length ? 'nie uruchomione – brak: ' + brakKr.join(', ') : '', t.sn && !sn ? 'brak nr seryjnego' : ''].filter(Boolean).join(' · ');
+    if (txt) braki.push({ id: u.id, txt });
+  });
+  return { czl, braki };
+}
+function blokGotowosci(g) {
+  return `<div class="badbox" style="font-size:14px"><b>Protokół dostępny, gdy wszystkie urządzenia systemu (${g.czl.length}) są uruchomione i mają nr seryjny. Brakuje (${g.braki.length}):</b>
+    <div class="stack" style="margin-top:6px;gap:4px">${g.braki.map(b => `<button type="button" class="btn sm" data-otw="${U.esc(b.id)}" style="text-align:left;justify-content:flex-start"><b>${U.esc(b.id)}</b>&nbsp;– ${U.esc(b.txt)}</button>`).join('')}</div></div>`;
+}
 const pasujeTyp = (typy, id) => { const t = (typy || []).map(x => String(x).toUpperCase()); return !t.length || t.indexOf(U.prefix(id)) >= 0; };
 
 /* Nowy protokół: wartości domyślne + pola „pamiętaj dla budowy” z ostatniego protokołu tej budowy.
@@ -147,10 +165,12 @@ function protKarta(id, F) {
   const ded = Prot.dedykowaneUrz(id), inne = Prot.inneUrz(id), ist = Prot.dlaUrzStan(id, F);
   const doWyk = ded.filter(q => !ist.some(x => x.def === q.id));
   const nazwa = x => (Prot.def(x.def, x.wersja) || {}).nazwa || x.def;
+  const g = ded.length ? gotowoscSystemu(id, F) : { czl: [], braki: [] }, blok = g.braki.length ? 'disabled' : '';
   return `<div class="card stack"><div class="lbl">Protokoły</div>
-    ${doWyk.map(q => `<button class="btn pri" data-npr="${U.esc(q.id)}" style="text-align:left">Do wykonania: ${U.esc(q.nazwa)}</button>`).join('')}
+    ${doWyk.map(q => `<button class="btn pri" data-npr="${U.esc(q.id)}" style="text-align:left" ${blok}>Do wykonania: ${U.esc(q.nazwa)}</button>`).join('')}
+    ${g.braki.length && ded.length ? blokGotowosci(g) : ''}
     ${ist.map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc(nazwa(x))}</span>${Prot.chip(x)}</button>`).join('')}
-    ${ded.filter(q => doWyk.indexOf(q) < 0).map(q => `<button class="btn sm" data-npr="${U.esc(q.id)}">+ kolejny: ${U.esc(q.nazwa)}</button>`).join('')}
+    ${ded.filter(q => doWyk.indexOf(q) < 0).map(q => `<button class="btn sm" data-npr="${U.esc(q.id)}" ${blok}>+ kolejny: ${U.esc(q.nazwa)}</button>`).join('')}
     ${inne.length ? `<details><summary class="mute">Inne protokoły (${inne.length})</summary><div class="stack" style="margin-top:6px">${inne.map(q => `<button class="btn sm" data-npr="${U.esc(q.id)}">+ ${U.esc(q.nazwa)}</button>`).join('')}</div></details>` : ''}
   </div>`;
 }
@@ -169,10 +189,10 @@ ProtViews.protokoly = function () {
     return `<h2>${U.esc(pr.nazwa)} <span class="mute" style="font-size:14px">v${U.esc(pr.wersja)}</span></h2>
       ${pr.blad ? `<div class="badbox">${U.esc(pr.blad)}</div>` : ''}
       <div class="list">${urzT.map(u => {
-        const ps = Prot.dlaUrzStan(u.id, F).filter(x => x.def === pr.id);
-        return `<div class="li"><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.kond ? poziomTxt(u.kond) : '')}${u.etap ? ' · etap ' + U.esc(u.etap) : ''}</span></span>
+        const ps = Prot.dlaUrzStan(u.id, F).filter(x => x.def === pr.id), g = gotowoscSystemu(u.id, F);
+        return `<div class="li"><b>${U.esc(u.id)}</b><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.kond ? poziomTxt(u.kond) : '')}${u.etap ? ' · etap ' + U.esc(u.etap) : ''}</span>${g.braki.length ? `<br><span style="color:var(--bad)">system: ${g.braki.length} z ${g.czl.length} ${odm(g.czl.length, 'urządzenia', 'urządzeń', 'urządzeń')} niegotowe</span>` : ''}</span>
           ${ps.map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}">${Prot.chip(x)}</button>`).join('')}
-          <button class="btn sm pri" data-new="${U.esc(pr.id)}" data-u="${U.esc(u.id)}">${ps.length ? '+ kolejny' : 'Wypełnij'}</button></div>`;
+          ${g.braki.length ? `<button class="btn sm" data-otw="${U.esc(u.id)}">Czego brakuje</button>` : `<button class="btn sm pri" data-new="${U.esc(pr.id)}" data-u="${U.esc(u.id)}">${ps.length ? '+ kolejny' : 'Wypełnij'}</button>`}</div>`;
       }).join('')}
       ${bezUrz.map(x => `<div class="li"><span class="grow">${U.esc(x.nr || 'bez urządzenia')}</span><button class="btn sm" data-pid="${U.esc(x.pid)}">${Prot.chip(x)}</button></div>`).join('')}
       ${!Prot.pow(pr).length ? wybor(pr, urz) : urzT.length ? '' : '<div class="li mute">Brak urządzeń tego typu' + (S.etap ? ' w wybranym etapie' : '') + '.</div>'}</div>`;
@@ -186,6 +206,7 @@ ProtViews.protokoly = function () {
     + (poz.length ? `<details class="card" style="margin-top:12px"><summary><b>Pozostałe protokoły (${poz.length})</b></summary><div class="stack" style="margin-top:8px">${poz.map(blokPoz).join('')}</div></details>` : '');
   bindEtap();
   view.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => UI.go('protokol', { pid: b.dataset.pid }));
+  view.querySelectorAll('[data-otw]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.otw));
   view.querySelectorAll('[data-new]').forEach(b => b.onclick = () => {
     const sel = b.dataset.sel ? view.querySelector(`select[data-selfor="${CSS.escape(b.dataset.new)}"]`) : null;
     UI.go('protokol', { nowy: b.dataset.new, urz: sel ? sel.value : b.dataset.u });
@@ -249,14 +270,19 @@ ProtViews.protokol = async function (par) {
     }
     return `<label class="pf ${f.typ === 'tekst_dlugi' ? 'wide' : ''}" data-pf="${U.esc((wi != null ? sek.id + ':' + wi + ':' : '') + f.id)}"><span class="f">${et}</span>${inner}</label>`;
   };
+  // od 1.28.0: kolejne pola z tym samym „siatka” – osobny blok na całą szerokość, 2 kolumny (np. Hz po lewej, A po prawej)
+  const pola = (sek, w, wi) => { const out = []; let blok = null;
+    sek.pola.forEach(f => { const h = pole(f, w, wi, sek);
+      if (f.siatka) { if (!blok || blok.k !== f.siatka) { blok = { k: f.siatka, h: [], w: [] }; out.push(blok); } blok.h.push(h); blok.w.push(f.waga || 0); } else { blok = null; out.push(h); } });
+    return out.map(x => typeof x === 'string' ? x : `<div class="psiatka"${x.w.some(v => v) ? ` style="grid-template-columns:${x.w.map(v => (v || 1) + 'fr').join(' ')}"` : ''}>${x.h.join('')}</div>`).join(''); };
   const sekcja = sek => {
     if (sek.typ === 'tabela') {
       const w = dane[sek.id] = dane[sek.id] || [];
-      return `<section class="card psek" data-sek="${U.esc(sek.id)}"><div class="row"><h2 class="grow" style="margin:0">${U.esc(sek.tytul)} (${w.length})</h2>${tylkoOdczyt ? '' : (poleUrz(sek) ? `<button type="button" class="btn sm" data-addall="${U.esc(sek.id)}">Dodaj wszystkie</button>` : '') + `<button type="button" class="btn sm pri" data-add="${U.esc(sek.id)}">+ Dodaj</button>`}</div>
+      return `<section class="card psek" data-sek="${U.esc(sek.id)}"><div class="row"><h2 class="grow" style="margin:0">${U.esc(sek.tytul)} (${w.length})</h2>${tylkoOdczyt ? '' : (poleUrz(sek) ? (zSys => `<button type="button" class="btn sm" data-addall="${U.esc(sek.id)}" ${zSys && !zSys.length ? 'disabled title="Szafa nie ma w systemie urządzeń tego typu"' : ''}>Dodaj wszystkie</button>`)(sek.z_systemu !== false ? urzSystemu(urzId).filter(u => pasujeTyp(poleUrz(sek).typy, u.id)) : null) : '') + `<button type="button" class="btn sm pri" data-add="${U.esc(sek.id)}">+ Dodaj</button>`}</div>
         ${w.map((r, i) => `<div class="pwiersz"><div class="row"><b class="grow">${U.esc(r.nr || 'Pozycja ' + (i + 1))}</b>${tylkoOdczyt ? '' : `<button type="button" class="btn sm" data-del="${U.esc(sek.id)}" data-i="${i}">Usuń</button>`}</div>
-          <div class="pgrid2">${sek.pola.map(f => pole(f, r, i, sek)).join('')}</div></div>`).join('') || '<p class="mute">Brak pozycji – dodaj przyciskiem „+ Dodaj”.</p>'}</section>`;
+          <div class="pgrid2">${pola(sek, r, i)}</div></div>`).join('') || '<p class="mute">Brak pozycji – dodaj przyciskiem „+ Dodaj”.</p>'}</section>`;
     }
-    return `<section class="card psek" data-sek="${U.esc(sek.id)}" ${sekcjaWidoczna(sek, dane) ? '' : 'hidden'}><h2 style="margin:0 0 6px">${U.esc(sek.tytul)}</h2><div class="pgrid2">${sek.pola.map(f => pole(f, dane, null, sek)).join('')}</div></section>`;
+    return `<section class="card psek" data-sek="${U.esc(sek.id)}" ${sekcjaWidoczna(sek, dane) ? '' : 'hidden'}><h2 style="margin:0 0 6px">${U.esc(sek.tytul)}</h2><div class="pgrid2">${pola(sek, dane, null)}</div></section>`;
   };
   przeliczAuto(def, dane, urzId);
   view.innerHTML = `
@@ -295,7 +321,9 @@ ProtViews.protokol = async function (par) {
       let w = dane[sek.id];
       // puste wiersze domyślne (bez urządzenia i bez wpisów) zastępujemy wierszami urządzeń
       w = dane[sek.id] = w.filter((r, i) => r[f.id] || JSON.stringify(r) !== JSON.stringify(nowyWiersz(sek, i + 1, urzId)));
-      const nowe = urzDoPola(f, w.map(r => r[f.id]).filter(String));
+      const uzyte = w.map(r => r[f.id]).filter(String);
+      // od 1.28.0: tylko urządzenia systemu szafy (z_systemu ≠ false); z_systemu: false – jak dotąd, wszystkie z budowy
+      const nowe = sek.z_systemu !== false ? urzSystemu(urzId).filter(u => pasujeTyp(f.typy, u.id) && uzyte.indexOf(u.id) < 0) : urzDoPola(f, uzyte);
       if (!nowe.length) return UI.toast('Wszystkie urządzenia tego typu' + (S.etap ? ' w etapie' : '') + ' są już na liście.');
       nowe.forEach(u => { const r = nowyWiersz(sek, w.length + 1, urzId); r[f.id] = u.id; wypelnijZUrz(sek, r, u.id); w.push(r); });
       draft(); UI.toast('Dodano ' + nowe.length + ' poz.'); return ProtViews.protokol({ pid: rec.pid });

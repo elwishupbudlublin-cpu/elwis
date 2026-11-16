@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.28.0 – 2026-11-16 (aplikacja)
+- Karta szafy: protokół dedykowany („Do wykonania”, „+ kolejny”) dostępny dopiero, gdy wszystkie urządzenia systemu są uruchomione (wszystkie kroki) i mają nr seryjny (typy z „Nr seryjny wymagany”); inaczej lista braków z przejściem do karty urządzenia. Ekran Protokoły: „Czego brakuje” zamiast „Wypełnij”.
+- Tabele protokołu: „Dodaj wszystkie” dodaje brakujące urządzenia systemu szafy; wyszarzone, gdy w systemie nie ma urządzeń tego typu.
+- Definicja: `siatka` i `waga` – układ pól w kolumnach (biegi Hz | A, wąskie „Obsługiwany”, szerszy nr seryjny).
+- WB-COLPG v0.4 (plik definicji): „Obsługiwany” domyślnie TAK; usunięte „Uruchomiony” (wyciągowe) i „Uruchomiony bieg 1/2” (strumieniowe).
+
 ## 1.27.0 – 2026-11-16 (aplikacja)
 - Protokoły z karty szafy: tabele z polem „urządzenie” wypełniają się od razu urządzeniami systemu szafy (pasujące typem, wybrany etap, kolejno kondygnacja → ID) z danymi z karty (ID, nr seryjny…). Wyłączenie w definicji: `"z_systemu": false`.
 - Pole definicji `ilosc_z_systemu: [prefiksy]` – liczba takich urządzeń w systemie (WB-COLPG: ilość detektorów CO = DC, LPG = DL).
