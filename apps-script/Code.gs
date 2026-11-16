@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.20.0';
+const SCRIPT_VERSION = '1.23.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -172,8 +172,9 @@ function bootstrap_(tablet) {
     .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])),
       cu: txt_(r[5]), m: tak_(r[7]) || txt_(r[2]) === 'biuro' }));
   const postep = safeJson_(P.getProperty('POSTEP') || '{}');
+  const licz = safeJson_(P.getProperty('LICZ') || '{}');   // od 1.23.0
   const liczniki = safeJson_(P.getProperty('ZDARZENIA') || '{}');   // liczba zdarzeń budowy (od 1.16.0) – tablet pomija pytanie o nowe wpisy, gdy nic nie przybyło
-  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; if (liczniki[p.kod] != null) o.zd = liczniki[p.kod]; return o; });
+  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; if (licz[p.kod]) o.licz = licz[p.kod]; if (liczniki[p.kod] != null) o.zd = liczniki[p.kod]; return o; });
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
@@ -535,7 +536,7 @@ function push_(b, tablet) {
       });
       if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 8).setNumberFormat(TEXT).setValues(rows);
       zapiszLicznik_(p.kod, sh.getLastRow() - 1);
-      przelicz_(p, Object.keys(touched));
+      przelicz_(p, Object.keys(touched), rows.length);
       if (usuniete.length) koszWord_(p, usuniete);
       if (zdjeciaDoKosza.length) zdjeciaDoKosza.forEach(fid => { const f = plikZdjecia_(p, fid); if (f) f.setTrashed(true); });
     }
@@ -544,8 +545,8 @@ function push_(b, tablet) {
 }
 
 /* Status i nr seryjny w zakładce Urządzenia – liczone ze Zdarzeń (fundamenty 2.3). */
-function przelicz_(p, ids) {
-  if (!ids.length) return;
+function przelicz_(p, ids, zmiany) {
+  if (!ids.length && !zmiany) return;
   const ss = SpreadsheetApp.openById(p.lista);
   const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
     .sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
@@ -569,6 +570,26 @@ function przelicz_(p, ids) {
     v[i][10] = status;
   });
   zapiszPostep_(p.kod, v.filter(r => txt_(r[0])).map(r => txt_(r[10])));
+  // liczniki budowy do listy budów (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki
+  const stAll = {};
+  ev.forEach(e => { if (e.typ === 'krok' && e.urz) { if (!stAll[e.urz]) stAll[e.urz] = {}; stAll[e.urz][e.d.krok] = !!e.d.wart; } });
+  const L = { u: 0, p: 0, d: 0, w: 0, b: Object.keys(braki).filter(b => braki[b].open).length };
+  v.forEach(r => {
+    const id = txt_(r[0]); if (!id) return;
+    const kroki = (typy[(id.match(/^[A-Za-z]+/) || [''])[0].toUpperCase()] || { kroki: ['Podłączony'] }).kroki;
+    const st = stAll[id] || {};
+    const zrob = kroki.map((k, j) => !!st[j]);
+    const pk = kroki.map((k, j) => /podłącz/i.test(k) ? j : -1).filter(j => j >= 0);
+    L.w++;
+    if (zrob.some(Boolean)) L.d++;
+    if (pk.length ? pk.every(j => zrob[j]) : zrob[0]) L.p++;
+    if (kroki.length && zrob.every(Boolean)) L.u++;
+  });
+  zapiszLicz_(p.kod, L);
+}
+
+function zapiszLicz_(kod, L) {
+  try { const m = safeJson_(P.getProperty('LICZ') || '{}'); m[kod] = L; P.setProperty('LICZ', JSON.stringify(m)); } catch (e) { }
 }
 
 function zapiszLicznik_(kod, n) {

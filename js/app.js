@@ -393,10 +393,16 @@ const Views = {
     const nq = U.norm(q);
     const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
     const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
-    // podłączone / wszystkie: z serwera (liczone przy pobraniu budowy i zmianie statusów), dla otwartej budowy – z tabletu
-    const post = p => { if (p.kod === S.kod && S.proj) { const u = (S.proj.urzadzenia || []), F = fold(S.ev); return [u.filter(x => devStatus(x, F) === 'gotowe').length, u.length]; } return p.postep || null; };
-    const stat = (p, maly) => { const x = post(p); if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
-      const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>podłączonych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; };
+    // liczniki (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki;
+    // otwarta budowa – liczone na tablecie, pozostałe – z serwera (licz); starszy serwer: tylko [gotowe, wszystkie] (postep)
+    const licz = p => (p.kod === S.kod && S.proj) ? liczBudowy(S.proj.urzadzenia || [], fold(S.ev)) : (p.licz || null);
+    const stat = (p, maly) => {
+      const L = licz(p);
+      if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
+        const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
+      const pr = n => L.w ? Math.round(n / L.w * 100) : 0;
+      return `<span class="lstat"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : ''}<span class="tbar3${maly ? ' sm' : ''}" title="uruchomione ${pr(L.u)}% · podłączone ${pr(L.p)}% · rozpoczęte ${pr(L.d)}%"><i class="t3" style="width:${pr(L.d)}%"></i><i class="t2" style="width:${pr(L.p)}%"></i><i class="t1" style="width:${pr(L.u)}%"></i></span></span>`;
+    };
     const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? '<span class="chip ok">✓ offline</span>' : ''}`;
     wstawWidok(`
       <section class="bhero">
@@ -744,6 +750,22 @@ const Views = {
     bindEtap();
   }
 };
+
+/* Liczniki budowy (od 1.23.0) – te same zasady co na serwerze (przelicz_) */
+function liczBudowy(urz, F) {
+  const L = { u: 0, p: 0, d: 0, w: 0, b: Object.values(F.braki).filter(b => !b.zamk).length };
+  urz.forEach(u => {
+    const kroki = typOf(u.id).kroki || [], st = F.dev[u.id];
+    const zrob = kroki.map((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
+    const pk = kroki.map((k, i) => /podłącz/i.test(k) ? i : -1).filter(i => i >= 0);
+    L.w++;
+    if (zrob.some(Boolean)) L.d++;
+    if (pk.length ? pk.every(i => zrob[i]) : zrob[0]) L.p++;
+    if (kroki.length && zrob.every(Boolean)) L.u++;
+  });
+  return L;
+}
+const odmUsterki = n => n === 1 ? 'usterka' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'usterki' : 'usterek';
 
 /* Wyszukiwanie bez zamykania klawiatury (od 1.22.1): przy wpisywaniu odświeżana jest tylko część z wynikami,
    pole wyszukiwania zostaje w DOM (pełne przerysowanie zdejmowało fokus i Android chował klawiaturę po każdej literze). */

@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.23.0 – 2026-11-16 (aplikacja i serwer)
+- Lista budów (kafelki i lista): liczniki `uruchomione / podłączone / rozpoczęte / wszystkie` urządzenia i pasek w trzech odcieniach zieleni; otwarte braki na czerwono („⚠ N usterek”). Uruchomione = wszystkie kroki; podłączone = wszystkie kroki ze słowem „podłącz”; rozpoczęte = co najmniej jeden krok. Otwarty brak nie zeruje już postępu urządzenia.
+- Serwer: liczniki budowy (`licz` w `bootstrap`) liczone przy każdym `push` z nowymi zdarzeniami, także przy brakach bez urządzenia. Wymaga wdrożenia Code.gs (Nowa wersja); do tego czasu nieotwarte budowy pokazują dotychczasowe „gotowe / wszystkie”.
+
 ## 1.22.1 – 2026-11-16 (aplikacja)
 - Poprawka: przy wpisywaniu w wyszukiwarkę (lista budów, notatki, lista urządzeń) klawiatura chowała się po każdej literze – cały ekran był przerysowywany razem z polem. Teraz odświeżane są tylko wyniki, pole i klawiatura zostają.
 
