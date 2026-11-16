@@ -400,8 +400,7 @@ const Views = {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
         const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
-      const pr = n => L.w ? Math.round(n / L.w * 100) : 0;
-      return `<span class="lstat"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : ''}<span class="tbar3${maly ? ' sm' : ''}" title="uruchomione ${pr(L.u)}% · podłączone ${pr(L.p)}% · rozpoczęte ${pr(L.d)}%"><i class="t3" style="width:${pr(L.d)}%"></i><i class="t2" style="width:${pr(L.p)}%"></i><i class="t1" style="width:${pr(L.u)}%"></i></span></span>`;
+      return `<span class="lstat"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : ''}${pasek3(L, maly)}</span>`;
     };
     const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? '<span class="chip ok">✓ offline</span>' : ''}`;
     wstawWidok(`
@@ -443,6 +442,7 @@ const Views = {
     const mozePin = !wsp && !link;
     const nazwa = String(p.nazwa || '').replace(new RegExp('^' + p.kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
     const pasek = v => `<span class="tbar"><i style="width:${v}%"></i></span>`;
+    const LB = liczBudowy(urz, F);   // od 1.23.1: liczniki jak na liście budów (etap wg przełącznika)
     const PUSTY = '<span class="chip" style="visibility:hidden">–</span>';
     view.innerHTML = `
       <section class="bhero">
@@ -458,7 +458,7 @@ const Views = {
       ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-bottom:12px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
       <div class="bgrid">
         <button class="big" id="tPodl"><span class="bi">${ic('plug')}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>
-          <span class="bst"><span class="sv">${cnt.gotowe} / ${urz.length} <small>podłączonych</small></span>${pasek(pct)}</span>${cnt.brak ? `<span class="chip bad">${cnt.brak} z brakiem</span>` : PUSTY}</button>
+          <span class="bst"><span class="sv">${LB.u} / ${LB.p} / ${LB.d} / ${LB.w}</span><small class="mute">uruch. / podł. / rozp. / wszystkie</small>${pasek3(LB)}</span>${openB.length ? `<span class="chip bad">⚠ ${openB.length} ${odmUsterki(openB.length)}</span>` : PUSTY}</button>
         <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>
           <span class="bst"><span class="sv">${protOk} / ${protWym} <small>wykonanych</small></span>${pasek(protWym ? Math.round(protOk / protWym * 100) : 0)}</span>${rob ? `<span class="chip warn">${rob} ${odm(rob, 'roboczy', 'robocze', 'roboczych')}</span>` : PUSTY}</button>
         <div class="big" id="tBraki" role="button" tabindex="0"><span class="bi">${ic('warn')}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Lista i zamykanie</span></span>
@@ -765,6 +765,8 @@ function liczBudowy(urz, F) {
   });
   return L;
 }
+const pasek3 = (L, maly) => { const pr = n => L.w ? Math.round(n / L.w * 100) : 0;
+  return `<span class="tbar3${maly ? ' sm' : ''}" title="uruchomione ${pr(L.u)}% · podłączone ${pr(L.p)}% · rozpoczęte ${pr(L.d)}%"><i class="t3" style="width:${pr(L.d)}%"></i><i class="t2" style="width:${pr(L.p)}%"></i><i class="t1" style="width:${pr(L.u)}%"></i></span>`; };
 const odmUsterki = n => n === 1 ? 'usterka' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'usterki' : 'usterek';
 
 /* Wyszukiwanie bez zamykania klawiatury (od 1.22.1): przy wpisywaniu odświeżana jest tylko część z wynikami,
