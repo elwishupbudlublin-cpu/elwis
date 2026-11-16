@@ -84,15 +84,32 @@ function wypelnijZUrz(sek, cel, id) {
 function poleUrz(sek) { return (sek.pola || []).find(f => f.typ === 'urzadzenie'); }
 function nowyWiersz(sek, lp, urzId) { const o = {}; const ctx = protCtx(urzId, lp); sek.pola.forEach(f => { o[f.id] = domyslna(f, ctx); }); return o; }
 
-/* Nowy protokół: wartości domyślne + pola „pamiętaj dla budowy” z ostatniego protokołu tej budowy */
+/* Urządzenia systemu (od 1.27.0): urządzenia, które w kolumnie System mają ID tej szafy (bez niej samej), w wybranym etapie;
+   kolejność: kondygnacja, ID. Pusto, gdy urządzenie nie jest szafą żadnego systemu. */
+function urzSystemu(urzId) {
+  if (!urzId) return [];
+  return ((S.proj || {}).urzadzenia || []).filter(u => u.id !== urzId && sysList(u).indexOf(urzId) >= 0 && (!S.etap || !u.etap || u.etap === S.etap))
+    .sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.id, b.id));
+}
+const pasujeTyp = (typy, id) => { const t = (typy || []).map(x => String(x).toUpperCase()); return !t.length || t.indexOf(U.prefix(id)) >= 0; };
+
+/* Nowy protokół: wartości domyślne + pola „pamiętaj dla budowy” z ostatniego protokołu tej budowy.
+   Od 1.27.0 z karty szafy: tabele z polem „urządzenie” – wiersz na każde pasujące typem urządzenie systemu (wyłącza „z_systemu”: false w sekcji);
+   pola z „ilosc_z_systemu”: [prefiksy] – liczba takich urządzeń w systemie. */
 function nowyProtokol(pr, urzId) {
   const def = pr.def, ctx = protCtx(urzId), dane = {};
   const poprzednie = Object.values(Prot.stan()).sort((a, b) => a.ts < b.ts ? 1 : -1);
+  const sys = urzSystemu(urzId);
   def.sekcje.forEach(sek => {
-    if (sek.typ === 'tabela') { dane[sek.id] = Array.from({ length: sek.domyslnie_wierszy || 0 }, (_, i) => nowyWiersz(sek, i + 1, urzId)); return; }
+    if (sek.typ === 'tabela') {
+      const fu = poleUrz(sek), czl = fu && sek.z_systemu !== false ? sys.filter(u => pasujeTyp(fu.typy, u.id)) : [];
+      if (czl.length) { dane[sek.id] = czl.map((u, i) => { const w = nowyWiersz(sek, i + 1, urzId); w[fu.id] = u.id; wypelnijZUrz(sek, w, u.id); return w; }); return; }
+      dane[sek.id] = Array.from({ length: sek.domyslnie_wierszy || 0 }, (_, i) => nowyWiersz(sek, i + 1, urzId)); return;
+    }
     sek.pola.forEach(f => {
       if (f.typ === 'auto') return;
       let v = domyslna(f, ctx);
+      if (f.ilosc_z_systemu && sys.length) { const n = sys.filter(u => pasujeTyp([].concat(f.ilosc_z_systemu), u.id)).length; if (n) v = String(n); }
       // dane z Bazy projektów mają pierwszeństwo; puste → wartość z poprzedniego protokołu tej budowy
       if (f.pamietaj_dla_budowy && (v === '' || v == null)) { const z = poprzednie.find(p => p.dane && p.dane[f.id]); if (z) v = z.dane[f.id]; }
       dane[f.id] = v;

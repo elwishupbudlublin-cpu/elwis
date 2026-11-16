@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.27.0 – 2026-11-16 (aplikacja)
+- Protokoły z karty szafy: tabele z polem „urządzenie” wypełniają się od razu urządzeniami systemu szafy (pasujące typem, wybrany etap, kolejno kondygnacja → ID) z danymi z karty (ID, nr seryjny…). Wyłączenie w definicji: `"z_systemu": false`.
+- Pole definicji `ilosc_z_systemu: [prefiksy]` – liczba takich urządzeń w systemie (WB-COLPG: ilość detektorów CO = DC, LPG = DL).
+- Dotyczy tylko nowych protokołów; zapisane bez zmian.
+
 ## 1.26.0 – 2026-11-16 (aplikacja)
 - Rzut: przyciski + / − / ⤢ przeniesione do prawego górnego rogu rzutu – nie chowają się pod dolnym paskiem skrótów.
 - Lista budów: „Wszystkie aktywne budowy” przewijana w sobie (wysokość do dolnego paska, min. 280 px) – strona nie przesuwa się przy przewijaniu do ostatniej budowy.

@@ -53,6 +53,8 @@ Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urzą
 - Powiązanie z typami urządzeń – wyłącznie w Bazie (zakładka Protokoły, kolumna E: `SZ; SP`), nie w definicji.
 - `urzadzenie` (od 1.6.0): `typy[]` – prefiksy urządzeń do wyboru (pusto = wszystkie); wartość = ID urządzenia. W tabeli – przycisk „Dodaj wszystkie”.
 - `z_urzadzenia` (od 1.6.0): po wyborze urządzenia w tej samej sekcji / wierszu pole przyjmuje wartość z karty: `id, sn, typ, kond, etap, arkusz, zasilanie, grupa` (`sn` – spisany na tablecie lub w liście urządzeń). Można poprawić ręcznie.
+- `z_systemu` (sekcja-tabela, od 1.27.0): nowy protokół otwarty z karty szafy dostaje wiersz na każde urządzenie jej systemu (kolumna System = ID szafy) pasujące do `typy` pola `urzadzenie`, w wybranym etapie, kolejno kondygnacja → ID, z polami `z_urzadzenia`. Domyślnie włączone; `"z_systemu": false` wyłącza. Brak pasujących → `domyslnie_wierszy`.
+- `ilosc_z_systemu` (pole, od 1.27.0): `["DC"]` – przy nowym protokole z karty szafy liczba urządzeń systemu o tych prefiksach (gdy > 0). Można poprawić ręcznie.
 - `zapisz_do_urzadzenia`: pole poza tabelą → numer do urządzenia protokołu; w wierszu tabeli → do wybranego urządzenia, gdy nie ma ono jeszcze numeru.
 - Wzory: `{pole}` – wartość z danych lub kontekstu (`kod, nazwa_budowy, adres, inwestor, zamawiajacy, nr, dd, mm, etap_urzadzenia, kondygnacja_urzadzenia, zalogowany, lp`); `{pole=X:A|B}` – A gdy pole = X, inaczej B.
 - Szablon Word: `{{pole}}` – wartość; pola `taknie/wybor` z mapą `word` → znaczniki opcji (☒/☐); `znacznik` → ☒/☐; wiersz tabeli z `{{#petla}} … {{/petla}}` powielany dla każdej pozycji. Daty w Word: dd/mm/rrrr.
