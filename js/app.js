@@ -396,8 +396,10 @@ const Views = {
     const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
     const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
     // liczniki (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki;
-    // otwarta budowa – liczone na tablecie, pozostałe – z serwera (licz); starszy serwer: tylko [gotowe, wszystkie] (postep)
-    const licz = p => (p.kod === S.kod && S.proj) ? liczBudowy(S.proj.urzadzenia || [], fold(S.ev)) : (p.licz || null);
+    // budowy zapisane na tablecie – liczone lokalnie, pozostałe – z serwera (licz); starszy serwer: tylko [gotowe, wszystkie] (postep)
+    const LM = await liczLokalne(all);   // od 1.25.1: liczone na tablecie dla każdej zapisanej budowy, reszta – z serwera
+    if (UI.cur !== 'home') return;       // użytkownik zdążył przejść dalej
+    const licz = p => LM[p.kod] || null;
     const stat = (p, maly) => {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
@@ -532,11 +534,13 @@ const Views = {
     };
   },
   /* Ostatnie zmiany (od 1.24.0) – tylko rola biuro: aktywne budowy od najnowszej zmiany (ostatni wpis z tabletu), z licznikami i usterkami */
-  zmiany() {
+  async zmiany() {
     if (!Session.isBiuro()) return UI.go('plan');
     UI.header('ostatnie zmiany', () => UI.wstecz('plan'));
     const all = (S.boot && S.boot.projekty) || [];
-    const L = p => (p.kod === S.kod && S.proj) ? Object.assign({}, p.licz || {}, liczBudowy(S.proj.urzadzenia || [], fold(S.ev))) : (p.licz || null);
+    const LM = await liczLokalne(all);
+    if (UI.cur !== 'zmiany') return;
+    const L = p => LM[p.kod] || null;
     const lista = all.map(p => ({ p, l: L(p) })).sort((a, b) => ((b.l && b.l.t) || '') < ((a.l && a.l.t) || '') ? -1 : ((b.l && b.l.t) || '') > ((a.l && a.l.t) || '') ? 1 : 0);
     const kiedy = t => { if (!t) return 'brak zmian od wdrożenia liczników'; const d = new Date(t), dz = U.day(new Date()), dd = U.day(d);
       const g = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
@@ -798,6 +802,44 @@ function sysHtml(u) {
 }
 
 /* Liczniki budowy (od 1.23.0) – te same zasady co na serwerze (przelicz_) */
+/* Liczniki budów z danych na tablecie (od 1.25.1): każda budowa zapisana na tablecie (proj:+kod i jej zdarzenia) – nie tylko otwarta.
+   Wynik łączony z licz z serwera; czas/autor ostatniej zmiany – nowszy z dwóch. Pamięć 15 s, żeby wyszukiwanie nie liczyło przy każdej literze. */
+const LICZ_PAM = {};
+async function liczLokalne(projekty) {
+  const m = {};
+  for (const p of projekty) {
+    const kod = p.kod; let L = null;
+    if (kod === S.kod && S.proj) L = liczZdarzen(S.proj.urzadzenia || [], S.ev || []);
+    else {
+      const c = LICZ_PAM[kod];
+      if (c && Date.now() - c.at < 15000) L = c.L;
+      else {
+        try { const pr = await DB.get('proj:' + kod);
+          if (pr && pr.urzadzenia) { const ev = await DB.eventsFor(kod); L = liczZdarzen(urzZNowymi(pr.urzadzenia, ev), ev); } } catch (e) { L = null; }
+        LICZ_PAM[kod] = { at: Date.now(), L };
+      }
+    }
+    const sv = p.licz || null;
+    if (!L) { m[kod] = sv; continue; }
+    const o = Object.assign({}, sv || {}, L);
+    if (sv && sv.t && (!L.t || sv.t > L.t)) { o.t = sv.t; o.k = sv.k; o.n = sv.n; }
+    m[kod] = o;
+  }
+  return m;
+}
+function urzZNowymi(urz, ev) {   // jak dolaczNowe, bez zmiany S
+  const lst = (urz || []).filter(u => !u._nowe), ids = new Set(lst.map(u => u.id));
+  ev.filter(e => e.typ === 'urz_nowe').forEach(e => { const d = e.d || {}, id = e.urz || d.tmp; if (!id || ids.has(id)) return; ids.add(id); lst.push({ id }); });
+  return lst;
+}
+function liczZdarzen(urz, ev) {
+  const L = liczBudowy(urz, fold(ev));
+  if (ev.length) {
+    const s = ev.map(e => e.ts).filter(Boolean).sort(), t = s[s.length - 1];
+    if (t) { const last = ev.find(e => e.ts === t); L.t = t; L.k = last && last.kto || ''; L.n = s.filter(x => U.day(x) === U.day(t)).length; }
+  }
+  return L;
+}
 function liczBudowy(urz, F) {
   const L = { u: 0, p: 0, d: 0, w: 0, b: Object.values(F.braki).filter(b => !b.zamk).length };
   urz.forEach(u => {

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.25.0';
+const SCRIPT_VERSION = '1.25.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -595,6 +595,23 @@ function przelicz_(p, ids, zmiany) {
   zapiszLicz_(p.kod, L);
 }
 
+/* Uzupełnienie liczników (od 1.25.1): budowy, które nie mają jeszcze licz (brak wpisów od wdrożenia 1.23.0).
+   Uruchamiane co godzinę z przeliczPriorytety (po max kilka budów) albo ręcznie: przeliczLiczniki() – wszystkie aktywne od nowa. */
+function uzupelnijLicz_(max) {
+  const m = safeJson_(P.getProperty('LICZ') || '{}'); let n = 0;
+  aktywne_().forEach(p => {
+    if (n >= max || !p.lista || (m[p.kod] && m[p.kod].w != null)) return;
+    try { przelicz_(p, [], true); } catch (e) { }
+    n++;
+  });
+  return n;
+}
+function przeliczLiczniki() {
+  P.deleteProperty('LICZ');
+  const n = uzupelnijLicz_(1000);
+  Logger.log('Przeliczono liczniki: ' + n + ' budów');
+}
+
 function zapiszLicz_(kod, L) {
   try { const m = safeJson_(P.getProperty('LICZ') || '{}'); m[kod] = L; P.setProperty('LICZ', JSON.stringify(m)); } catch (e) { }
 }
@@ -887,6 +904,7 @@ function zadaniaWszystkie_() {
 }
 
 function przeliczPriorytety() {
+  try { uzupelnijLicz_(5); } catch (e) { }   // od 1.25.1: brakujące liczniki budów, po 5 na godzinę
   const start = Date.now(), k = konfig_();
   const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
   const cu = zadaniaWszystkie_();

@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.25.1 – 2026-11-16 (aplikacja i serwer – poprawka)
+- Lista budów i „Ostatnie zmiany”: liczniki uruch./podł./rozp./wszystkie i usterki liczone na tablecie dla każdej budowy zapisanej na tablecie, nie tylko otwartej (wcześniej pojawiały się dopiero po wejściu w budowę i powrocie).
+- Serwer: `uzupelnijLicz_` – co godzinę (z `przeliczPriorytety`) uzupełnia liczniki budów, które ich nie mają (po 5 na godzinę); `przeliczLiczniki()` – ręczne przeliczenie wszystkich aktywnych budów.
+
 ## 1.25.0 – 2026-11-16 (aplikacja i serwer, schemat 1.9)
 - Schemat 1.9: kolumna N „System” w zakładce Urządzenia list urządzeń – ID urządzenia sterującego (szafy), kilka przez średnik; szafa ma w niej swoje ID.
 - Serwer: `project` przekazuje pole `sys`.
