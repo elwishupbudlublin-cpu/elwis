@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.23.0';
+const SCRIPT_VERSION = '1.24.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -548,7 +548,7 @@ function push_(b, tablet) {
 function przelicz_(p, ids, zmiany) {
   if (!ids.length && !zmiany) return;
   const ss = SpreadsheetApp.openById(p.lista);
-  const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
+  const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), kto: txt_(r[2]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
     .sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
   const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
   const braki = {}; ev.forEach(e => {
@@ -585,6 +585,12 @@ function przelicz_(p, ids, zmiany) {
     if (pk.length ? pk.every(j => zrob[j]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;
   });
+  // ostatnia zmiana (od 1.24.0): czas i autor ostatniego wpisu + liczba wpisów tego dnia – ekran „Ostatnie zmiany”
+  if (ev.length) {
+    const last = ev[ev.length - 1], dz = ts => { try { return Utilities.formatDate(new Date(ts), 'Europe/Warsaw', 'yyyy-MM-dd'); } catch (e) { return ''; } };
+    const d0 = dz(last.ts); L.t = last.ts; L.k = last.kto; L.n = 0;
+    for (let i = ev.length - 1; i >= 0 && dz(ev[i].ts) === d0; i--) L.n++;   // od końca – tylko wpisy z dnia ostatniej zmiany
+  }
   zapiszLicz_(p.kod, L);
 }
 

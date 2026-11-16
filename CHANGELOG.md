@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.24.0 – 2026-11-16 (aplikacja i serwer)
+- Priorytety → nowa zakładka „Ostatnie zmiany” (tylko rola biuro): aktywne budowy od najnowszej zmiany – kod, nazwa, adres, czas i autor ostatniego wpisu z tabletu, liczba wpisów tego dnia, liczniki uruchomione / podłączone / rozpoczęte / wszystkie i usterki. Dotknięcie otwiera budowę.
+- Serwer: `licz` uzupełniony o `t` (czas ostatniego wpisu), `k` (autor), `n` (wpisy tego dnia). Wymaga wdrożenia Code.gs (Nowa wersja) – razem ze zmianą z 1.23.0.
+
 ## 1.23.3 – 2026-11-16 (aplikacja)
 - Napis ELWIS (logowanie, górny pasek) czcionką Orbitron (lokalna, licencja OFL – `fonts/LICENSE-Orbitron.txt`) z żółtą literą „I”.
 - Ekran logowania: „Designed by / Łukasz Pomarański” w dwóch liniach; pod klawiaturą PIN znak wodny – ikona ELWIS i „Designed by Łukasz Pomarański for HUP-BUD Sp. z o.o.”.

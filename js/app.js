@@ -81,7 +81,7 @@ const UI = {
   bnav() {
     const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
     const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
-    const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc';
+    const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc' || this.cur === 'zmiany';
     $('#nPrio').hidden = !Session.isBiuro(); b.classList.toggle('n4', Session.isBiuro());
     $('#nPrio').classList.toggle('on', prio);
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
@@ -512,7 +512,7 @@ const Views = {
       </div>`;
     view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Priorytety</h1><button class="btn sm pri" id="pOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div>
         <div class="mute" style="color:#dbe7ff">${r ? `${pr.length} budów · przeliczono ${U.esc(kiedy)}${r.pominiete ? ` · ${r.pominiete} nieprzeliczonych` : ''}` : 'Brak danych – połącz się z siecią i zsynchronizuj.'}</div>
-        <div class="pseg" style="margin-top:10px"><button class="on">Budowy</button><button id="pWyd">Wydajność ekip</button></div></section>
+        <div class="pseg" style="margin-top:10px"><button class="on">Budowy</button><button id="pZm">Ostatnie zmiany</button><button id="pWyd">Wydajność ekip</button></div></section>
       ${r && r.brakKlucza ? '<div class="card mute">Brak klucza ClickUp na serwerze – priorytety liczone tylko z danych z budów.</div>' : ''}
       ${r && r.komentarz ? `<div class="card pkom">${ic('note')} ${U.esc(r.komentarz)}</div>` : ''}
       ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
@@ -523,6 +523,7 @@ const Views = {
     view.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => openProject(b.dataset.pk));
     view.querySelectorAll('[data-purl]').forEach(b => b.onclick = () => { if (b.dataset.purl) window.open(b.dataset.purl, '_blank', 'noopener'); });
     $('#pWyd').onclick = () => UI.go('wydajnosc');
+    $('#pZm').onclick = () => UI.go('zmiany');
     $('#pOdsw').onclick = async () => {
       if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
       $('#pOdsw').disabled = true; $('#pOdsw').textContent = 'Przeliczam… (do kilku minut)';
@@ -530,6 +531,30 @@ const Views = {
       if (UI.cur === 'priorytety') UI.refresh();
     };
   },
+  /* Ostatnie zmiany (od 1.24.0) – tylko rola biuro: aktywne budowy od najnowszej zmiany (ostatni wpis z tabletu), z licznikami i usterkami */
+  zmiany() {
+    if (!Session.isBiuro()) return UI.go('plan');
+    UI.header('ostatnie zmiany', () => UI.wstecz('plan'));
+    const all = (S.boot && S.boot.projekty) || [];
+    const L = p => (p.kod === S.kod && S.proj) ? Object.assign({}, p.licz || {}, liczBudowy(S.proj.urzadzenia || [], fold(S.ev))) : (p.licz || null);
+    const lista = all.map(p => ({ p, l: L(p) })).sort((a, b) => ((b.l && b.l.t) || '') < ((a.l && a.l.t) || '') ? -1 : ((b.l && b.l.t) || '') > ((a.l && a.l.t) || '') ? 1 : 0);
+    const kiedy = t => { if (!t) return 'brak zmian od wdrożenia liczników'; const d = new Date(t), dz = U.day(new Date()), dd = U.day(d);
+      const g = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+      return dd === dz ? 'dziś ' + g : dd === U.day(new Date(Date.now() - 864e5)) ? 'wczoraj ' + g : d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' }) + ' ' + g; };
+    const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
+    const wiersz = ({ p, l }) => `<button class="zrow" data-k="${U.esc(p.kod)}">
+        <span class="zkto"><b class="m bkd">${U.esc(p.kod)}</b><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span></span>
+        <span class="zkiedy"><b>${U.esc(kiedy(l && l.t))}</b><span class="mute">${l && l.k ? U.esc(l.k) + (l.n ? ` · ${l.n} ${odm(l.n, 'wpis', 'wpisy', 'wpisów')} tego dnia` : '') : ''}</span></span>
+        ${l && l.w != null ? `<span class="lstat"><span class="m"><b>${l.u} / ${l.p} / ${l.d} / ${l.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${l.b ? `<span class="usterki">⚠ ${l.b} ${odmUsterki(l.b)}</span>` : ''}${pasek3(l, true)}</span>` : '<span class="lstat mute">brak danych</span>'}
+      </button>`;
+    view.innerHTML = `<section class="phero"><h1>Ostatnie zmiany</h1><div class="mute" style="color:#dbe7ff">${lista.length} aktywnych budów · od ostatniego wpisu z tabletu</div>
+        <div class="pseg" style="margin-top:10px"><button id="zBud">Budowy</button><button class="on">Ostatnie zmiany</button><button id="zWyd">Wydajność ekip</button></div></section>
+      <div class="list" style="margin-top:12px">${lista.map(wiersz).join('') || '<div class="li mute">Brak aktywnych budów.</div>'}</div>`;
+    $('#zBud').onclick = () => UI.go('priorytety');
+    $('#zWyd').onclick = () => UI.go('wydajnosc');
+    view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
+  },
+
   /* Wydajność ekip (od 1.18.0) – tylko rola biuro: trend tygodniowy / miesięczny w 4 kategoriach, porównanie ekip */
   async wydajnosc(par) {
     if (!Session.isBiuro()) return UI.go('plan');
@@ -567,7 +592,7 @@ const Views = {
         ${s.typy.length ? `<div class="mute wtyp">${s.typy.sort((a, b) => b.n - a.n).slice(0, 4).map(t => `${U.esc(t.typ)}: ${t.czas} min (norma ${t.norma}, n=${t.n})`).join(' · ')}</div>` : ''}</div>`;
     };
     view.innerHTML = `<section class="phero"><h1>Wydajność ekip</h1><div class="mute" style="color:#dbe7ff">${r && r.czas ? 'Stan na ' + new Date(r.czas).toLocaleDateString('pl-PL') + ' · widok tylko dla biura' : 'Brak danych – zsynchronizuj.'}</div>
-        <div class="pseg" style="margin-top:10px"><button id="wBud">Budowy</button><button class="on">Wydajność ekip</button></div></section>
+        <div class="pseg" style="margin-top:10px"><button id="wBud">Budowy</button><button id="wZm">Ostatnie zmiany</button><button class="on">Wydajność ekip</button></div></section>
       ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
       <div class="tabs" style="margin:10px 0">${Object.keys(KAT).map(k => `<button class="tab ${k === kat ? 'on' : ''}" data-wk="${k}">${KAT[k][0]}</button>`).join('')}
         <span style="width:12px"></span><button class="tab ${!mies ? 'on' : ''}" data-wo="t">Tygodnie</button><button class="tab ${mies ? 'on' : ''}" data-wo="m">Miesiące</button></div>
@@ -576,6 +601,7 @@ const Views = {
         <div class="row wleg">${serie.map(s => `<span class="row"><svg width="28" height="8"><line x1="0" x2="28" y1="4" y2="4" stroke="${s.kol}" stroke-width="3" stroke-dasharray="${s.dash}"/></svg>${U.esc(ekN(s.ek))}</span>`).join('')}</div></div>
         <div class="grid2" style="margin-top:12px">${serie.map(karta).join('')}</div>` : '<div class="card mute">Brak wpisów ekip z ostatnich 12 tygodni.</div>'}`;
     $('#wBud').onclick = () => UI.go('priorytety');
+    $('#wZm').onclick = () => UI.go('zmiany');
     view.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, k: b.dataset.wk }, { zastap: true }));
     view.querySelectorAll('[data-wo]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, o: b.dataset.wo }, { zastap: true }));
   },
