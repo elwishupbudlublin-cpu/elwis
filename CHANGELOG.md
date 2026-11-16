@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.25.0 – 2026-11-16 (aplikacja i serwer, schemat 1.9)
+- Schemat 1.9: kolumna N „System” w zakładce Urządzenia list urządzeń – ID urządzenia sterującego (szafy), kilka przez średnik; szafa ma w niej swoje ID.
+- Serwer: `project` przekazuje pole `sys`.
+- Karta urządzenia: „System” – przycisk otwierający kartę szafy; w karcie szafy podsumowanie jej systemu (liczba urządzeń, podłączone, uruchomione, pasek). Wyszukiwarka listy urządzeń szuka też po systemie.
+
 ## 1.24.0 – 2026-11-16 (aplikacja i serwer)
 - Priorytety → nowa zakładka „Ostatnie zmiany” (tylko rola biuro): aktywne budowy od najnowszej zmiany – kod, nazwa, adres, czas i autor ostatniego wpisu z tabletu, liczba wpisów tego dnia, liczniki uruchomione / podłączone / rozpoczęte / wszystkie i usterki. Dotknięcie otwiera budowę.
 - Serwer: `licz` uzupełniony o `t` (czas ostatniego wpisu), `k` (autor), `n` (wpisy tego dnia). Wymaga wdrożenia Code.gs (Nowa wersja) – razem ze zmianą z 1.23.0.

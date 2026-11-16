@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.24.0';
+const SCRIPT_VERSION = '1.25.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -188,7 +188,8 @@ function project_(kod) {
   const urz = rows_(ss.getSheetByName('Urządzenia')).filter(r => txt_(r[0])).map(r => ({
     id: txt_(r[0]), grupa: txt_(r[1]), typ: txt_(r[2]), zasilanie: txt_(r[3]), kond: txt_(r[4]), arkusz: txt_(r[5]),
     uwagi: txt_(r[6]), x: num_(r[7]), y: num_(r[8]), sn: txt_(r[9]), status: txt_(r[10]), etap: txt_(r[11]),
-    oz: txt_(r[12])   // „Oznaczenie proj.” – oznaczenie z projektu (schemat 1.7)
+    oz: txt_(r[12]),  // „Oznaczenie proj.” – oznaczenie z projektu (schemat 1.7)
+    sys: txt_(r[13])  // „System” – ID urządzenia sterującego, kilka przez średnik (schemat 1.9)
   }));
   zapiszPostep_(kod, urz.map(u => u.status));
   // zgodność etapów urządzeń z listą etapów budowy (fundamenty 2.4)

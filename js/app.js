@@ -679,7 +679,7 @@ const Views = {
     const sortUrz = par.s || (await DB.get('sortUrz')) || 'id';
     const q = U.norm(par.q || '');
     const vis = urz.filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
-      .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn].join(' ')).includes(q));
+      .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn, u.sys].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
     const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
@@ -781,6 +781,22 @@ const Views = {
 
 let ppScroll = 0;   // przewinięcie paska osób w planie „Wszyscy” (od 1.23.2)
 
+/* System (od 1.25.0, schemat 1.9): kolumna „System” = ID urządzenia sterującego (szafy), kilka przez średnik */
+const sysList = u => String((u && u.sys) || '').split(';').map(x => x.trim()).filter(Boolean);
+function sysHtml(u) {
+  const sy = sysList(u); if (!sy.length) return '';
+  const all = (S.proj && S.proj.urzadzenia) || [];
+  return sy.map(s => {
+    if (s === u.id) {   // szafa / sterownik – podsumowanie jego systemu
+      const czl = all.filter(x => x.id !== u.id && sysList(x).includes(s));
+      const L = liczBudowy(czl, fold(S.ev));
+      return `<div style="grid-column:1/3"><div class="mute">System ${U.esc(s)}</div>${czl.length ? `${czl.length} ${odm(czl.length, 'urządzenie', 'urządzenia', 'urządzeń')} · podłączone ${L.p} / ${L.w} · uruchomione ${L.u}${pasek3(L, true)}` : 'brak przypisanych urządzeń'}</div>`;
+    }
+    const st = all.find(x => x.id === s);
+    return `<div style="grid-column:1/3"><div class="mute">System</div><button class="btn sm" data-sys="${U.esc(s)}">${U.esc(s)}${st && st.oz ? ' · ' + U.esc(st.oz) : ''}${st ? ' – ' + U.esc(typOf(s).nazwa || '') : ''}</button></div>`;
+  }).join('');
+}
+
 /* Liczniki budowy (od 1.23.0) – te same zasady co na serwerze (przelicz_) */
 function liczBudowy(urz, F) {
   const L = { u: 0, p: 0, d: 0, w: 0, b: Object.values(F.braki).filter(b => !b.zamk).length };
@@ -832,6 +848,7 @@ const Dialogs = {
           <div><div class="mute">Kondygnacja</div>${U.esc(u.kond ? poziomTxt(u.kond) : '—')}</div><div><div class="mute">Arkusz</div>${U.esc(u.arkusz || '—')}</div>
           ${maEtapy() || u.etap ? `<div style="grid-column:1/3"><div class="mute">Etap budowy</div>${U.esc(u.etap ? etapOpis(u.etap) : '— (brak przypisania)')}</div>` : ''}
           ${u.uwagi ? `<div style="grid-column:1/3"><div class="mute">Uwagi</div>${U.esc(u.uwagi)}</div>` : ''}
+          ${sysHtml(u)}
         </div>
         <div class="card stack"><div class="row"><b class="grow">Nr seryjny</b>${t.sn ? '<span class="chip warn">wymagany</span>' : ''}</div>
           <div class="row"><input type="text" id="sn" value="${U.esc(sn)}" placeholder="zeskanuj kod lub wpisz" class="grow" style="flex:1"><button class="btn sm" id="snSave">Zapisz</button></div>
@@ -850,6 +867,7 @@ const Dialogs = {
       </div>
       <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan">Na rzucie</button></div>
     </div></div>`;
+    modal.querySelectorAll('[data-sys]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.sys));
     $('#dx').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
     modal.querySelectorAll('.step').forEach(b => b.onclick = async () => {
       const i = +b.dataset.k; const s = st.kroki[i]; const kr = U.krok(t.kroki[i]);
