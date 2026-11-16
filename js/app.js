@@ -398,17 +398,16 @@ const Views = {
     const stat = (p, maly) => { const x = post(p); if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
       const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>podłączonych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; };
     const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? '<span class="chip ok">✓ offline</span>' : ''}`;
-    view.innerHTML = `
+    wstawWidok(`
       <section class="bhero">
         <h1>Wyszukaj budowę</h1>
         <label class="search hsearch"><span hidden>Szukaj budowy</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
           <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
       </section>
-      ${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
+      <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
       <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
-      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div>`;
-    const inp = $('#q');
-    inp.oninput = () => { UI.par.q = inp.value; Views.home(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
+    szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
 
@@ -593,12 +592,12 @@ const Views = {
     const q = U.norm(UI.par.q || '');
     const F = fold(S.ev);
     const lista = F.notes.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
-    view.innerHTML = `<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
+    wstawWidok(`<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
       <label class="search" style="margin:14px 0"><span hidden>Szukaj w notatkach</span><input type="search" id="q" value="${U.esc(UI.par.q || '')}" placeholder="słowo, urządzenie, osoba" autocomplete="off"></label>
-      <div class="stack">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
-        <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`;
+      <div class="stack" id="wyn">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
+        <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`, '#wyn');
     $('#nNew').onclick = () => Dialogs.notatka('');
-    const inp = $('#q'); inp.oninput = () => { UI.par.q = inp.value; Views.notatki(); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+    szukajNaZywo($('#q'), () => Views.notatki());
     view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
     hydrateFotos(view);
   },
@@ -650,7 +649,7 @@ const Views = {
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
     const prefixes = [...new Set(urz.map(u => U.prefix(u.id)))];
-    view.innerHTML = etapSwitch() + `
+    wstawWidok(etapSwitch() + `
       <div class="ubar">
       <div class="row" style="margin-bottom:${mode === 'lista' ? 8 : 0}px">
         <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
@@ -669,14 +668,14 @@ const Views = {
         <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
-        : `<div class="list" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
+        : `<div class="list" id="wyn" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
             <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
-      ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`;
+      ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`, '#wyn');
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
-    if ($('#uq')) $('#uq').oninput = e => { const y = window.scrollY; UI.par.q = e.target.value; Views.rzut(UI.par).then(() => { const i = $('#uq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); window.scrollTo(0, y); }); };
+    if ($('#uq')) szukajNaZywo($('#uq'), () => Views.rzut(UI.par));
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: null }));
     // dodanie urządzenia – rola biuro (od 1.15.0): na rzucie najpierw wskazanie miejsca, na liście od razu formularz
     if ($('#uAdd')) $('#uAdd').onclick = () => mode === 'rzut' && ark ? UI.go('rzut', { ...par, wskaz: { ark } }) : Dialogs.noweUrz({ ark });
@@ -745,6 +744,20 @@ const Views = {
     bindEtap();
   }
 };
+
+/* Wyszukiwanie bez zamykania klawiatury (od 1.22.1): przy wpisywaniu odświeżana jest tylko część z wynikami,
+   pole wyszukiwania zostaje w DOM (pełne przerysowanie zdejmowało fokus i Android chował klawiaturę po każdej literze). */
+function wstawWidok(html, sel) {
+  const a = document.activeElement;
+  // pole wyszukiwania tego widoku ma fokus (trwa wpisywanie) → podmień tylko wyniki
+  if (a && a.type === 'search' && a.id && view.contains(a)) {
+    const t = document.createElement('template'); t.innerHTML = html;
+    const nowy = t.content.querySelector(sel), stary = view.querySelector(sel);
+    if (nowy && stary && t.content.getElementById(a.id)) { stary.replaceWith(nowy); return; }
+  }
+  view.innerHTML = html;
+}
+function szukajNaZywo(inp, odswiez) { inp.oninput = () => { UI.par.q = inp.value; odswiez(); }; }
 
 /* ---------- Okna ---------- */
 const Dialogs = {

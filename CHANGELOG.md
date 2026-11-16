@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.22.1 – 2026-11-16 (aplikacja)
+- Poprawka: przy wpisywaniu w wyszukiwarkę (lista budów, notatki, lista urządzeń) klawiatura chowała się po każdej literze – cały ekran był przerysowywany razem z polem. Teraz odświeżane są tylko wyniki, pole i klawiatura zostają.
+
 ## 1.22.0 – 2026-11-16 (aplikacja)
 - Kroki z wariantami: w Słownikach krok zapisany jako `Nazwa [wariant A | wariant B]` (np. `Podłączony [puszka HupBud | puszka b. el.]`) – na tablecie dotknięcie kroku pokazuje przyciski wariantów; wybrany wariant widać przy kroku i w historii; ponowne dotknięcie: zmiana wariantu lub „Cofnij”. Krok liczy się jako wykonany niezależnie od wariantu (postęp, status, Priorytety bez zmian). Serwer bez zmian (wartość kroku = nazwa wariantu).
 
