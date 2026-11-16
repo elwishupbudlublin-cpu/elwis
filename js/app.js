@@ -415,7 +415,8 @@ const Views = {
       </section>
       <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
       <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
-      <div class="list">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
+      <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
+    dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
@@ -802,6 +803,15 @@ function sysHtml(u) {
 }
 
 /* Liczniki budowy (od 1.23.0) – te same zasady co na serwerze (przelicz_) */
+/* Lista budów przewijana w sobie (od 1.26.0): wysokość od górnej krawędzi listy do dolnego paska skrótów, min. 280 px */
+function dopasujListeBudow() {
+  const el = document.getElementById('blist'); if (!el) return;
+  const nav = document.querySelector('.bnav:not([hidden])'), m = el.closest('main');
+  const dol = Math.max(nav ? nav.getBoundingClientRect().height + 12 : 0, m ? parseFloat(getComputedStyle(m).paddingBottom) || 0 : 0);   // dolny margines strony (miejsce na pasek)
+  const top = el.getBoundingClientRect().top + window.scrollY;
+  el.style.maxHeight = Math.max(280, window.innerHeight - top - dol) + 'px';
+}
+window.addEventListener('resize', () => { if (UI.cur === 'home') dopasujListeBudow(); });
 /* Liczniki budów z danych na tablecie (od 1.25.1): każda budowa zapisana na tablecie (proj:+kod i jej zdarzenia) – nie tylko otwarta.
    Wynik łączony z licz z serwera; czas/autor ostatniej zmiany – nowszy z dwóch. Pamięć 15 s, żeby wyszukiwanie nie liczyło przy każdej literze. */
 const LICZ_PAM = {};

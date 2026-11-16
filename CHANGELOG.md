@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.26.0 – 2026-11-16 (aplikacja)
+- Rzut: przyciski + / − / ⤢ przeniesione do prawego górnego rogu rzutu – nie chowają się pod dolnym paskiem skrótów.
+- Lista budów: „Wszystkie aktywne budowy” przewijana w sobie (wysokość do dolnego paska, min. 280 px) – strona nie przesuwa się przy przewijaniu do ostatniej budowy.
+
 ## 1.25.1 – 2026-11-16 (aplikacja i serwer – poprawka)
 - Lista budów i „Ostatnie zmiany”: liczniki uruch./podł./rozp./wszystkie i usterki liczone na tablecie dla każdej budowy zapisanej na tablecie, nie tylko otwartej (wcześniej pojawiały się dopiero po wejściu w budowę i powrocie).
 - Serwer: `uzupelnijLicz_` – co godzinę (z `przeliczPriorytety`) uzupełnia liczniki budów, które ich nie mają (po 5 na godzinę); `przeliczLiczniki()` – ręczne przeliczenie wszystkich aktywnych budów.
