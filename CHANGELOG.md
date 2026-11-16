@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.28.1 – 2026-11-16 (aplikacja)
+- Protokoły: `z_urzadzenia` przyjmuje `oz|id` (pierwsza niepusta wartość), `(id)` (w nawiasie) i `oz?(id)` (tylko gdy jest oznaczenie z projektu); nowy typ pola `ukryte` – tylko do Worda, bez pola na tablecie.
+- WB-COLPG v0.4: nr wentylatora = oznaczenie z projektu (brak → ID ELWIS), w Wordzie pod nim ID ELWIS w nawiasie.
+
 ## 1.28.0 – 2026-11-16 (aplikacja)
 - Karta szafy: protokół dedykowany („Do wykonania”, „+ kolejny”) dostępny dopiero, gdy wszystkie urządzenia systemu są uruchomione (wszystkie kroki) i mają nr seryjny (typy z „Nr seryjny wymagany”); inaczej lista braków z przejściem do karty urządzenia. Ekran Protokoły: „Czego brakuje” zamiast „Wypełnij”.
 - Tabele protokołu: „Dodaj wszystkie” dodaje brakujące urządzenia systemu szafy; wyszarzone, gdy w systemie nie ma urządzeń tego typu.

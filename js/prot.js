@@ -72,6 +72,10 @@ function urzDoPola(f, uzyte, biezace) {
 }
 /* Wartość z karty urządzenia: id, sn (spisany na tablecie lub w liście urządzeń), typ, kond, etap, arkusz, zasilanie, grupa */
 function zUrz(id, klucz) {
+  // od 1.28.1: „oz|id” – pierwsza niepusta wartość; „(id)” – wartość w nawiasie (pusto, gdy brak); „oz?(id)” – (id) tylko, gdy jest oz
+  const wa = /^(\w+)\?(.+)$/.exec(klucz); if (wa) return zUrz(id, wa[1]) !== '' ? zUrz(id, wa[2]) : '';
+  if (String(klucz).indexOf('|') >= 0) { for (const k of String(klucz).split('|')) { const v = zUrz(id, k.trim()); if (v !== '') return v; } return ''; }
+  const nw = /^\((.+)\)$/.exec(klucz); if (nw) { const v = zUrz(id, nw[1]); return v !== '' ? '(' + v + ')' : ''; }
   const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u) return '';
   if (klucz === 'id') return u.id;
   if (klucz === 'sn') { const st = fold(S.ev).dev[id]; return (st && st.sn) || u.sn || ''; }
@@ -249,6 +253,7 @@ ProtViews.protokol = async function (par) {
     const v = w[f.id], key = `data-f="${U.esc(f.id)}"` + (wi != null ? ` data-w="${wi}" data-s="${U.esc(sek.id)}"` : '');
     const et = U.esc(f.etykieta || nazwaPola(f.id)) + (f.wymagane ? ' <span class="req">*</span>' : '') + (f.jednostka ? ` <span class="mute">[${U.esc(f.jednostka)}]</span>` : '');
     const dis = tylkoOdczyt ? 'disabled' : '';
+    if (f.typ === 'ukryte') return '';   // od 1.28.1: pole tylko do Worda (np. ID ELWIS pod oznaczeniem z projektu)
     let inner;
     switch (f.typ) {
       case 'auto': inner = `<div class="auto" data-auto="${U.esc(f.id)}">${U.esc(f.id === 'nr_protokolu' ? (nr ? ocenWzor(f.wzor, Object.assign(protCtx(urzId), { nr, dd: (dane.data || '').slice(8, 10), mm: (dane.data || '').slice(5, 7) }), {}) : 'nadawany po „Prześlij” i synchronizacji') : v || '')}</div>`; break;
