@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.23.3 – 2026-11-16 (aplikacja)
+- Napis ELWIS (logowanie, górny pasek) czcionką Orbitron (lokalna, licencja OFL – `fonts/LICENSE-Orbitron.txt`) z żółtą literą „I”.
+- Ekran logowania: „Designed by / Łukasz Pomarański” w dwóch liniach; pod klawiaturą PIN znak wodny – ikona ELWIS i „Designed by Łukasz Pomarański for HUP-BUD Sp. z o.o.”.
+
 ## 1.23.2 – 2026-11-16 (aplikacja)
 - Plan „Wszyscy”: po dotknięciu osoby w pasku osób pasek zostaje w tym samym miejscu (wcześniej przewijał się na początek).
 

@@ -146,8 +146,8 @@ const Views = {
     view.innerHTML = `
       <div class="login">
         <div class="side">
-          <div class="big">ELWIS</div>
-          <div class="designed">Designed by Łukasz Pomarański</div>
+          <div class="big">ELW<span class="elwis-i">I</span>S</div>
+          <div class="designed">Designed by<br>Łukasz Pomarański</div>
           <div>Elektryczne Wsparcie<br>Instalatora i Serwisu</div>
           <div class="mute" style="color:#dbe6f2;margin-top:auto">${U.esc((API.cfg() || {}).tablet || '')}<br>Wersja ${APP_VERSION}<br>${navigator.onLine ? 'Online' : 'Offline – logowanie działa bez internetu'}</div>
         </div>
@@ -164,6 +164,7 @@ const Views = {
             <button class="btn pri" style="width:100%" id="pinGo">Zaloguj</button>
             <div class="mute" id="pinMsg" style="text-align:center">Tablet pamięta logowanie ${S.boot ? S.boot.sesjaGodziny : 12} h albo do wylogowania.</div>
             ${!navigator.onLine ? '' : '<button class="btn sm" id="pinSync">Odśwież listę pracowników</button>'}
+            <div class="wmark" aria-hidden="true"><img src="icons/icon-192.png" alt=""><span>Designed by Łukasz Pomarański<br>for HUP-BUD Sp. z o.o.</span></div>
           </div>
         </div>
       </div>`;

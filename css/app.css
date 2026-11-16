@@ -410,3 +410,14 @@ main{padding:16px 16px 100px}
 .tbar3 .t3{background:#BBF7D0}.tbar3 .t2{background:#4ADE80}.tbar3 .t1{background:var(--ok)}
 .lstat .tbar3.sm{height:6px;width:140px;margin-left:auto}.btc .lstat .tbar3.sm{margin-left:0}
 .usterki{color:var(--bad,#c93a3a);font-weight:700}
+
+/* znak wodny pod klawiaturą PIN (1.23.3) */
+.login .wmark{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:18px;opacity:.35;user-select:none;pointer-events:none}
+.login .wmark img{width:56px;height:56px;filter:grayscale(1);border-radius:12px}
+.login .wmark span{font-size:12px;letter-spacing:.04em;color:var(--mute);font-style:italic}
+
+/* napis ELWIS – Orbitron 800 z żółtym „I” (1.23.3); czcionka lokalna (OFL), tylko litery łacińskie */
+@font-face{font-family:'Orbitron';font-style:normal;font-weight:800;font-display:swap;src:url(../fonts/orbitron-latin-800-normal.woff2) format('woff2')}
+.logo,.login .side .big{font-family:'Orbitron','Inter',system-ui,sans-serif;font-weight:800;letter-spacing:.12em}
+.elwis-i{color:#FACC15}
+.login .wmark span{text-align:center;max-width:320px;line-height:1.4}
