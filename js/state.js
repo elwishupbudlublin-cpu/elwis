@@ -47,7 +47,7 @@ function fold(events) {
     const d = e.d || {};
     if (e.urz) D(e.urz).hist.push(e);
     switch (e.typ) {
-      case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
+      case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, war: typeof d.wart === 'string' ? d.wart : '', kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
       case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;

@@ -775,7 +775,7 @@ const Dialogs = {
           const last = i === t.kroki.length - 1;
           const needSn = last && t.sn && !sn && !hasTab && !done;
           const dis = (!done && (blocked || needSn));
-          return `<button class="step ${done ? 'done' : ''}" data-k="${i}" ${dis ? 'disabled' : ''}><span class="box">${done ? '✓' : ''}</span><span class="grow"><b>${U.esc(k)}</b><br><span class="mute">${done ? U.esc(s.kto) + ' · ' + U.fmt(s.ts) : blocked ? 'Zablokowane: otwarty brak' : needSn ? 'Wymaga nr seryjnego lub zdjęcia tabliczki' : 'do zrobienia'}</span></span></button>`;
+          return `<button class="step ${done ? 'done' : ''}" data-k="${i}" ${dis ? 'disabled' : ''}><span class="box">${done ? '✓' : ''}</span><span class="grow"><b>${U.esc(U.krok(k).n)}${done && s.war ? ' – ' + U.esc(s.war) : ''}</b><br><span class="mute">${!done && U.krok(k).op.length && !dis ? 'wybierz: ' + U.krok(k).op.map(U.esc).join(' / ') + ' · ' : ''}${done ? U.esc(s.kto) + ' · ' + U.fmt(s.ts) : blocked ? 'Zablokowane: otwarty brak' : needSn ? 'Wymaga nr seryjnego lub zdjęcia tabliczki' : 'do zrobienia'}</span></span></button>`;
         }).join('')}</div></div>
         <div><div class="lbl">Braki (${br.filter(b => !b.zamk).length} otwartych)</div><div class="stack" style="margin-top:8px">${br.map(issueHtml).join('') || '<span class="mute">Brak.</span>'}</div></div>
         <div><div class="lbl">Zdjęcia</div><div class="thumbs" id="thumbs" style="margin-top:8px"></div></div>
@@ -785,7 +785,18 @@ const Dialogs = {
     </div></div>`;
     $('#dx').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
     modal.querySelectorAll('.step').forEach(b => b.onclick = async () => {
-      const i = +b.dataset.k; const s = st.kroki[i];
+      const i = +b.dataset.k; const s = st.kroki[i]; const kr = U.krok(t.kroki[i]);
+      if (kr.op.length) {   // krok z wariantami (od 1.22.0): wybór wariantu pod krokiem, ponowne dotknięcie – zmiana lub cofnięcie
+        const nx = b.nextElementSibling; if (nx && nx.classList.contains('kopt')) { nx.remove(); return; }
+        modal.querySelectorAll('.kopt').forEach(x => x.remove());
+        b.insertAdjacentHTML('afterend', `<div class="kopt row" style="flex-wrap:wrap;gap:8px;margin:-2px 0 4px 44px">${kr.op.map((o, j) => `<button class="btn ${s && s.val && s.war === o ? 'pri' : ''}" data-o="${j}">${U.esc(o)}</button>`).join('')}${s && s.val ? '<button class="btn" data-o="-1">Cofnij</button>' : ''}</div>`);
+        b.nextElementSibling.querySelectorAll('[data-o]').forEach(x => x.onclick = async () => {
+          const j = +x.dataset.o;
+          await addEvent('krok', id, j < 0 ? { krok: i, nazwa: kr.n, wart: false } : { krok: i, nazwa: kr.n + ' – ' + kr.op[j], wart: kr.op[j] });
+          Dialogs.device(id); UI.refresh();
+        });
+        return;
+      }
       await addEvent('krok', id, { krok: i, nazwa: t.kroki[i], wart: !(s && s.val) });
       Dialogs.device(id); UI.refresh();
     });

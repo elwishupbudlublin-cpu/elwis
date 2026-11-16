@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.22.0 – 2026-11-16 (aplikacja)
+- Kroki z wariantami: w Słownikach krok zapisany jako `Nazwa [wariant A | wariant B]` (np. `Podłączony [puszka HupBud | puszka b. el.]`) – na tablecie dotknięcie kroku pokazuje przyciski wariantów; wybrany wariant widać przy kroku i w historii; ponowne dotknięcie: zmiana wariantu lub „Cofnij”. Krok liczy się jako wykonany niezależnie od wariantu (postęp, status, Priorytety bez zmian). Serwer bez zmian (wartość kroku = nazwa wariantu).
+
 ## 1.21.1 – 2026-11-14 (aplikacja)
 - Poprawka 1.21.0: kod QR zrobiony w przeglądarce otwartej na adresie `…/exec` zawierał adres przekierowania `script.googleusercontent.com/…/echo` (jednorazowa odpowiedź serwera – zawsze „Nieznany lub wyłączony klucz tabletu”). Taki adres jest teraz odrzucany przy skanowaniu i przy połączeniu, z podpowiedzią, skąd wziąć właściwy.
 

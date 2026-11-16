@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.21.1';
+const APP_VERSION = '1.22.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -63,6 +63,8 @@ const API = (() => {
 
 /* Pomocnicze */
 const U = {
+  // krok ze Słowników: „Podłączony [puszka HupBud | puszka b. el.]” → {n:'Podłączony', op:['puszka HupBud','puszka b. el.']} (od 1.22.0)
+  krok(k) { const m = String(k || '').match(/^(.*?)\s*\[([^\]]*)\]\s*$/); if (!m) return { n: String(k || ''), op: [] }; const op = m[2].split('|').map(x => x.trim()).filter(Boolean); return op.length ? { n: m[1].trim(), op } : { n: String(k), op: [] }; },
   esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
   uid: p => p + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
   now: () => new Date().toISOString(),
