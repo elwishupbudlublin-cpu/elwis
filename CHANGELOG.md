@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.29.0 – 2026-11-16 (aplikacja)
+- Lista budów: sortowanie „Wszystkie aktywne budowy” obok nagłówka – Nr (budowy), Nazwa (alfabetycznie), Podłączone (liczba podłączonych urządzeń, domyślnie od największej); ponowne dotknięcie odwraca kierunek; wybór zapamiętany na tablecie. Kafelki „Ostatnio na tym tablecie” bez zmian.
+
 ## 1.28.1 – 2026-11-16 (aplikacja)
 - Protokoły: `z_urzadzenia` przyjmuje `oz|id` (pierwsza niepusta wartość), `(id)` (w nawiasie) i `oz?(id)` (tylko gdy jest oznaczenie z projektu); nowy typ pola `ukryte` – tylko do Worda, bez pola na tablecie.
 - WB-COLPG v0.4: nr wentylatora = oznaczenie z projektu (brak → ID ELWIS), w Wordzie pod nim ID ELWIS w nawiasie.

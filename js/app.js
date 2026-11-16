@@ -400,6 +400,13 @@ const Views = {
     const LM = await liczLokalne(all);   // od 1.25.1: liczone na tablecie dla każdej zapisanej budowy, reszta – z serwera
     if (UI.cur !== 'home') return;       // użytkownik zdążył przejść dalej
     const licz = p => LM[p.kod] || null;
+    // sortowanie listy (od 1.29.0): nr budowy / nazwa / podłączone; ponowne dotknięcie odwraca kierunek; zapamiętane na tablecie
+    const so = Object.assign({ k: 'kod', d: 1 }, (await DB.get('sortBud')) || {});
+    if (UI.cur !== 'home') return;
+    const SORT = { kod: (a, b) => natCmp(a.kod, b.kod), naz: (a, b) => naz(a).localeCompare(naz(b), 'pl', { sensitivity: 'base' }),
+      podl: (a, b) => (((licz(a) || {}).p) || 0) - (((licz(b) || {}).p) || 0) || natCmp(a.kod, b.kod) };
+    list.sort((a, b) => (SORT[so.k] || SORT.kod)(a, b) * so.d);
+    const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : 'liczba podłączonych urządzeń'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     const stat = (p, maly) => {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
@@ -414,11 +421,16 @@ const Views = {
           <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
       </section>
       <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
-      <h2>${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
+      <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
+        <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Podłączone')}</div></div>
       <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
     dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
+    view.querySelectorAll('[data-sb]').forEach(b => b.onclick = async () => {
+      const k = b.dataset.sb; await DB.set('sortBud', { k, d: so.k === k ? -so.d : (k === 'podl' ? -1 : 1) });   // podłączone – domyślnie od największej
+      Views.home();
+    });
   },
 
   /* Karta budowy – od 1.13.0: ciemny nagłówek (nazwa, adres, nawigacja), pod nim etapy, 6 kafelków ze statystykami, „Więcej” */

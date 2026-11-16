@@ -432,3 +432,5 @@ main{padding:16px 16px 100px}
 /* 1.26.0: lista „Wszystkie aktywne budowy” przewijana w sobie – strona stoi, przewija się tylko lista (wysokość do dolnego paska) */
 .list.blist{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .psiatka{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.bsort{flex-wrap:nowrap;gap:8px;align-items:center;margin:18px 0 8px}.bsort h2{margin:0;white-space:nowrap;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bsort .seg2{display:flex;align-items:center;gap:4px;flex:none}.bsort .seg2 .tab{margin:0;padding:6px 10px;font-size:14px;min-height:36px}
