@@ -488,3 +488,6 @@ main{padding:16px 16px 100px}
 .li .uico .ic{width:20px;height:20px}
 .li .ui-brak{color:var(--bad,#b91c1c)}.li .ui-foto{color:#475569}
 .gph .gnav{top:auto;bottom:auto;top:122px}
+/* 1.32.3: „Na rzucie” na kafelku zdjęcia – w polu opisu, po prawej */
+.gph .gnav{top:auto;bottom:14px;right:12px;background:#fff;border:1px solid #CBD5E1;box-shadow:none}
+.gph:has(.gnav) .gcap{padding-right:64px}
