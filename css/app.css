@@ -463,3 +463,6 @@ main{padding:16px 16px 100px}
 .mk.puls::after{content:'';position:absolute;left:50%;top:50%;width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));border-radius:50%;transform:translate(-50%,-50%);border:calc(4px*var(--inv,1)) solid #f59e0b;animation:mkFala 1s ease-out forwards;pointer-events:none}
 @keyframes mkPuls{from{transform:scale(1)}to{transform:scale(1.8)}}
 @keyframes mkFala{from{width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));opacity:1}to{width:calc(140px*var(--inv,1));height:calc(140px*var(--inv,1));opacity:0}}
+/* 1.31.5: przyciski z ikoną – ikona i tekst w jednej linii, wyśrodkowane w pionie */
+.btn:has(> .ic){display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn > .ic{width:20px;height:20px;flex:none}
