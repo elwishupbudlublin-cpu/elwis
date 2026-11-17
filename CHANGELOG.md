@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.9 – 2026-11-17 (aplikacja)
+- Nagłówek: bieżąca czynność synchronizacji (np. „Pobieranie rzutów 3/7 · 45%”) w polu stanu sieci zamiast „Online”, z migającą żółtą kropką; po zakończeniu wraca „Zsynchr. gg:mm” / „Online” / „Offline”. Osobna plakietka pod nagłówkiem usunięta, cienka linia postępu zostaje.
+
 ## 1.31.8 – 2026-11-17 (aplikacja)
 - Lista budów: przycisk sortowania „Podłączone” → „Rozpoczęto %”.
 

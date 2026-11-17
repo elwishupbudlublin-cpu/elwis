@@ -18,9 +18,9 @@ const UI = {
   toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(this._t); this._t = setTimeout(() => el.classList.remove('show'), 2600); },
   net() {
     const n = $('#net'), t = $('#netText');
-    n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '');
+    n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '') + (S.syncing ? ' sync' : '');
     const p = S.pending ? ` · ${S.pending} do wysłania` : '';
-    t.textContent = S.syncing ? 'Synchronizuję…' + (S.prog ? ' ' + Math.round(S.prog.p * 100) + '%' : '') : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
+    t.textContent = S.syncing ? (S.prog && S.prog.t ? S.prog.t : 'Synchronizuję…') + (S.prog ? ' · ' + Math.round(S.prog.p * 100) + '%' : '') : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
     $('#btnSync .spinico').classList.toggle('spin', S.syncing);
     this.prog();
     $('#memWarn').hidden = !(S.malo && S.user);
@@ -32,8 +32,10 @@ const UI = {
     $('#syncStrip').hidden = !on || $('#top').hidden;
     if (!on) return;
     $('#syncFill').style.width = Math.round(S.prog.p * 100) + '%';
-    $('#syncTxt').textContent = S.prog.t;
-    $('#netText').textContent = 'Synchronizuję… ' + Math.round(S.prog.p * 100) + '%';
+    // od 1.31.9: bieżąca czynność synchronizacji w polu stanu sieci (zamiast „Online”), bez osobnej plakietki
+    $('#syncTxt').textContent = '';
+    $('#netText').textContent = (S.prog.t || 'Synchronizuję…') + ' · ' + Math.round(S.prog.p * 100) + '%';
+    $('#net').classList.add('sync');
   },
   header(sub, back) {
     $('#top').hidden = false; $('#topSub').textContent = sub || '';

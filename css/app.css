@@ -471,3 +471,8 @@ main{padding:16px 16px 100px}
 .syncstrip .sbar{height:4px;border-radius:0;background:rgba(255,255,255,.18)}
 .syncstrip #syncTxt{position:absolute;top:8px;right:14px;background:var(--navy);color:#fff;font-size:12px;line-height:1;padding:6px 10px;border-radius:999px;box-shadow:0 2px 8px rgba(15,23,42,.25);white-space:nowrap}
 .syncstrip #syncTxt:empty{display:none}
+/* 1.31.9: czynność synchronizacji w polu stanu sieci */
+.net{max-width:min(340px,40vw);min-width:0}
+.net #netText{overflow:hidden;text-overflow:ellipsis}
+.net.sync .dot{background:#facc15;animation:netMig .8s ease-in-out infinite alternate}
+@keyframes netMig{from{opacity:1}to{opacity:.3}}
