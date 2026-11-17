@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.7 – 2026-11-17 (aplikacja)
+- Synchronizacja: pasek postępu jako cienka linia na dolnej krawędzi nagłówka i mały napis nad treścią – nie powiększa górnego paska i nie przesuwa widoku.
+
 ## 1.31.6 – 2026-11-17 (aplikacja)
 - Automatyczna synchronizacja co 10 min (wcześniej co 3 min). Bez zmian: synchronizacja po zalogowaniu, po odzyskaniu sieci, po otwarciu budowy, po zamknięciu protokołu i przyciskiem ⟳.
 
