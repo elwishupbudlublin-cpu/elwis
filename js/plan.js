@@ -9,7 +9,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
   const HOLD = 2000;    // ms – przytrzymanie znacznika 2 s = przesuwanie (od 1.30.0, opt.onMove)
-  let hold = 0, drag = null, trzym = null;
+  let hold = 0, drag = null, trzym = null, wielo = false;
   const puscTrzym = () => { if (trzym) { trzym.classList.remove('trzym'); trzym = null; } };
 
   const M = 40; // px marginesu przy krawędzi
@@ -34,13 +34,31 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     const ns = Math.max(minS, Math.min(s * f, 6));
     tx = cx - (cx - tx) * (ns / s); ty = cy - (cy - ty) * (ns / s); s = ns; apply();
   }
+  // od 1.30.3: urządzenia w (prawie) tym samym miejscu rzutu – kropki obok siebie, stykające się bokiem (stały odstęp na ekranie, przy każdym powiększeniu)
+  const BLISKO = 0.006, KROP = 30;
+  function rozsun() {
+    const grp = markers.map((m, i) => i);
+    const f = i => grp[i] === i ? i : (grp[i] = f(grp[i]));
+    markers.forEach((a, i) => markers.forEach((b, j) => { if (j > i && Math.abs(a.x - b.x) < BLISKO && Math.abs(a.y - b.y) < BLISKO) grp[f(j)] = f(i); }));
+    const g = {}; markers.forEach((m, i) => { (g[f(i)] = g[f(i)] || []).push(m); });
+    Object.values(g).forEach(arr => {
+      const cx = arr.reduce((a, m) => a + m.x, 0) / arr.length, cy = arr.reduce((a, m) => a + m.y, 0) / arr.length;
+      arr.sort((a, b) => a.x - b.x || String(a.id).localeCompare(String(b.id), 'pl', { numeric: true }));
+      arr.forEach((m, k) => { m.px = arr.length > 1 ? cx : m.x; m.py = arr.length > 1 ? cy : m.y; m.dx = arr.length > 1 ? (k - (arr.length - 1) / 2) * KROP : 0; });
+    });
+  }
+  function ustaw(b, m) {
+    b.style.left = (m.px * 100) + '%'; b.style.top = (m.py * 100) + '%';
+    b.style.marginLeft = m.dx ? `calc(${-15 + m.dx}px*var(--inv,1))` : '';
+  }
   img.onload = () => {
     W = img.naturalWidth; H = img.naturalHeight;
     img.style.width = W + 'px'; img.style.height = H + 'px';
     layer.style.width = W + 'px'; layer.style.height = H + 'px';
+    rozsun();
     for (const m of markers) {
       const b = document.createElement('button');
-      b.className = 'mk ' + m.cls; b.dataset.id = m.id; b.style.left = (m.x * 100) + '%'; b.style.top = (m.y * 100) + '%';
+      b.className = 'mk ' + m.cls; b.dataset.id = m.id; ustaw(b, m);
       b.setAttribute('aria-label', m.label); b.title = m.label;
       layer.appendChild(b);
     }
@@ -50,14 +68,15 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     if (e.target.closest('.planctl')) return; // przyciski powiększenia działają zwykłym kliknięciem
     box.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) { moved = false; start = { x: e.clientX, y: e.clientY }; }
-    clearTimeout(hold);
-    if (pts.size === 1 && opt.onMove && !wskaz) {
+    clearTimeout(hold); puscTrzym();
+    if (pts.size >= 2) wielo = true;   // od 1.30.3: 2+ palce (np. powiększanie) – bez odliczania do przesuwania aż do zdjęcia wszystkich palców
+    if (pts.size === 1 && opt.onMove && !wskaz && !wielo) {
       const m = najblizszy(e.clientX, e.clientY);
       const el0 = m && layer.querySelector(`.mk[data-id="${CSS.escape(m.id)}"]`);
       if (el0) { trzym = el0; el0.classList.add('trzym'); }   // otoczka rośnie przez 2 s przytrzymania
       if (m) hold = setTimeout(() => {
         if (trzym) { trzym.classList.remove('trzym'); trzym = null; }
-        if (moved || pts.size !== 1) return;
+        if (moved || pts.size !== 1 || wielo) return;
         const el = layer.querySelector(`.mk[data-id="${CSS.escape(m.id)}"]`); if (!el) return;
         drag = { m, el, fx: m.x, fy: m.y, ruch: false }; el.classList.add('drag'); box.classList.add('przesuw');
         if (navigator.vibrate) navigator.vibrate(30);
@@ -70,7 +89,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     if (drag) {   // przesuwanie znacznika palcem
       const r = box.getBoundingClientRect();
       drag.fx = Math.min(1, Math.max(0, (e.clientX - r.left - tx) / (W * s))); drag.fy = Math.min(1, Math.max(0, (e.clientY - r.top - ty) / (H * s)));
-      drag.el.style.left = (drag.fx * 100) + '%'; drag.el.style.top = (drag.fy * 100) + '%';
+      drag.el.style.left = (drag.fx * 100) + '%'; drag.el.style.top = (drag.fy * 100) + '%'; drag.el.style.marginLeft = '';
       if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) drag.ruch = true;
       return;
     }
@@ -91,12 +110,13 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     const single = pts.size === 1;
     pts.delete(e.pointerId); if (pts.size < 2) last = null;
     clearTimeout(hold); puscTrzym();
+    if (!pts.size) wielo = false;
     if (drag) {
       const d = drag; drag = null; box.classList.remove('przesuw'); tap = false;
-      const wroc = () => { d.el.classList.remove('drag'); d.el.style.left = (d.m.x * 100) + '%'; d.el.style.top = (d.m.y * 100) + '%'; };
+      const wroc = () => { d.el.classList.remove('drag'); ustaw(d.el, d.m); };
       if (!d.ruch || e.type !== 'pointerup') { wroc(); return; }
       const fx = Math.round(d.fx * 1e4) / 1e4, fy = Math.round(d.fy * 1e4) / 1e4;
-      opt.onMove(d.m.id, fx, fy, wroc, () => { d.el.classList.remove('drag'); d.m.x = fx; d.m.y = fy; });
+      opt.onMove(d.m.id, fx, fy, wroc, () => { d.el.classList.remove('drag'); d.m.x = fx; d.m.y = fy; rozsun(); layer.querySelectorAll('.mk[data-id]').forEach(b => { const m = markers.find(x => x.id === b.dataset.id); if (m) ustaw(b, m); }); });
       return;
     }
     tap = single && !moved && e.type === 'pointerup';
@@ -121,7 +141,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   function najblizszy(x, y) {
     const r = box.getBoundingClientRect(); let best = null, bd = HIT;
     for (const m of markers) {
-      const d = Math.hypot(r.left + tx + m.x * W * s - x, r.top + ty + m.y * H * s - y);
+      const d = Math.hypot(r.left + tx + (m.px != null ? m.px : m.x) * W * s + (m.dx || 0) - x, r.top + ty + (m.py != null ? m.py : m.y) * H * s - y);
       if (d < bd) { bd = d; best = m; }
     }
     return best;
@@ -146,7 +166,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     focus(id) {
       const m = markers.find(x => x.id === id); if (!m) return;
       const r = box.getBoundingClientRect(); s = Math.max(s, Math.min(r.width / W, r.height / H) * 3);
-      tx = r.width / 2 - m.x * W * s; ty = r.height / 2 - m.y * H * s; apply();
+      tx = r.width / 2 - (m.px != null ? m.px : m.x) * W * s - (m.dx || 0); ty = r.height / 2 - (m.py != null ? m.py : m.y) * H * s; apply();
     }
   };
 }

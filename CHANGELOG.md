@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.30.3 – 2026-11-17 (aplikacja)
+- Rzut: urządzenia w tym samym (lub prawie tym samym, < 0,006) miejscu – kropki w rzędzie obok siebie, stykające się bokiem, przy każdym powiększeniu; dotknięcie trafia we właściwą kropkę.
+- Przesuwanie kropki: dotyk 2 lub więcej palcami (powiększanie) nie uruchamia odliczania – aż do zdjęcia wszystkich palców.
+
 ## 1.30.2 – 2026-11-17 (aplikacja)
 - Rzut: przy przytrzymaniu kropki okrąg rośnie przez 0,5 s, potem do 2 s linia zmienia kolor na zielony stopniowo dookoła; w trybie przesuwania otoczka miga na zielono.
 
