@@ -7,7 +7,7 @@ const IKONY = { plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4">
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
-  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
+  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
   chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
   x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
   plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
@@ -417,7 +417,7 @@ const Views = {
         const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
       return `<span class="lstat"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : ''}${pasek3(L, maly)}</span>`;
     };
-    const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? '<span class="chip ok">✓ offline</span>' : ''}`;
+    const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? `<span class="chip ok chipic" title="Dostępne offline – zapisane w tablecie">${ic('offline')} offline</span>` : ''}`;
     wstawWidok(`
       <section class="bhero">
         <h1>Wyszukaj budowę</h1>
@@ -491,7 +491,7 @@ const Views = {
           <span class="bst"><span class="sv">${F.notes.length} <small>${odm(F.notes.length, 'notatka', 'notatki', 'notatek')}</small></span></span>
           <span class="brow"><span></span><button class="inb" id="bNote">${ic('plus')}Notatka</button></span></div>
         <button class="big" id="tDokP"><span class="bi">${ic('folder')}</span><span class="bt"><b>Dokumenty projektowe</b><span>Rzuty, schematy, dokumenty budowy</span></span>
-          <span class="bst"><span class="sv">${pliki.length} <small>${odm(pliki.length, 'plik', 'pliki', 'plików')}</small></span></span>${pliki.length ? `<span class="chip ${plikiOff === pliki.length ? 'ok' : 'gr'}">✓ ${plikiOff} offline</span>` : PUSTY}</button>
+          <span class="bst"><span class="sv">${pliki.length} <small>${odm(pliki.length, 'plik', 'pliki', 'plików')}</small></span></span>${pliki.length ? `<span class="chip chipic ${plikiOff === pliki.length ? 'ok' : 'gr'}" title="Pliki dostępne offline">${ic('offline')} ${plikiOff} offline</span>` : PUSTY}</button>
       </div>
       <section class="card more" style="margin-top:14px"><span class="lbl">Więcej</span>
         <button class="mrow" id="mDokT">${ic('book')}<b>Dokumenty techniczne</b><span>${tech.length}</span>${ic('chev')}</button>

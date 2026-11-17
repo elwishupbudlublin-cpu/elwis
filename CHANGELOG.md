@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.32.0 – 2026-11-17 (aplikacja)
+- Znacznik „offline” (budowy zapisane w tablecie, pliki na kafelku Dokumenty): ikona chmury z pobieraniem zamiast „✓”.
+
 ## 1.31.9 – 2026-11-17 (aplikacja)
 - Nagłówek: bieżąca czynność synchronizacji (np. „Pobieranie rzutów 3/7 · 45%”) w polu stanu sieci zamiast „Online”, z migającą żółtą kropką; po zakończeniu wraca „Zsynchr. gg:mm” / „Online” / „Offline”. Osobna plakietka pod nagłówkiem usunięta, cienka linia postępu zostaje.
 

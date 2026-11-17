@@ -476,3 +476,4 @@ main{padding:16px 16px 100px}
 .net #netText{overflow:hidden;text-overflow:ellipsis}
 .net.sync .dot{background:#facc15;animation:netMig .8s ease-in-out infinite alternate}
 @keyframes netMig{from{opacity:1}to{opacity:.3}}
+.chipic{display:inline-flex;align-items:center;gap:4px}.chipic .ic{width:16px;height:16px}
