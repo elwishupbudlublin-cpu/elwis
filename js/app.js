@@ -404,9 +404,11 @@ const Views = {
     const so = Object.assign({ k: 'kod', d: 1 }, (await DB.get('sortBud')) || {});
     if (UI.cur !== 'home') return;
     const SORT = { kod: (a, b) => natCmp(a.kod, b.kod), naz: (a, b) => naz(a).localeCompare(naz(b), 'pl', { sensitivity: 'base' }),
-      podl: (a, b) => (((licz(a) || {}).p) || 0) - (((licz(b) || {}).p) || 0) || natCmp(a.kod, b.kod) };
+      // od 1.31.2: % urządzeń z rozpoczętą pracą (rozp. / wszystkie); budowy bez liczników – zawsze na końcu
+      podl: (a, b) => { const pr = p => { const L = licz(p); return L && L.w ? L.d / L.w : -1; };
+        const x = pr(a), y = pr(b); if ((x < 0) !== (y < 0)) return (x < 0 ? 1 : -1) * so.d; return (x - y) || natCmp(a.kod, b.kod); } };
     list.sort((a, b) => (SORT[so.k] || SORT.kod)(a, b) * so.d);
-    const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : 'liczba podłączonych urządzeń'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
+    const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : '% urządzeń z rozpoczętą pracą'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     const stat = (p, maly) => {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;

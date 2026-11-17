@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.2 – 2026-11-17 (aplikacja)
+- Lista budów: sortowanie „Podłączone” po % urządzeń z rozpoczętą pracą (rozp. / wszystkie), a nie po liczbie podłączonych; budowy bez liczników zawsze na końcu.
+
 ## 1.31.1 – 2026-11-17 (aplikacja – poprawka)
 - Rzut: „Pokaż” / „Na rzucie” przy dużym pliku rzutu wskazywały zawsze cały rzut – przybliżenie liczone było przed wczytaniem obrazu i po wczytaniu nadpisywane widokiem całości. Teraz wskazanie czeka na wczytanie rzutu.
 
