@@ -953,7 +953,7 @@ const Dialogs = {
           <div class="row" style="flex-wrap:wrap"><span class="grow">System: <b>${U.esc(u.sys || '— brak (autonomiczne)')}</b></span><button class="btn sm" id="aSys">Zmień system</button></div>
           <div class="row" style="flex-wrap:wrap"><span class="grow">Pozycja: <b>${u.x === '' || u.x == null ? 'brak na rzucie' : 'rzut ' + U.esc(u.arkusz || '—')}</b></span><button class="btn sm" id="aPoz">${u.x === '' || u.x == null ? 'Ustaw na rzucie' : 'Ustaw ponownie'}</button><button class="btn sm bad" id="aDel">Usuń urządzenie</button></div></div>` : ''}
       </div>
-      <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan">Na rzucie</button></div>
+      <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan" title="Pokaż urządzenie na rzucie">${ic('pin')} Pokaż</button></div>
     </div></div>`;
     modal.querySelectorAll('[data-sys]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.sys));
     modal.querySelectorAll('[data-otw]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.otw));   // od 1.28.0: braki systemu → karta urządzenia

@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.3 – 2026-11-17 (aplikacja)
+- Karta urządzenia: przycisk „Na rzucie” → „Pokaż” z ikoną pinezki (jak w oknie braku).
+
 ## 1.31.2 – 2026-11-17 (aplikacja)
 - Lista budów: sortowanie „Podłączone” po % urządzeń z rozpoczętą pracą (rozp. / wszystkie), a nie po liczbie podłączonych; budowy bez liczników zawsze na końcu.
 
