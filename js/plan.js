@@ -4,7 +4,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   const layer = document.createElement('div'); layer.className = 'layer';
   const img = new Image(); img.src = imgUrl; img.alt = 'Rzut';
   layer.appendChild(img); box.appendChild(layer);
-  let s = 1, tx = 0, ty = 0, W = 1, H = 1, minS = 0.1;
+  let s = 1, tx = 0, ty = 0, W = 1, H = 1, minS = 0.1, loaded = false, czekaFocus = null;
   const pts = new Map(); let last = null, moved = false, start = null, tap = false, tapTimer = 0;
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
@@ -62,7 +62,8 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       b.setAttribute('aria-label', m.label); b.title = m.label;
       layer.appendChild(b);
     }
-    fit();
+    fit(); loaded = true;
+    if (czekaFocus) { const id = czekaFocus; czekaFocus = null; api.focus(id); }
   };
   box.addEventListener('pointerdown', e => {
     if (e.target.closest('.planctl')) return; // przyciski powiększenia działają zwykłym kliknięciem
@@ -156,7 +157,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   });
   box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
   box.addEventListener('wheel', e => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
-  return {
+  const api = {
     box,
     recolor(fn) { layer.querySelectorAll('.mk').forEach(b => { const r = fn(b.dataset.id); b.className = 'mk ' + r.cls; b.title = r.label; b.setAttribute('aria-label', r.label); }); },
     zoomIn() { const r = box.getBoundingClientRect(); zoomAt(1.3, r.width / 2, r.height / 2); },
@@ -164,6 +165,8 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     fit,
     wskaz(fn) { wskaz = fn; box.classList.toggle('wskaz', !!fn); if (!fn && pin) { pin.remove(); pin = null; } },
     focus(id) {
+      // od 1.31.1: rzut jeszcze się wczytuje (duży plik) – wskazanie po wczytaniu, inaczej fit() cofało widok do całego rzutu
+      if (!loaded) { czekaFocus = id; return; }
       const m = markers.find(x => x.id === id); if (!m) return;
       const r = box.getBoundingClientRect(); s = Math.max(s, Math.min(r.width / W, r.height / H) * 3);
       tx = r.width / 2 - (m.px != null ? m.px : m.x) * W * s - (m.dx || 0); ty = r.height / 2 - (m.py != null ? m.py : m.y) * H * s; apply();
@@ -172,4 +175,5 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       if (el) { el.classList.remove('puls'); void el.offsetWidth; el.classList.add('puls'); setTimeout(() => el.classList.remove('puls'), 1100); }
     }
   };
+  return api;
 }

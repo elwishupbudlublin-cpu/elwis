@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.1 – 2026-11-17 (aplikacja – poprawka)
+- Rzut: „Pokaż” / „Na rzucie” przy dużym pliku rzutu wskazywały zawsze cały rzut – przybliżenie liczone było przed wczytaniem obrazu i po wczytaniu nadpisywane widokiem całości. Teraz wskazanie czeka na wczytanie rzutu.
+
 ## 1.31.0 – 2026-11-17 (aplikacja)
 - Budowa → Urządzenia: pasek Rzut / Lista, lista rozwijana System (wszystkie, każda szafa / rozdzielnica z liczbą urządzeń, bez systemu), lista rozwijana Filtr (stan, protokoły, typy urządzeń), „+ Dodaj urządzenie” po prawej w tej samej wysokości; w pionie pasek w dwóch liniach.
 - Okno braku: przyciski „Urządzenie …” i „Pokaż” (rzut z przybliżeniem na urządzenie; wyszarzony, gdy brak pozycji).
