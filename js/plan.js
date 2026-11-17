@@ -9,7 +9,8 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
   const HOLD = 2000;    // ms – przytrzymanie znacznika 2 s = przesuwanie (od 1.30.0, opt.onMove)
-  let hold = 0, drag = null;
+  let hold = 0, drag = null, trzym = null;
+  const puscTrzym = () => { if (trzym) { trzym.classList.remove('trzym'); trzym = null; } };
 
   const M = 40; // px marginesu przy krawędzi
   function clamp() {
@@ -52,7 +53,10 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     clearTimeout(hold);
     if (pts.size === 1 && opt.onMove && !wskaz) {
       const m = najblizszy(e.clientX, e.clientY);
+      const el0 = m && layer.querySelector(`.mk[data-id="${CSS.escape(m.id)}"]`);
+      if (el0) { trzym = el0; el0.classList.add('trzym'); }   // otoczka rośnie przez 2 s przytrzymania
       if (m) hold = setTimeout(() => {
+        if (trzym) { trzym.classList.remove('trzym'); trzym = null; }
         if (moved || pts.size !== 1) return;
         const el = layer.querySelector(`.mk[data-id="${CSS.escape(m.id)}"]`); if (!el) return;
         drag = { m, el, fx: m.x, fy: m.y, ruch: false }; el.classList.add('drag'); box.classList.add('przesuw');
@@ -71,7 +75,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       return;
     }
     if (pts.size === 1) {
-      if (!moved && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) moved = true;
+      if (!moved && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) { moved = true; puscTrzym(); }
       if (moved) { tx += e.clientX - prev.x; ty += e.clientY - prev.y; apply(); }
     } else if (pts.size === 2) {
       const [a, b] = [...pts.values()];
@@ -86,7 +90,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     if (!pts.has(e.pointerId)) return;
     const single = pts.size === 1;
     pts.delete(e.pointerId); if (pts.size < 2) last = null;
-    clearTimeout(hold);
+    clearTimeout(hold); puscTrzym();
     if (drag) {
       const d = drag; drag = null; box.classList.remove('przesuw'); tap = false;
       const wroc = () => { d.el.classList.remove('drag'); d.el.style.left = (d.m.x * 100) + '%'; d.el.style.top = (d.m.y * 100) + '%'; };

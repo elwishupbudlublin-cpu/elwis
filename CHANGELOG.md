@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.30.1 – 2026-11-17 (aplikacja)
+- Rzut: otoczka wokół kropki przy przesuwaniu – podczas 2 s przytrzymania rośnie (postęp), w trybie przesuwania miga, kilka razy większa od kropki.
+
 ## 1.30.0 – 2026-11-17 (aplikacja i serwer)
 - Wpisany nr seryjny = prace rozpoczęte: urządzenie „w toku” (kolor na rzucie i liście), liczy się do „rozp.” (tablet i serwer).
 - Zgłoś brak: bez domyślnego rodzaju; opis wymagany tylko przy „Inne” lub bez rodzaju.
