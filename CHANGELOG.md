@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.32.2 – 2026-11-17 (aplikacja)
+- Lista urządzeń: ikonka czerwonego trójkąta przy otwartym braku i ikonka aparatu przy zdjęciach (urządzenia i jego braków), z liczbą, gdy więcej niż 1.
+- Zdjęcia z budowy: przycisk „Na rzucie” w dolnym prawym rogu zdjęcia na kafelku.
+
 ## 1.32.1 – 2026-11-17 (aplikacja)
 - Zdjęcia z budowy: na kafelku zdjęcia urządzenia (także zdjęcia braku przy urządzeniu) okrągły przycisk z celownikiem, a w podglądzie zdjęcia przycisk „Na rzucie” – przejście do urządzenia na rzucie z pulsującą kropką. Brak przycisku, gdy urządzenie nie ma pozycji na rzucie lub zdjęcie nie dotyczy urządzenia.
 
