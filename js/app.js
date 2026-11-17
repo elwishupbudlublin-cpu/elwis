@@ -424,7 +424,7 @@ const Views = {
       </section>
       <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
       <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
-        <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Podłączone')}</div></div>
+        <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Rozpoczęto %')}</div></div>
       <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
     dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());

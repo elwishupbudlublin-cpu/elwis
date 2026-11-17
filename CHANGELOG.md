@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.8 – 2026-11-17 (aplikacja)
+- Lista budów: przycisk sortowania „Podłączone” → „Rozpoczęto %”.
+
 ## 1.31.7 – 2026-11-17 (aplikacja)
 - Synchronizacja: pasek postępu jako cienka linia na dolnej krawędzi nagłówka i mały napis nad treścią – nie powiększa górnego paska i nie przesuwa widoku.
 
