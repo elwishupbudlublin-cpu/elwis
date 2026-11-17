@@ -451,3 +451,15 @@ main{padding:16px 16px 100px}
 @keyframes otoczkaRos{from{width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));opacity:.4}to{width:calc(150px*var(--inv,1));height:calc(150px*var(--inv,1));opacity:1}}
 @keyframes otoczkaMiga{from{opacity:1}to{opacity:.15}}
 .mk.trzym{z-index:5;opacity:1}
+/* 1.31.0: pasek urządzeń – Rzut / Lista, listy rozwijane System i Filtr, „+ Dodaj urządzenie” po prawej, wszystko tej samej wysokości */
+.ubtn{align-items:center}
+.tsel{flex:none;position:relative}
+.tsel select{min-height:44px;height:44px;width:auto;max-width:230px;padding:0 38px 0 16px;border-radius:22px;border:1px solid #CBD5E1;background:#fff;font-weight:600;color:#334155;
+  -webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23334155' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.tsel.on select{background-color:var(--navy);border-color:var(--navy);color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E")}
+.tab.pri{background:var(--blue,#2563eb);border-color:var(--blue,#2563eb);color:#fff}
+@media (max-width:720px){.ubar .ubtn{flex-wrap:wrap;row-gap:8px}.ubtn>span[style]{display:none}.szer{display:none}}
+.mk.puls{z-index:6;opacity:1;animation:mkPuls .35s ease-in-out 3 alternate}
+.mk.puls::after{content:'';position:absolute;left:50%;top:50%;width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));border-radius:50%;transform:translate(-50%,-50%);border:calc(4px*var(--inv,1)) solid #f59e0b;animation:mkFala 1s ease-out forwards;pointer-events:none}
+@keyframes mkPuls{from{transform:scale(1)}to{transform:scale(1.8)}}
+@keyframes mkFala{from{width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));opacity:1}to{width:calc(140px*var(--inv,1));height:calc(140px*var(--inv,1));opacity:0}}

@@ -167,6 +167,9 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       const m = markers.find(x => x.id === id); if (!m) return;
       const r = box.getBoundingClientRect(); s = Math.max(s, Math.min(r.width / W, r.height / H) * 3);
       tx = r.width / 2 - (m.px != null ? m.px : m.x) * W * s - (m.dx || 0); ty = r.height / 2 - (m.py != null ? m.py : m.y) * H * s; apply();
+      // od 1.31.0: kropka pulsuje przez ok. 1 s, żeby była dobrze widoczna
+      const el = layer.querySelector(`.mk[data-id="${CSS.escape(id)}"]`);
+      if (el) { el.classList.remove('puls'); void el.offsetWidth; el.classList.add('puls'); setTimeout(() => el.classList.remove('puls'), 1100); }
     }
   };
 }

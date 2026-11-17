@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.31.0 – 2026-11-17 (aplikacja)
+- Budowa → Urządzenia: pasek Rzut / Lista, lista rozwijana System (wszystkie, każda szafa / rozdzielnica z liczbą urządzeń, bez systemu), lista rozwijana Filtr (stan, protokoły, typy urządzeń), „+ Dodaj urządzenie” po prawej w tej samej wysokości; w pionie pasek w dwóch liniach.
+- Okno braku: przyciski „Urządzenie …” i „Pokaż” (rzut z przybliżeniem na urządzenie; wyszarzony, gdy brak pozycji).
+- Rzut: kropka wskazanego urządzenia pulsuje ok. 1 s (także „Na rzucie” w karcie urządzenia).
+
 ## 1.30.3 – 2026-11-17 (aplikacja)
 - Rzut: urządzenia w tym samym (lub prawie tym samym, < 0,006) miejscu – kropki w rzędzie obok siebie, stykające się bokiem, przy każdym powiększeniu; dotknięcie trafia we właściwą kropkę.
 - Przesuwanie kropki: dotyk 2 lub więcej palcami (powiększanie) nie uruchamia odliczania – aż do zdjęcia wszystkich palców.

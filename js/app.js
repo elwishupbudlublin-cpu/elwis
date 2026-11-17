@@ -695,7 +695,11 @@ const Views = {
     // sortowanie listy (od 1.14.0): ID ELWIS albo oznaczenie z projektu – zawsze w grupach kondygnacji; wybór zapamiętany na tablecie
     const sortUrz = par.s || (await DB.get('sortUrz')) || 'id';
     const q = U.norm(par.q || '');
-    const vis = urz.filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+    // system (od 1.31.0): wybór z listy rozwijanej – urządzenia, które w kolumnie System mają ID tej szafy; „-” = bez systemu
+    const sysF = par.sys || '';
+    const systemy = [...new Set(urz.flatMap(u => sysList(u)))].sort(natCmp);
+    const wSys = u => !sysF || (sysF === '-' ? !sysList(u).length : sysList(u).includes(sysF));
+    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
       .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn, u.sys].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
@@ -703,9 +707,16 @@ const Views = {
     wstawWidok(etapSwitch() + `
       <div class="ubar">
       <div class="row" style="margin-bottom:${mode === 'lista' ? 8 : 0}px">
-        <div class="tabs grow" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
-        <span style="width:12px"></span>${[['all', 'Wszystkie'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : []), ...prefixes.map(x => [x, typOf(x + '1').nazwa])].map(([k, l]) => `<button class="tab ${k === filt ? 'on' : ''}" data-fl="${U.esc(k)}">${U.esc(l)}</button>`).join('')}</div>
-        ${biuro ? '<button class="btn sm pri" id="uAdd" title="Tylko rola biuro">+ Dodaj urządzenie</button>' : ''}
+        <div class="tabs grow ubtn" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
+        <span style="width:8px;flex:none"></span>
+        <label class="tsel ${sysF ? 'on' : ''}"><span hidden>System</span><select id="uSys" aria-label="System">
+          <option value="">Wszystkie systemy</option><optgroup label="System (szafa / rozdzielnica)">${systemy.map(x => `<option value="${U.esc(x)}" ${x === sysF ? 'selected' : ''}>${U.esc(idOz(x))} (${urz.filter(u => sysList(u).includes(x)).length})</option>`).join('')}
+</optgroup>
+          <option value="-" ${sysF === '-' ? 'selected' : ''}>Bez systemu (${urz.filter(u => !sysList(u).length).length})</option></select></label>
+        <label class="tsel ${filt !== 'all' ? 'on' : ''}"><span hidden>Filtr</span><select id="uFil" aria-label="Filtr">${[['all', 'Wszystkie urządzenia'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === filt ? 'selected' : ''}>${U.esc(l)}</option>`).join('')}
+          <optgroup label="Typ urządzenia">${prefixes.map(x => `<option value="${U.esc(x)}" ${x === filt ? 'selected' : ''}>${U.esc(typOf(x + '1').nazwa)}</option>`).join('')}</optgroup></select></label>
+</div>
+        ${biuro ? '<button class="tab pri" id="uAdd" title="Dodaj urządzenie (tylko rola biuro)" style="flex:none">+ Dodaj<span class="szer"> urządzenie</span></button>' : ''}
       </div>
       ${mode === 'lista' && sheets.length > 1 ? `<div class="tabs" style="margin:8px 0 0"><button class="tab tpoz ${!ark ? 'on' : ''}" data-a="">Wszystkie poziomy<span class="tsub">${sheets.length} rzutów</span></button>${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>` : ''}
       ${mode === 'lista' ? `<div class="row">
@@ -724,7 +735,8 @@ const Views = {
       ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`, '#wyn');
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
-    view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
+    $('#uFil').onchange = e => UI.go('rzut', { ...par, f: e.target.value });
+    $('#uSys').onchange = e => UI.go('rzut', { ...par, sys: e.target.value });
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
     if ($('#uq')) szukajNaZywo($('#uq'), () => Views.rzut(UI.par));
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: par.wskaz && par.wskaz.urz ? { urz: par.wskaz.urz } : null }));
@@ -1106,6 +1118,7 @@ const Dialogs = {
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Brak">
       <div class="shead"><h3>Brak – ${b.urz ? U.esc(idOz(b.urz)) : b.etap ? 'etap ' + U.esc(b.etap) : 'budowa'}</h3><span class="chip ${b.zamk ? 'ok' : 'bad'}">${b.zamk ? 'zamknięty' : 'otwarty'}</span></div>
       <div class="sbody">
+        ${b.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="eUrz">Urządzenie ${U.esc(idOz(b.urz))}</button>${(u => `<button class="btn sm pri" id="eRys" ${u && u.arkusz && u.x !== '' && u.x != null ? '' : 'disabled title="Urządzenie nie ma pozycji na rzucie"'}>${ic('pin')} Pokaż</button>`)(((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz))}</div>` : ''}
         <div class="mute">Zgłosił: ${U.esc(b.kto)} · ${U.fmt(b.ts)}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
         <label><span class="f" style="display:block">Opis</span><textarea id="eo">${U.esc(b.opis)}</textarea></label>
@@ -1121,7 +1134,6 @@ const Dialogs = {
       <div class="sfoot">
         ${autor || biuro ? '<button class="btn bad" id="eDel">Usuń</button>' : ''}
         ${b.zamk ? (biuro ? '<button class="btn" id="eOpen">Otwórz ponownie</button>' : '') : '<button class="btn ok" id="eClose">Zamknij brak</button>'}
-        ${b.urz ? '<button class="btn" id="eUrz">Urządzenie</button>' : ''}
         <button class="btn" id="eX">Anuluj</button><button class="btn pri" id="eS">Zapisz zmiany</button></div></div></div>`;
     hydrateFotos(modal);
     modal.querySelectorAll('.cats button').forEach(x => x.onclick = () => { kat = x.dataset.k; modal.querySelectorAll('.cats button').forEach(y => y.classList.toggle('on', y === x)); });
@@ -1129,6 +1141,9 @@ const Dialogs = {
     $('#ekf').onclick = () => pickFile(async f => { komFoto.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#ekc').textContent = komFoto.length + ' zdjęć'; });
     $('#eX').onclick = wroc;
     if ($('#eUrz')) $('#eUrz').onclick = () => Dialogs.device(b.urz);
+    // od 1.31.0: rzut z urządzeniem braku – przybliżenie i pulsująca kropka
+    if ($('#eRys')) $('#eRys').onclick = async () => { const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz); if (!u) return;
+      if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: u.id, sys: '', f: 'all' }); };
     $('#eS').onclick = async () => {
       const opis = $('#eo').value.trim(), blok = $('#eb').checked; if (!opis) { UI.toast('Opis nie może być pusty.'); return; }
       const d = { bid };
