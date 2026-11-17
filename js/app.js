@@ -7,7 +7,7 @@ const IKONY = { plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4">
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
-  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
+  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
   chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
   x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
   plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
@@ -953,7 +953,7 @@ const Dialogs = {
           <div class="row" style="flex-wrap:wrap"><span class="grow">System: <b>${U.esc(u.sys || '— brak (autonomiczne)')}</b></span><button class="btn sm" id="aSys">Zmień system</button></div>
           <div class="row" style="flex-wrap:wrap"><span class="grow">Pozycja: <b>${u.x === '' || u.x == null ? 'brak na rzucie' : 'rzut ' + U.esc(u.arkusz || '—')}</b></span><button class="btn sm" id="aPoz">${u.x === '' || u.x == null ? 'Ustaw na rzucie' : 'Ustaw ponownie'}</button><button class="btn sm bad" id="aDel">Usuń urządzenie</button></div></div>` : ''}
       </div>
-      <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan" title="Pokaż urządzenie na rzucie">${ic('pin')} Pokaż</button></div>
+      <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan" title="Pokaż urządzenie na rzucie">${ic('cel')} Na rzucie</button></div>
     </div></div>`;
     modal.querySelectorAll('[data-sys]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.sys));
     modal.querySelectorAll('[data-otw]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.otw));   // od 1.28.0: braki systemu → karta urządzenia
@@ -1120,7 +1120,7 @@ const Dialogs = {
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Brak">
       <div class="shead"><h3>Brak – ${b.urz ? U.esc(idOz(b.urz)) : b.etap ? 'etap ' + U.esc(b.etap) : 'budowa'}</h3><span class="chip ${b.zamk ? 'ok' : 'bad'}">${b.zamk ? 'zamknięty' : 'otwarty'}</span></div>
       <div class="sbody">
-        ${b.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="eUrz">Urządzenie ${U.esc(idOz(b.urz))}</button>${(u => `<button class="btn sm pri" id="eRys" ${u && u.arkusz && u.x !== '' && u.x != null ? '' : 'disabled title="Urządzenie nie ma pozycji na rzucie"'}>${ic('pin')} Pokaż</button>`)(((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz))}</div>` : ''}
+        ${b.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="eUrz">Urządzenie ${U.esc(idOz(b.urz))}</button>${(u => `<button class="btn sm pri" id="eRys" ${u && u.arkusz && u.x !== '' && u.x != null ? '' : 'disabled title="Urządzenie nie ma pozycji na rzucie"'}>${ic('cel')} Na rzucie</button>`)(((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz))}</div>` : ''}
         <div class="mute">Zgłosił: ${U.esc(b.kto)} · ${U.fmt(b.ts)}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
         <label><span class="f" style="display:block">Opis</span><textarea id="eo">${U.esc(b.opis)}</textarea></label>

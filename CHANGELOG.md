@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.4 – 2026-11-17 (aplikacja)
+- Karta urządzenia i okno braku: przycisk „Na rzucie” z ikoną celownika (pinezka zostaje przy „Ustaw na rzucie”).
+
 ## 1.31.3 – 2026-11-17 (aplikacja)
 - Karta urządzenia: przycisk „Na rzucie” → „Pokaż” z ikoną pinezki (jak w oknie braku).
 
