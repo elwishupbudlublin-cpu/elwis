@@ -670,11 +670,12 @@ const Views = {
     view.innerHTML = `<h1>Zdjęcia z budowy (${wszystkie.length})</h1>
       <div class="tabs">${[['all', 'Wszystkie', wszystkie.length], ['urz', 'Urządzenia', n('urz')], ['brak', 'Braki', n('brak')], ['notatka', 'Notatki', n('notatka')]].map(([k, l, c]) => `<button class="tab ${k === filtr ? 'on' : ''}" data-fl="${k}">${l} ${c}</button>`).join('')}</div>
       ${groupBy(lista.slice(0, ile), f => U.day(f.ts)).map(([d, arr]) => `<h2>${new Date(d + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-        <div class="gal">${arr.map(f => { const o = opisZdjecia(f, F); return `<button class="gph" data-g="${U.esc(f.fid)}"><span class="gimg" data-gi="${U.esc(f.fid)}">zdjęcie na Dysku</span><span class="gcap"><b>${U.esc(o.t)}</b>${o.s ? `<span>${U.esc(o.s)}</span>` : ''}<span class="m">${U.esc(f.kto)} · ${U.fmt(f.ts)}</span></span></button>`; }).join('')}</div>`).join('') || '<p class="mute">Brak zdjęć.</p>'}
+        <div class="gal">${arr.map(f => { const o = opisZdjecia(f, F); return `<button class="gph" data-g="${U.esc(f.fid)}"><span class="gimg" data-gi="${U.esc(f.fid)}">zdjęcie na Dysku</span><span class="gcap"><b>${U.esc(o.t)}</b>${o.s ? `<span>${U.esc(o.s)}</span>` : ''}<span class="m">${U.esc(f.kto)} · ${U.fmt(f.ts)}</span></span>${f.urz && maPozycje(f.urz) ? `<span class="gnav" role="button" tabindex="0" data-gr="${U.esc(f.urz)}" title="Pokaż ${U.esc(f.urz)} na rzucie" aria-label="Na rzucie">${ic('cel')}</span>` : ''}</button>`; }).join('')}</div>`).join('') || '<p class="mute">Brak zdjęć.</p>'}
       ${lista.length > ile ? `<div class="row" style="margin-top:14px"><button class="btn grow" id="gMore">Pokaż kolejne (${lista.length - ile})</button></div>` : ''}
       <p class="mute">Pełna rozdzielczość tylko dla zdjęć z tego tabletu – pozostałe pobierane w podglądzie pomniejszonym.</p>`;
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('zdjecia', { f: b.dataset.fl }));
     if ($('#gMore')) $('#gMore').onclick = () => UI.go('zdjecia', { ...par, ile: ile + 40 });
+    view.querySelectorAll('[data-gr]').forEach(b => b.onclick = e => { e.stopPropagation(); pokazNaRzucie(b.dataset.gr); });
     view.querySelectorAll('[data-g]').forEach(b => b.onclick = () => Foto.podglad(b.dataset.g));
     view.querySelectorAll('[data-gi]').forEach(async el => {
       const fid = el.dataset.gi; const ph = await DB.getPhoto(fid), m = ph ? null : await DB.getFile('mini:' + fid);
@@ -1424,6 +1425,14 @@ async function thumbs(el, foto) {
 /* miniatury zdjęć w kartach braków (data-fotos="fid,fid") */
 function hydrateFotos(root) { (root || document).querySelectorAll('[data-fotos]').forEach(el => thumbs(el, el.dataset.fotos.split(',').filter(String))); }
 
+/* Przejście do urządzenia na rzucie (od 1.32.1): wspólne dla karty urządzenia, okna braku i zdjęć */
+function maPozycje(id) { const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); return !!(u && u.arkusz && u.x !== '' && u.x != null); }
+async function pokazNaRzucie(id) {
+  const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u || !maPozycje(id)) return;
+  if (!wEtapie(u)) await ustawEtap(u.etap || '');
+  UI.close(); const fv = document.getElementById('fotoView'); if (fv) fv.remove();
+  UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: u.id, sys: '', f: 'all' });
+}
 /* Podgląd i usuwanie zdjęć (od 1.8.0): pełna rozdzielczość – zdjęcia z tego tabletu; z innych tabletów – pomniejszone, pobierane na żądanie */
 const Foto = {
   info(fid) { return fold(S.ev).fotoInfo[fid] || {}; },
@@ -1441,11 +1450,13 @@ const Foto = {
     const wrap = document.createElement('div'); wrap.className = 'fotoview'; wrap.id = 'fotoView';
     const i = this.info(fid);
     wrap.innerHTML = `<div class="fvbar"><span class="grow">${U.esc(i.urz || '')} ${U.esc(({ tabliczka: 'tabliczka', brak: 'zdjęcie braku', notatka: 'zdjęcie notatki' })[i.rodzaj] || 'zdjęcie')} · ${U.esc(i.kto || '')} ${i.ts ? U.fmt(i.ts) : ''} <span class="mute" id="fvJak"></span></span>
+      ${i.urz && maPozycje(i.urz) ? `<button class="btn sm" id="fvRz" title="Pokaż urządzenie na rzucie">${ic('cel')} Na rzucie</button>` : ''}
       ${this.mozeUsunac(fid) ? '<button class="btn bad sm" id="fvDel">Usuń zdjęcie</button>' : ''}<button class="btn sm" id="fvX">✕ Zamknij</button></div>
       <div class="fvimg" id="fvImg"><span class="mute">Wczytuję…</span></div>`;
     document.body.appendChild(wrap);
     const zamknij = () => wrap.remove();
     $('#fvX').onclick = zamknij;
+    if ($('#fvRz')) $('#fvRz').onclick = () => pokazNaRzucie(i.urz);
     if ($('#fvDel')) $('#fvDel').onclick = async () => {
       if (!confirm('Usunąć to zdjęcie? Zniknie z aplikacji, a plik na Dysku trafi do kosza.')) return;
       await this.usun(fid); zamknij();

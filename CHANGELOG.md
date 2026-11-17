@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.32.1 – 2026-11-17 (aplikacja)
+- Zdjęcia z budowy: na kafelku zdjęcia urządzenia (także zdjęcia braku przy urządzeniu) okrągły przycisk z celownikiem, a w podglądzie zdjęcia przycisk „Na rzucie” – przejście do urządzenia na rzucie z pulsującą kropką. Brak przycisku, gdy urządzenie nie ma pozycji na rzucie lub zdjęcie nie dotyczy urządzenia.
+
 ## 1.32.0 – 2026-11-17 (aplikacja)
 - Znacznik „offline” (budowy zapisane w tablecie, pliki na kafelku Dokumenty): ikona chmury z pobieraniem zamiast „✓”.
 
