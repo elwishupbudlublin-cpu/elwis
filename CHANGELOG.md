@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.30.2 – 2026-11-17 (aplikacja)
+- Rzut: przy przytrzymaniu kropki okrąg rośnie przez 0,5 s, potem do 2 s linia zmienia kolor na zielony stopniowo dookoła; w trybie przesuwania otoczka miga na zielono.
+
 ## 1.30.1 – 2026-11-17 (aplikacja)
 - Rzut: otoczka wokół kropki przy przesuwaniu – podczas 2 s przytrzymania rośnie (postęp), w trybie przesuwania miga, kilka razy większa od kropki.
 

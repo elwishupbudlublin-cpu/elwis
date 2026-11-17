@@ -441,8 +441,13 @@ main{padding:16px 16px 100px}
 .card.admin{border:1px dashed var(--line,#cbd5e1)}
 /* 1.30.1: otoczka przy przesuwaniu – rośnie podczas przytrzymania (2 s), potem miga, dużo większa od kropki */
 .mk.trzym::after,.mk.drag::after{content:'';position:absolute;left:50%;top:50%;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%)}
-.mk.trzym::after{width:0;height:0;border:calc(3px*var(--inv,1)) solid rgba(37,99,235,.8);animation:otoczkaRos 2s linear forwards}
-.mk.drag::after{width:calc(90px*var(--inv,1));height:calc(90px*var(--inv,1));border:calc(4px*var(--inv,1)) solid #2563eb;background:rgba(37,99,235,.15);animation:otoczkaMiga .6s ease-in-out infinite alternate}
+@property --pr{syntax:'<percentage>';inherits:false;initial-value:0%}
+/* 1.30.2: przez 0,5 s okrąg rośnie (niebieski), potem do 2 s linia zmienia się na zieloną stopniowo dookoła (zgodnie z ruchem wskazówek) */
+.mk.trzym::after{width:0;height:0;background:conic-gradient(#16a34a var(--pr),rgba(37,99,235,.85) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 6px*var(--inv,1)),#000 calc(100% - 6px*var(--inv,1)));mask:radial-gradient(farthest-side,transparent calc(100% - 6px*var(--inv,1)),#000 calc(100% - 6px*var(--inv,1)));
+  animation:otoczkaRos .5s ease-out forwards,otoczkaZiel 1.5s linear .5s forwards}
+@keyframes otoczkaZiel{from{--pr:0%}to{--pr:100%}}
+.mk.drag::after{width:calc(90px*var(--inv,1));height:calc(90px*var(--inv,1));border:calc(4px*var(--inv,1)) solid #16a34a;background:rgba(22,163,74,.15);animation:otoczkaMiga .6s ease-in-out infinite alternate}
 @keyframes otoczkaRos{from{width:calc(30px*var(--inv,1));height:calc(30px*var(--inv,1));opacity:.4}to{width:calc(150px*var(--inv,1));height:calc(150px*var(--inv,1));opacity:1}}
 @keyframes otoczkaMiga{from{opacity:1}to{opacity:.15}}
 .mk.trzym{z-index:5;opacity:1}
