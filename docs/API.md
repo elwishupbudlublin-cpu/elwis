@@ -34,6 +34,9 @@ Odpowiedź zawsze JSON: `{ok:true, ...}` albo `{ok:false, error:"opis"}`.
 | `foto_usun` | `{fid}` – usunięcie zdjęcia (od 1.8.0); serwer akceptuje od autora zdjęcia lub roli biuro i przenosi plik do kosza |
 | `pinezka` | `{lat, lon, dokl}` – pinezka GPS budowy z tabletu (od 1.12.0); serwer wpisuje `lat,lon` do Projekty, kolumna D „Pinezka GPS (lat,lon)”: pustą – każdy, istniejącą – tylko rola biuro; współrzędne spoza Polski odrzucane |
 | `urz_nowe` | `{tmp, prefix, kond, arkusz, x, y, oz, uwagi, etap}` – nowe urządzenie z tabletu (od 1.15.0, tylko rola biuro, także offline). `urz` = ID tymczasowe `<prefiks>~xxxx`. Serwer nadaje ID = prefiks + kolejny numer dla prefiksu, dopisuje wiersz na końcu zakładki Urządzenia (Grupa = nazwa typu ze Słowników, Status = czeka) i zamienia ID tymczasowe w pozostałych zdarzeniach; tablet wysyła te zdarzenia przed zdjęciami i po odpowiedzi zamienia ID u siebie. Zdarzenie od osoby spoza roli biuro albo z prefiksem spoza Słowników – nieprzyjęte |
+| `urz_poz` | `{x, y, ark}` – pozycja urządzenia na rzucie (od 1.30.0, każdy; przytrzymanie znacznika 2 s i przesunięcie albo „Ustaw na rzucie”). Serwer zapisuje X, Y (H, I) i Arkusz (F) w zakładce Urządzenia |
+| `urz_sys` | `{sys, było}` – system urządzenia (od 1.30.0, tylko rola biuro) → kolumna N „System” |
+| `urz_usun` | `{powod}` – usunięcie urządzenia (od 1.30.0, tylko rola biuro). Serwer przenosi wiersz do zakładki „Usunięte” (+ Usunięto, Kto, Powód); ID nie wraca do puli. Zdarzenia urządzenia zostają |
 | `protokol` | `{pid, def, wersja, prefiks, stan: roboczy/gotowy/zablokowany/usuniety, nr?, dane{…}}` – pełny stan formularza, ostatni zapis wygrywa; `nr` nadaje serwer (od 1.5.0); `usuniety` (od 1.6.1) – protokół znika z list, serwer przenosi jego Word do kosza; pracownik może usunąć tylko protokół bez numeru |
 
 Po `push` serwer przelicza kolumny **Nr seryjny** i **Status** w zakładce Urządzenia (czeka / w toku / gotowe / brak).

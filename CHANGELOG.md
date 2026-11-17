@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.30.0 – 2026-11-17 (aplikacja i serwer)
+- Wpisany nr seryjny = prace rozpoczęte: urządzenie „w toku” (kolor na rzucie i liście), liczy się do „rozp.” (tablet i serwer).
+- Zgłoś brak: bez domyślnego rodzaju; opis wymagany tylko przy „Inne” lub bez rodzaju.
+- Rzut: przytrzymanie znacznika 2 s → przesuwanie palcem → potwierdzenie „Zapisz pozycję / Anuluj” (każdy). Lista: „Ustaw na rzucie” dla urządzeń bez pozycji.
+- Karta urządzenia (biuro): Administracja – zmiana systemu, ponowne ustawienie pozycji, usunięcie urządzenia (z powodem).
+- Serwer: zdarzenia `urz_poz`, `urz_sys`, `urz_usun` zapisywane w zakładce Urządzenia; usunięte wiersze w zakładce „Usunięte”, ich ID nie wracają do puli.
+
 ## 1.29.0 – 2026-11-16 (aplikacja)
 - Lista budów: sortowanie „Wszystkie aktywne budowy” obok nagłówka – Nr (budowy), Nazwa (alfabetycznie), Podłączone (liczba podłączonych urządzeń, domyślnie od największej); ponowne dotknięcie odwraca kierunek; wybór zapamiętany na tablecie. Kafelki „Ostatnio na tym tablecie” bez zmian.
 

@@ -83,10 +83,10 @@ function devStatus(u, F) {
   const open = Object.values(F.braki).some(b => b.urz === u.id && !b.zamk);
   if (open) return 'brak';
   const kroki = typOf(u.id).kroki;
-  if (!st) return 'czeka';
+  if (!st) return u.sn ? 'w toku' : 'czeka';
   const done = kroki.filter((k, i) => st.kroki[i] && st.kroki[i].val).length;
   if (done === kroki.length && kroki.length) return 'gotowe';
-  return done ? 'w toku' : 'czeka';
+  return done || st.sn || u.sn ? 'w toku' : 'czeka';   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
 }
 
 /* Urządzenia dodane z tabletu (od 1.15.0, zdarzenie `urz_nowe`, tylko rola biuro): widoczne od razu – także offline,
@@ -102,8 +102,18 @@ function dolaczNowe() {
     lst.push({ id, grupa: typOf(id).nazwa, typ: '', zasilanie: '', kond: d.kond || '', arkusz: d.arkusz || '', uwagi: d.uwagi || '',
       x: d.x == null ? '' : d.x, y: d.y == null ? '' : d.y, sn: '', status: 'czeka', etap: d.etap || '', oz: d.oz || '', _nowe: true });
   });
-  S.proj.urzadzenia = lst;
+  // zmiany urządzeń z tabletu (od 1.30.0): pozycja na rzucie (urz_poz), system (urz_sys, biuro), usunięcie (urz_usun, biuro) –
+  // widoczne od razu; serwer zapisuje je w liście urządzeń, więc po pobraniu budowy dają ten sam wynik
+  const usun = new Set();
+  (S.ev || []).filter(e => ZM_URZ.includes(e.typ)).sort((a, b) => a.ts < b.ts ? -1 : 1).forEach(e => {
+    const d = e.d || {}, u = lst.find(x => x.id === e.urz); if (!u) return;
+    if (e.typ === 'urz_poz') { u.x = d.x; u.y = d.y; if (d.ark) u.arkusz = d.ark; }
+    if (e.typ === 'urz_sys') u.sys = d.sys || '';
+    if (e.typ === 'urz_usun') usun.add(u.id);
+  });
+  S.proj.urzadzenia = usun.size ? lst.filter(u => !usun.has(u.id)) : lst;
 }
+const ZM_URZ = ['urz_poz', 'urz_sys', 'urz_usun'];
 /* ID nadane przez serwer → zamiana ID tymczasowych w zdarzeniach i nazwach zdjęć na tablecie */
 async function zamienTmp(kod, mapa, przyjete) {
   const tmp = Object.keys(mapa || {});
@@ -125,7 +135,7 @@ async function addEvent(typ, urz, d) {
   const e = { id: U.uid('e'), ts: U.now(), kto: S.user.name, tablet: (API.cfg() || {}).tablet || '', kod: S.kod, urz: urz || '', typ, d, synced: 0 };
   await DB.putEvent(e);
   S.ev.push(e);
-  if (typ === 'urz_nowe') dolaczNowe();
+  if (typ === 'urz_nowe' || ZM_URZ.includes(typ)) dolaczNowe();
   S.pending++;
   Sync.soon();
   return e;

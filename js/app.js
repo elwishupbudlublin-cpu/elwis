@@ -715,19 +715,22 @@ const Views = {
       </div>
       ${mode === 'rzut' ? `
         <div class="tabs">${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>
-        ${par.wskaz ? `<div class="wskazbar">${ic('plus')} <b class="grow">Dotknij miejsce nowego urządzenia na rzucie ${U.esc(ark)}</b><button class="btn sm" id="wAnul">Anuluj</button></div>` : ''}
+        ${par.wskaz ? `<div class="wskazbar">${ic('plus')} <b class="grow">${par.wskaz.urz ? `Dotknij miejsce urządzenia ${U.esc(idOz(par.wskaz.urz))} na rzucie ${U.esc(ark)}${sheets.length > 1 ? ' – inny rzut wybierz wyżej' : ''}` : `Dotknij miejsce nowego urządzenia na rzucie ${U.esc(ark)}`}</b><button class="btn sm" id="wAnul">Anuluj</button></div>` : ''}
         <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
         : `<div class="list" id="wyn" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
-            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
+            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}${u.x === '' || u.x == null ? `<span class="btn sm bezpoz" role="button" tabindex="0" data-poz="${U.esc(u.id)}" title="Urządzenie nie ma pozycji na rzucie">${ic('pin')} Ustaw na rzucie</span>` : ''}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
       ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`, '#wyn');
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, f: b.dataset.fl }));
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
     if ($('#uq')) szukajNaZywo($('#uq'), () => Views.rzut(UI.par));
-    view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: null }));
+    view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: par.wskaz && par.wskaz.urz ? { urz: par.wskaz.urz } : null }));
+    // urządzenie bez pozycji na rzucie (od 1.30.0): „Ustaw na rzucie” → tryb wskazywania dla tego urządzenia
+    view.querySelectorAll('[data-poz]').forEach(b => b.onclick = e => { e.stopPropagation(); const u = urz.find(x => x.id === b.dataset.poz) || {};
+      UI.go('rzut', { ...par, mode: 'rzut', ark: sheets.includes(u.arkusz) ? u.arkusz : sheets[0], wskaz: { urz: u.id }, focus: null }); });
     // dodanie urządzenia – rola biuro (od 1.15.0): na rzucie najpierw wskazanie miejsca, na liście od razu formularz
     if ($('#uAdd')) $('#uAdd').onclick = () => mode === 'rzut' && ark ? UI.go('rzut', { ...par, wskaz: { ark } }) : Dialogs.noweUrz({ ark });
     if ($('#wAnul')) $('#wAnul').onclick = () => UI.go('rzut', { ...par, wskaz: null });
@@ -738,10 +741,14 @@ const Views = {
       if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
       $('#noplan').remove();
       const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: idOz(u) + ' – ' + sOf(u) }));
-      const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id)); pv.ark = ark; UI.pv = pv;
+      // przytrzymanie znacznika i przesunięcie = zmiana pozycji z potwierdzeniem (od 1.30.0)
+      const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id),
+        { onMove: (id, x, y, wroc, ok) => Dialogs.pozycja(id, { x, y, ark }, wroc, ok) }); pv.ark = ark; UI.pv = pv;
       $('#zin').onclick = () => pv.zoomIn(); $('#zout').onclick = () => pv.zoomOut(); $('#zfit').onclick = () => pv.fit();
       if (par.focus) setTimeout(() => pv.focus(par.focus), 300);
-      if (par.wskaz) pv.wskaz((x, y) => { pv.wskaz(null); Dialogs.noweUrz({ ...par.wskaz, ark, x, y }); });
+      if (par.wskaz) pv.wskaz((x, y) => {
+        if (par.wskaz.urz) { const id = par.wskaz.urz; Dialogs.pozycja(id, { x, y, ark, nowa: true }, () => {}, () => UI.go('rzut', { ...par, wskaz: null, focus: id })); return; }
+        pv.wskaz(null); Dialogs.noweUrz({ ...par.wskaz, ark, x, y }); });
     }
   },
 
@@ -869,7 +876,7 @@ function liczBudowy(urz, F) {
     const zrob = kroki.map((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
     const pk = kroki.map((k, i) => /podłącz/i.test(k) ? i : -1).filter(i => i >= 0);
     L.w++;
-    if (zrob.some(Boolean)) L.d++;
+    if (zrob.some(Boolean) || (st && st.sn) || u.sn) L.d++;   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
     if (pk.length ? pk.every(i => zrob[i]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;
   });
@@ -928,6 +935,9 @@ const Dialogs = {
         <div><div class="lbl">Braki (${br.filter(b => !b.zamk).length} otwartych)</div><div class="stack" style="margin-top:8px">${br.map(issueHtml).join('') || '<span class="mute">Brak.</span>'}</div></div>
         <div><div class="lbl">Zdjęcia</div><div class="thumbs" id="thumbs" style="margin-top:8px"></div></div>
         <div><div class="lbl">Historia</div><div class="hist" style="margin-top:8px">${st.hist.slice().reverse().slice(0, 30).map(e => `<div><b>${U.fmt(e.ts)}</b> ${U.esc(e.kto)} – ${U.esc(histTxt(e))}</div>`).join('') || '<span class="mute">Brak wpisów.</span>'}</div></div>
+        ${Session.isBiuro() && !czyTmp(id) ? `<div class="card stack admin"><div class="lbl">Administracja (biuro)</div>
+          <div class="row" style="flex-wrap:wrap"><span class="grow">System: <b>${U.esc(u.sys || '— brak (autonomiczne)')}</b></span><button class="btn sm" id="aSys">Zmień system</button></div>
+          <div class="row" style="flex-wrap:wrap"><span class="grow">Pozycja: <b>${u.x === '' || u.x == null ? 'brak na rzucie' : 'rzut ' + U.esc(u.arkusz || '—')}</b></span><button class="btn sm" id="aPoz">${u.x === '' || u.x == null ? 'Ustaw na rzucie' : 'Ustaw ponownie'}</button><button class="btn sm bad" id="aDel">Usuń urządzenie</button></div></div>` : ''}
       </div>
       <div class="sfoot"><button class="btn bad" id="dBrak">Zgłoś brak</button><button class="btn" id="dFoto">Zdjęcie</button><button class="btn" id="dPlan">Na rzucie</button></div>
     </div></div>`;
@@ -958,8 +968,62 @@ const Dialogs = {
     modal.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => { const z = UI.cur; UI.close(); UI.go('protokol', { pid: b.dataset.pid }, { dlg: z !== 'protokol' ? id : null }); });
     modal.querySelectorAll('[data-npr]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { nowy: b.dataset.npr, urz: id }, { dlg: id }); });
     $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); const z = UI.cur; UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }, { dlg: z !== 'rzut' ? id : null }); };
+    if ($('#aSys')) $('#aSys').onclick = () => Dialogs.systemUrz(id);
+    if ($('#aDel')) $('#aDel').onclick = () => Dialogs.usunUrz(id);
+    if ($('#aPoz')) $('#aPoz').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, wskaz: { urz: id } }); };
     bindIssue(modal, () => Dialogs.device(id));
     thumbs($('#thumbs'), st.foto); hydrateFotos(modal);
+  },
+
+  /* Zmiana pozycji urządzenia na rzucie (od 1.30.0): potwierdzenie po przesunięciu znacznika lub wskazaniu miejsca */
+  pozycja(id, p, wroc, ok) {
+    const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u) return wroc();
+    const inny = u.arkusz && u.arkusz !== p.ark;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zmiana pozycji">
+      <div class="shead"><h3>${p.nowa ? 'Ustawić pozycję' : 'Zmienić pozycję'} – ${U.esc(idOz(u))}?</h3></div>
+      <div class="sbody"><div>${p.nowa ? 'Urządzenie pojawi się na rzucie' : 'Znacznik zostanie w nowym miejscu na rzucie'} <b>${U.esc(p.ark)}</b>${inny ? ` (dotąd: ${U.esc(u.arkusz)})` : ''}.</div>
+        <div class="mute">Zmiana trafi do listy urządzeń przy synchronizacji; w historii urządzenia zostaje wpis z autorem.</div></div>
+      <div class="sfoot"><button class="btn" id="pzx">Anuluj</button><button class="btn pri" id="pzs">Zapisz pozycję</button></div></div></div>`;
+    $('#pzx').onclick = () => { UI.close(); wroc(); };
+    $('#pzs').onclick = async () => { await addEvent('urz_poz', id, { x: p.x, y: p.y, ark: p.ark }); UI.close(); ok(); UI.toast('Pozycja zapisana'); };
+  },
+
+  /* Zmiana systemu urządzenia (od 1.30.0) – tylko rola biuro */
+  systemUrz(id) {
+    if (!Session.isBiuro()) return;
+    const wsz = (S.proj || {}).urzadzenia || [], u = wsz.find(x => x.id === id); if (!u) return;
+    const szafy = wsz.filter(x => sysList(x).indexOf(x.id) >= 0 && x.id !== id).sort((a, b) => natCmp(a.id, b.id));
+    const wyb = new Set(sysList(u));
+    const lst = () => modal.querySelector('#sysl').innerHTML = szafy.map(x => `<button type="button" class="tab ${wyb.has(x.id) ? 'on' : ''}" data-sy="${U.esc(x.id)}">${U.esc(x.id)}${x.oz ? ` <span class="tsub">${U.esc(x.oz)}</span>` : ''}</button>`).join('') || '<span class="mute">Na budowie nie ma szaf z systemem.</span>';
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="System urządzenia">
+      <div class="shead"><h3>System – ${U.esc(idOz(u))}</h3><span class="chip">biuro</span></div>
+      <div class="sbody"><div class="mute">Wybierz szafę / rozdzielnicę sterującą (można kilka). Pusty wybór = urządzenie autonomiczne.</div>
+        <div class="tabs" id="sysl" style="flex-wrap:wrap"></div>
+        ${sysList(u).indexOf(id) >= 0 ? '<div class="mute">To urządzenie jest szafą swojego systemu – jej ID zostaje.</div>' : ''}</div>
+      <div class="sfoot"><button class="btn" id="syx">Anuluj</button><button class="btn pri" id="sys">Zapisz</button></div></div></div>`;
+    lst();
+    modal.querySelector('#sysl').onclick = e => { const b = e.target.closest('[data-sy]'); if (!b) return; wyb.has(b.dataset.sy) ? wyb.delete(b.dataset.sy) : wyb.add(b.dataset.sy); lst(); };
+    $('#syx').onclick = () => Dialogs.device(id);
+    $('#sys').onclick = async () => {
+      const nowy = [...(sysList(u).indexOf(id) >= 0 ? [id] : []), ...[...wyb].filter(x => x !== id).sort(natCmp)].join('; ');
+      await addEvent('urz_sys', id, { sys: nowy, było: u.sys || '' }); UI.toast('System zapisany'); Dialogs.device(id); UI.refresh();
+    };
+  },
+
+  /* Usunięcie urządzenia (od 1.30.0) – tylko rola biuro; serwer przenosi wiersz do zakładki „Usunięte” */
+  usunUrz(id) {
+    if (!Session.isBiuro()) return;
+    const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === id); if (!u) return;
+    const F = fold(S.ev), st = F.dev[id], ile = st ? st.hist.length : 0;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Usuń urządzenie">
+      <div class="shead"><h3>Usunąć ${U.esc(idOz(u))}?</h3><span class="chip bad">biuro</span></div>
+      <div class="sbody"><div>Urządzenie zniknie z listy, rzutu, liczników i protokołów tej budowy. Wiersz trafi do zakładki <b>Usunięte</b> listy urządzeń; ID nie wróci do puli.</div>
+        ${ile ? `<div class="badbox" style="font-size:14px">Urządzenie ma ${ile} ${odm(ile, 'wpis', 'wpisy', 'wpisów')} w historii (kroki, zdjęcia, braki) – zostaną w archiwum zdarzeń.</div>` : ''}
+        <label><span class="f" style="display:block">Powód (do historii)</span><input type="text" id="uuP" placeholder="np. dubel, poza zakresem, zmiana projektu"></label></div>
+      <div class="sfoot"><button class="btn" id="uux">Anuluj</button><button class="btn bad" id="uus">Usuń urządzenie</button></div></div></div>`;
+    $('#uux').onclick = () => Dialogs.device(id);
+    $('#uus').onclick = async () => { const pow = $('#uuP').value.trim(); if (!pow) { UI.toast('Podaj powód usunięcia.'); return; }
+      await addEvent('urz_usun', id, { powod: pow }); UI.close(); UI.toast(id + ' usunięte'); UI.refresh(); };
   },
 
   /* Nowe urządzenie (od 1.15.0) – tylko rola biuro; działa offline (zdarzenie urz_nowe), ID nada serwer */
@@ -1006,23 +1070,26 @@ const Dialogs = {
 
   brak(urz) {
     const kats = (S.boot.slowniki.kategorie || []);
-    let kat = kats[0] || 'Inne'; let photos = [];
+    let kat = ''; let photos = [];   // od 1.30.0: bez domyślnego rodzaju; opis wymagany tylko przy „Inne” lub bez rodzaju
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zgłoś brak">
       <div class="shead"><h3>Zgłoś brak</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody">
         <div><div class="mute">Dotyczy</div><b>${urz ? U.esc(urz) : (maEtapy() && S.etap ? 'Etap ' + U.esc(etapOpis(S.etap)) : 'Cała budowa')}</b></div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
-        <label><span class="f" style="display:block">Opis – co jest nie tak i co jest potrzebne</span><textarea id="bo"></textarea></label>
+        <label><span class="f" style="display:block">Opis – co jest nie tak i co jest potrzebne <span class="mute" id="bow"></span></span><textarea id="bo"></textarea></label>
         <div class="row"><button class="btn" id="bf">+ Zdjęcie</button><span class="mute" id="bfc"></span>
           <label class="row" style="margin-left:auto"><input type="checkbox" id="bb" style="width:24px;height:24px"> Blokuje dalszą pracę</label></div>
       </div>
       <div class="sfoot"><button class="btn" id="bx">Anuluj</button><button class="btn bad" id="bs">Zapisz brak</button></div></div></div>`;
-    modal.querySelectorAll('.cats button').forEach(b => b.onclick = () => { kat = b.dataset.k; modal.querySelectorAll('.cats button').forEach(x => x.classList.toggle('on', x === b)); });
+    const opisWym = () => !kat || /^inn/i.test(kat);
+    const pokazWym = () => { $('#bow').textContent = opisWym() ? '(wymagany)' : '(opcjonalny)'; };
+    modal.querySelectorAll('.cats button').forEach(b => b.onclick = () => { kat = kat === b.dataset.k ? '' : b.dataset.k; modal.querySelectorAll('.cats button').forEach(x => x.classList.toggle('on', x.dataset.k === kat)); pokazWym(); });
+    pokazWym();
     $('#bf').onclick = () => pickFile(async f => { const id = await storePhoto(f, urz || 'BUDOWA', 'brak'); photos.push(id); $('#bfc').textContent = photos.length + ' zdjęć'; });
     $('#bx').onclick = () => urz ? Dialogs.device(urz) : UI.close();
     $('#bs').onclick = async () => {
-      const opis = $('#bo').value.trim(); if (!opis) { UI.toast('Dodaj krótki opis.'); return; }
-      const d = { kat, opis, blokuje: $('#bb').checked, foto: photos };
+      const opis = $('#bo').value.trim(); if (!opis && opisWym()) { UI.toast(kat ? 'Przy rodzaju „' + kat + '” dodaj krótki opis.' : 'Wybierz rodzaj braku albo dodaj opis.'); return; }
+      const d = { kat: kat || 'Inne', opis, blokuje: $('#bb').checked, foto: photos };
       if (!urz && maEtapy() && S.etap) d.etap = S.etap;
       await addEvent('brak', urz, d);
       UI.toast('Brak zapisany'); urz ? Dialogs.device(urz) : UI.close(); UI.refresh();
@@ -1318,7 +1385,7 @@ function bindIssue(root, after) {
 }
 function histTxt(e) {
   const d = e.d || {};
-  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ;
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ === 'urz_poz' ? 'zmiana pozycji na rzucie ' + (d.ark || '') : e.typ === 'urz_sys' ? 'system: ' + (d.sys || 'brak') : e.typ === 'urz_usun' ? 'usunięto urządzenie – ' + (d.powod || '') : e.typ;
 }
 async function thumbs(el, foto) {
   if (!el) return;

@@ -434,3 +434,8 @@ main{padding:16px 16px 100px}
 .psiatka{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
 .bsort{flex-wrap:nowrap;gap:8px;align-items:center;margin:18px 0 8px}.bsort h2{margin:0;white-space:nowrap;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .bsort .seg2{display:flex;align-items:center;gap:4px;flex:none}.bsort .seg2 .tab{margin:0;padding:6px 10px;font-size:14px;min-height:36px}
+/* 1.30.0: przesuwanie znacznika, urządzenia bez pozycji */
+.mk.drag{transform:scale(1.7);opacity:1;box-shadow:0 0 0 calc(6px*var(--inv,1)) rgba(37,99,235,.35);z-index:5}
+.plan.przesuw{cursor:grabbing}
+.li .bezpoz{flex:none;font-size:13px;min-height:34px;padding:4px 10px;border-color:var(--warn,#d97706);color:var(--warn,#b45309)}
+.card.admin{border:1px dashed var(--line,#cbd5e1)}

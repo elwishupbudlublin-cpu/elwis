@@ -1,5 +1,6 @@
 /* ELWIS – rzut z powiększaniem i przesuwaniem (dotyk, mysz), znaczniki urządzeń. */
-function PlanView(box, imgUrl, markers, onTap) {
+function PlanView(box, imgUrl, markers, onTap, opt) {
+  opt = opt || {};
   const layer = document.createElement('div'); layer.className = 'layer';
   const img = new Image(); img.src = imgUrl; img.alt = 'Rzut';
   layer.appendChild(img); box.appendChild(layer);
@@ -7,6 +8,8 @@ function PlanView(box, imgUrl, markers, onTap) {
   const pts = new Map(); let last = null, moved = false, start = null, tap = false, tapTimer = 0;
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
   const HIT = 28;       // px – promień trafienia znacznika na ekranie
+  const HOLD = 2000;    // ms – przytrzymanie znacznika 2 s = przesuwanie (od 1.30.0, opt.onMove)
+  let hold = 0, drag = null;
 
   const M = 40; // px marginesu przy krawędzi
   function clamp() {
@@ -46,10 +49,27 @@ function PlanView(box, imgUrl, markers, onTap) {
     if (e.target.closest('.planctl')) return; // przyciski powiększenia działają zwykłym kliknięciem
     box.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) { moved = false; start = { x: e.clientX, y: e.clientY }; }
+    clearTimeout(hold);
+    if (pts.size === 1 && opt.onMove && !wskaz) {
+      const m = najblizszy(e.clientX, e.clientY);
+      if (m) hold = setTimeout(() => {
+        if (moved || pts.size !== 1) return;
+        const el = layer.querySelector(`.mk[data-id="${CSS.escape(m.id)}"]`); if (!el) return;
+        drag = { m, el, fx: m.x, fy: m.y, ruch: false }; el.classList.add('drag'); box.classList.add('przesuw');
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, HOLD);
+    }
     last = null; });
   box.addEventListener('pointermove', e => {
     if (!pts.has(e.pointerId)) return;
     const prev = pts.get(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (drag) {   // przesuwanie znacznika palcem
+      const r = box.getBoundingClientRect();
+      drag.fx = Math.min(1, Math.max(0, (e.clientX - r.left - tx) / (W * s))); drag.fy = Math.min(1, Math.max(0, (e.clientY - r.top - ty) / (H * s)));
+      drag.el.style.left = (drag.fx * 100) + '%'; drag.el.style.top = (drag.fy * 100) + '%';
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) drag.ruch = true;
+      return;
+    }
     if (pts.size === 1) {
       if (!moved && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_TOL) moved = true;
       if (moved) { tx += e.clientX - prev.x; ty += e.clientY - prev.y; apply(); }
@@ -66,6 +86,15 @@ function PlanView(box, imgUrl, markers, onTap) {
     if (!pts.has(e.pointerId)) return;
     const single = pts.size === 1;
     pts.delete(e.pointerId); if (pts.size < 2) last = null;
+    clearTimeout(hold);
+    if (drag) {
+      const d = drag; drag = null; box.classList.remove('przesuw'); tap = false;
+      const wroc = () => { d.el.classList.remove('drag'); d.el.style.left = (d.m.x * 100) + '%'; d.el.style.top = (d.m.y * 100) + '%'; };
+      if (!d.ruch || e.type !== 'pointerup') { wroc(); return; }
+      const fx = Math.round(d.fx * 1e4) / 1e4, fy = Math.round(d.fy * 1e4) / 1e4;
+      opt.onMove(d.m.id, fx, fy, wroc, () => { d.el.classList.remove('drag'); d.m.x = fx; d.m.y = fy; });
+      return;
+    }
     tap = single && !moved && e.type === 'pointerup';
     // długie przytrzymanie: Android nie wysyła wtedy „click” – otwieramy sami po chwili
     clearTimeout(tapTimer);
@@ -82,12 +111,16 @@ function PlanView(box, imgUrl, markers, onTap) {
       pin.style.left = (fx * 100) + '%'; pin.style.top = (fy * 100) + '%';
       wskaz(Math.round(fx * 1e4) / 1e4, Math.round(fy * 1e4) / 1e4); return;
     }
-    let best = null, bd = HIT;
+    const best = najblizszy(x, y);
+    if (best) onTap(best.id);
+  }
+  function najblizszy(x, y) {
+    const r = box.getBoundingClientRect(); let best = null, bd = HIT;
     for (const m of markers) {
       const d = Math.hypot(r.left + tx + m.x * W * s - x, r.top + ty + m.y * H * s - y);
       if (d < bd) { bd = d; best = m; }
     }
-    if (best) onTap(best.id);
+    return best;
   }
   // Wybór znacznika dopiero na zdarzeniu „click” (po pointerup). Otwarcie okna wcześniej powodowało,
   // że kliknięcie generowane przez Androida trafiało w tło nowego okna i od razu je zamykało.

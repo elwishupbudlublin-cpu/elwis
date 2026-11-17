@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.25.1';
+const SCRIPT_VERSION = '1.30.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -380,7 +380,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun'];
 
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
@@ -436,6 +436,8 @@ function urzNowe_(p, e, biuro) {
   if (!/^[A-Z]{1,6}$/.test(pre) || !typ) return '';
   const sh = SpreadsheetApp.openById(p.lista).getSheetByName('Urządzenia');
   const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => txt_(r[0])) : [];
+  const us = SpreadsheetApp.openById(p.lista).getSheetByName('Usunięte');   // od 1.30.0: ID usuniętych nie wracają do puli
+  if (us && us.getLastRow() > 1) us.getRange(2, 1, us.getLastRow() - 1, 1).getDisplayValues().forEach(r => ids.push(txt_(r[0])));
   const re = new RegExp('^' + pre + '(\\d+)$', 'i');
   let max = 0; ids.forEach(x => { const m = x.match(re); if (m) max = Math.max(max, Number(m[1])); });
   const id = pre + (max + 1);
@@ -444,6 +446,40 @@ function urzNowe_(p, e, biuro) {
   sh.getRange(sh.getLastRow() + 1, 1, 1, 13).setNumberFormat(TEXT).setValues([[id, typ.nazwa, '', '', txt_(d.kond).slice(0, 40), txt_(d.arkusz).slice(0, 40),
     txt_(d.uwagi).slice(0, 500), xy(d.x), xy(d.y), '', 'czeka', etapy.indexOf(etap) >= 0 ? etap : '', txt_(d.oz).slice(0, 40)]]);
   return id;
+}
+/* Zmiany urządzeń z tabletu (od 1.30.0) w zakładce Urządzenia listy budowy:
+   urz_poz – pozycja na rzucie (każdy): H, I (x, y) i F (arkusz); urz_sys – kolumna N „System” (rola biuro);
+   urz_usun – wiersz przeniesiony do zakładki „Usunięte” z datą, autorem i powodem (rola biuro). Zwraca false = odrzucone. */
+function zmianaUrz_(p, e, biuro) {
+  const d = e.d || {}, id = txt_(e.urz); if (!id) return false;
+  if (e.typ !== 'urz_poz' && !biuro[txt_(e.kto)]) return false;
+  const ss = SpreadsheetApp.openById(p.lista), sh = ss.getSheetByName('Urządzenia');
+  if (!sh || sh.getLastRow() < 2) return false;
+  const ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => txt_(r[0]));
+  const i = ids.indexOf(id); if (i < 0) return false;
+  const row = i + 2;
+  if (e.typ === 'urz_poz') {
+    const xy = v => (v === '' || v == null || isNaN(Number(v))) ? '' : String(Math.min(1, Math.max(0, Number(v))));
+    if (xy(d.x) === '' || xy(d.y) === '') return false;
+    sh.getRange(row, 8, 1, 2).setNumberFormat(TEXT).setValues([[xy(d.x), xy(d.y)]]);
+    if (txt_(d.ark)) sh.getRange(row, 6).setNumberFormat(TEXT).setValue(txt_(d.ark).slice(0, 40));
+    return true;
+  }
+  if (e.typ === 'urz_sys') { sh.getRange(row, 14).setNumberFormat(TEXT).setValue(txt_(d.sys).slice(0, 200)); return true; }
+  if (e.typ === 'urz_usun') {
+    const nc = Math.max(14, sh.getLastColumn());
+    let us = ss.getSheetByName('Usunięte');
+    if (!us) {
+      us = ss.insertSheet('Usunięte');
+      const nag = sh.getRange(1, 1, 1, nc).getDisplayValues()[0].concat(['Usunięto', 'Kto', 'Powód']);
+      us.getRange(1, 1, 1, nag.length).setValues([nag]).setFontWeight('bold'); us.setFrozenRows(1);
+    }
+    const w = sh.getRange(row, 1, 1, nc).getDisplayValues()[0].concat([txt_(e.ts), txt_(e.kto), txt_(d.powod).slice(0, 300)]);
+    us.getRange(us.getLastRow() + 1, 1, 1, w.length).setNumberFormat(TEXT).setValues([w]);
+    sh.deleteRow(row);
+    return true;
+  }
+  return false;
 }
 /* ID tymczasowe z tabletu → ID nadane przez serwer (ze zdarzeń urz_nowe w zakładce Zdarzenia) */
 function mapaTmp_(sh) {
@@ -523,6 +559,10 @@ function push_(b, tablet) {
           if (biuro === null) biuro = rolaBiuro_();
           if (!pinezka_(p.kod, e, biuro)) return;
         }
+        if (e.typ === 'urz_poz' || e.typ === 'urz_sys' || e.typ === 'urz_usun') {
+          if (biuro === null) biuro = rolaBiuro_();
+          if (!zmianaUrz_(p, e, biuro)) return;
+        }
         if (e.typ === 'foto_usun') {
           // zdjęcie usuwa autor albo rola biuro (od 1.8.0)
           const fid = txt_(e.d && e.d.fid); if (!fid) return;
@@ -566,9 +606,9 @@ function przelicz_(p, ids, zmiany) {
     ev.filter(e => e.urz === id).forEach(e => { if (e.typ === 'krok') st[e.d.krok] = !!e.d.wart; if (e.typ === 'nr' && e.d.sn) sn = String(e.d.sn); });
     const done = kroki.filter((k, j) => st[j]).length;
     const open = Object.keys(braki).some(b => braki[b].urz === id && braki[b].open);
-    const status = open ? 'brak' : (done === kroki.length && kroki.length ? 'gotowe' : done ? 'w toku' : 'czeka');
+    const status = open ? 'brak' : (done === kroki.length && kroki.length ? 'gotowe' : done || sn ? 'w toku' : 'czeka');   // od 1.30.0: nr seryjny = w toku
     sh.getRange(i + 2, 10, 1, 2).setNumberFormat(TEXT).setValues([[sn, status]]);
-    v[i][10] = status;
+    v[i][9] = sn; v[i][10] = status;
   });
   zapiszPostep_(p.kod, v.filter(r => txt_(r[0])).map(r => txt_(r[10])));
   // liczniki budowy do listy budów (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki
@@ -582,7 +622,7 @@ function przelicz_(p, ids, zmiany) {
     const zrob = kroki.map((k, j) => !!st[j]);
     const pk = kroki.map((k, j) => /podłącz/i.test(k) ? j : -1).filter(j => j >= 0);
     L.w++;
-    if (zrob.some(Boolean)) L.d++;
+    if (zrob.some(Boolean) || txt_(r[9])) L.d++;   // od 1.30.0: nr seryjny = rozpoczęte
     if (pk.length ? pk.every(j => zrob[j]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;
   });
