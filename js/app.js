@@ -1627,7 +1627,7 @@ function settings() {
     $('#exNo').onclick = zostan; $('#ov').onclick = e => { if (e.target.id === 'ov') zostan(); };
     $('#exYes').onclick = () => { window.close(); history.back(); setTimeout(() => UI.toast('Naciśnij systemowe „wstecz”, aby zamknąć aplikację.'), 400); };
   });
-  setInterval(() => { if (navigator.onLine && S.user) Sync.run(); }, 3 * 60e3);
+  setInterval(() => { if (navigator.onLine && S.user) Sync.run(); }, 10 * 60e3);   // automatyczna synchronizacja co 10 min (od 1.31.6; wcześniej co 3 min)
   setInterval(async () => { if (S.user && S.user.exp < Date.now()) { await Session.logout(); UI.close(); UI.toast('Sesja wygasła – zaloguj się ponownie.'); UI.go('login'); } }, 60e3);
   if (!API.ready()) return UI.go('setup');
   await Session.load();

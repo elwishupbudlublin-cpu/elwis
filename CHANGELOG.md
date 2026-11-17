@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.31.6 – 2026-11-17 (aplikacja)
+- Automatyczna synchronizacja co 10 min (wcześniej co 3 min). Bez zmian: synchronizacja po zalogowaniu, po odzyskaniu sieci, po otwarciu budowy, po zamknięciu protokołu i przyciskiem ⟳.
+
 ## 1.31.5 – 2026-11-17 (aplikacja)
 - Przyciski z ikoną (m.in. „Na rzucie”): ikona i tekst w jednej linii, wyśrodkowane w pionie.
 
