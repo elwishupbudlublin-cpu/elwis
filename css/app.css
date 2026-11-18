@@ -514,3 +514,17 @@ main{padding:16px 16px 100px}
 .tile.btc .lstat small{font-size:11px}
 .lstat .lfront{display:inline-flex;align-items:center;gap:4px;color:#15803d;font-weight:700;font-size:13px}
 .lstat .lfront .ic{width:16px;height:16px}
+/* 1.33.2: tablet w pionie – liczniki budowy w drugiej linii wiersza, krótszy nagłówek listy */
+.bsort .hkr{display:none}
+@media (max-width:760px){
+  .bsort .hdl{display:none}.bsort .hkr{display:inline}
+  .bsort{flex-wrap:wrap}.bsort h2{flex-basis:100%}.bsort .ffront{margin-right:auto}
+  .blist .li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:14px;row-gap:6px;align-items:start}
+  .blist .li > .lstat{grid-column:2 / 4;grid-row:2;min-width:0;text-align:left}
+  .blist .li > .chip{grid-column:3;justify-self:end}
+  .blist .lstat .lgrp{justify-content:flex-start;gap:16px}
+  .blist .lstat .lg1,.blist .lstat .lg2{align-items:flex-start}
+  .blist .lstat .ldod{justify-content:flex-start}
+  .blist .lstat .tbar3.sm{margin-left:0;width:100%}
+  .blist .lstat .m b{font-size:15px}.blist .lstat small{font-size:11px}
+}

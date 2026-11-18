@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.33.2 – 2026-11-18 (aplikacja)
+- Lista budów na wąskim ekranie (tablet w pionie): liczniki w drugiej linii wiersza pod nazwą, mniejsza czcionka, pasek postępu na całą szerokość; nagłówek „Aktywne budowy (N)”, filtr i sortowanie w osobnej linii.
+
 ## 1.33.1 – 2026-11-18 (aplikacja)
 - Kafelki „Ostatnio na tym tablecie”: licznik „do rozp.” bez „otw. f.”; otwarty front jako zielona ikona drzwi z liczbą obok usterek i notatek; mniejsza czcionka liczników.
 

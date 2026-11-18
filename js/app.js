@@ -436,7 +436,7 @@ const Views = {
           <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
       </section>
       <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${kier(p)}${stat(p)}</button>`).join('')}</div>` : ''}
-      <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
+      <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : '<span class="hdl">Wszystkie aktywne budowy</span><span class="hkr">Aktywne budowy</span>'} (${list.length})</h2>
         <button class="tab ffront ${fFront ? 'on' : ''}" id="fFront" aria-pressed="${fFront}" title="Pokaż tylko budowy, na których otworzył się front">${ic('front')} front otw.${nFront ? ` <small>${nFront}</small>` : ''}</button>
         <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Rozpoczęto %')}</div></div>
       <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span>${kier(p, true)}</span>${stat(p, true)}${znaczki(p)}</button>`).join('') || (fFront ? '<div class="li mute">Żadna budowa nie ma otwartego frontu.</div>' : '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>')}</div></div>`, '#wyn');
