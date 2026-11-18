@@ -422,8 +422,9 @@ const Views = {
         const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
       // od 1.33.0: do rozp. / otw. f. – odstęp – uruch. / podł. / rozp. / wszystkie; pod spodem usterki i notatki
       const rz = L.w - L.d, f = L.f || 0;
-      const dod = [L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : '', L.nt ? `<span class="lnot">${ic('note')} ${L.nt} ${odm(L.nt, 'notatka', 'notatki', 'notatek')}</span>` : ''].filter(Boolean).join('');
-      return `<span class="lstat"><span class="lgrp"><span class="lg2"><span class="m"><b>${rz} / <span class="${f ? 'fr' : ''}">${f}</span></b></span><small>do rozp. / otw. f.</small></span><span class="lg1"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small></span></span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L, maly)}</span>`;
+      // od 1.33.1: na kafelkach „Ostatnio” otwarty front tylko jako ikona drzwi z liczbą (obok usterek i notatek)
+      const dod = [!maly && f ? `<span class="lfront" title="Otworzył się front – ${f} ${odm(f, 'urządzenie', 'urządzenia', 'urządzeń')}">${ic('front')} ${f}</span>` : '', L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : '', L.nt ? `<span class="lnot">${ic('note')} ${L.nt} ${odm(L.nt, 'notatka', 'notatki', 'notatek')}</span>` : ''].filter(Boolean).join('');
+      return `<span class="lstat"><span class="lgrp"><span class="lg2">${maly ? `<span class="m"><b>${rz} / <span class="${f ? 'fr' : ''}">${f}</span></b></span><small>do rozp. / otw. f.</small>` : `<span class="m"><b>${rz}</b></span><small>do rozp.</small>`}</span><span class="lg1"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small></span></span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L, maly)}</span>`;
     };
     // kierownik HUP-BUD opiekujący się budową (od 1.33.0, Baza → Projekty → Kierownik)
     const kier = (p, maly) => p.kierownik ? `<span class="lkier${maly ? ' sm' : ''}" title="Kierownik budowy HUP-BUD">${ic('kier')}${U.esc(p.kierownik)}</span>` : '';

@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.33.1 – 2026-11-18 (aplikacja)
+- Kafelki „Ostatnio na tym tablecie”: licznik „do rozp.” bez „otw. f.”; otwarty front jako zielona ikona drzwi z liczbą obok usterek i notatek; mniejsza czcionka liczników.
+
 ## 1.33.0 – 2026-11-18
 - Lista budów i kafelki: licznik „do rozp. / otw. f.” (urządzenia bez żadnej czynności / urządzenia, na których otworzył się front), odstęp, dalej uruch. / podł. / rozp. / wszystkie; pod spodem usterki i liczba notatek.
 - Kierownik HUP-BUD budowy pod adresem (Baza → Projekty → Kierownik, schemat 1.10).

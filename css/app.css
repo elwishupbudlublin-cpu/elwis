@@ -508,3 +508,9 @@ main{padding:16px 16px 100px}
 .bsort .ffront.on { background:#15803d; color:#fff; border-color:#15803d }
 .bsort .ffront.on .ic { color:#fff }
 .bsort .ffront small { font-weight:700 }
+/* 1.33.1: kafelki „Ostatnio” – mniejsze liczniki, otwarty front jako ikona z liczbą */
+.tile.btc .lstat .lgrp{gap:14px}
+.tile.btc .lstat .m b{font-size:15px}
+.tile.btc .lstat small{font-size:11px}
+.lstat .lfront{display:inline-flex;align-items:center;gap:4px;color:#15803d;font-weight:700;font-size:13px}
+.lstat .lfront .ic{width:16px;height:16px}
