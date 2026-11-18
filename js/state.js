@@ -47,11 +47,12 @@ function fold(events) {
     const d = e.d || {};
     if (e.urz) D(e.urz).hist.push(e);
     switch (e.typ) {
-      case 'krok': D(e.urz).kroki[d.krok] = { val: !!d.wart, war: typeof d.wart === 'string' ? d.wart : '', kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
-      case 'nr': D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
+      case 'krok': D(e.urz).front = false; D(e.urz).kroki[d.krok] = { val: !!d.wart, war: typeof d.wart === 'string' ? d.wart : '', kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
+      case 'nr': D(e.urz).front = false; D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
-      case 'brak': braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
-      case 'brak_zamk': if (braki[d.bid]) braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; break;
+      case 'brak': if (e.urz) D(e.urz).front = false; braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
+      // otworzył się front (od 1.33.0): zamknięty brak urządzenia → flaga; kasuje ją każda czynność (krok, nr seryjny) i nowy brak
+      case 'brak_zamk': if (braki[d.bid]) { braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; if (braki[d.bid].urz) { D(braki[d.bid].urz).front = true; D(braki[d.bid].urz).frontTs = e.ts; } } break;
       case 'brak_edyc': {   // edycja / usunięcie / ponowne otwarcie braku (od 1.9.0)
         const b = braki[d.bid]; if (!b) break;
         if (d.usun) { delete braki[d.bid]; break; }
@@ -69,6 +70,8 @@ function fold(events) {
         if (d.pid) prot[d.pid] = { pid: d.pid, def: d.def, wersja: d.wersja, prefiks: d.prefiks, stan: d.stan || 'roboczy', nr: d.nr || (prot[d.pid] && prot[d.pid].nr) || '', dane: d.dane || {}, urz: e.urz, kto: e.kto, ts: e.ts }; break;
     }
   }
+  // front otwarty tylko, gdy urządzenie nie ma już żadnego otwartego braku
+  Object.values(braki).forEach(b => { if (!b.zamk && b.urz && dev[b.urz]) dev[b.urz].front = false; });
   // usunięte zdjęcia znikają z kart urządzeń, braków i notatek (historia zostaje w zdarzeniach)
   if (usuniete.size) {
     Object.values(dev).forEach(x => { x.foto = x.foto.filter(f => !usuniete.has(f.fid)); });

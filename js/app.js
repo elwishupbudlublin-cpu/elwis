@@ -7,7 +7,7 @@ const IKONY = { plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4">
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
-  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
+  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', kier: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"></path><path d="M9 4.5h6"></path>', front: '<path d="M13 12v.01M3 21h18M5 21V5a2 2 0 0 1 2-2h7.5M17 13.5V21M14 7h7M18 4l3 3-3 3"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
   chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
   x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
   plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
@@ -395,7 +395,7 @@ const Views = {
     const rec = recent.map(k => all.find(p => p.kod === k)).filter(Boolean).slice(0, 4);
     const off = new Set(await Pamiec.lista());
     const nq = U.norm(q);
-    const list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
+    let list = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres].join(' ')).includes(nq));
     const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
     // liczniki (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki;
     // budowy zapisane na tablecie – liczone lokalnie, pozostałe – z serwera (licz); starszy serwer: tylko [gotowe, wszystkie] (postep)
@@ -410,13 +410,23 @@ const Views = {
       podl: (a, b) => { const pr = p => { const L = licz(p); return L && L.w ? L.d / L.w : -1; };
         const x = pr(a), y = pr(b); if ((x < 0) !== (y < 0)) return (x < 0 ? 1 : -1) * so.d; return (x - y) || natCmp(a.kod, b.kod); } };
     list.sort((a, b) => (SORT[so.k] || SORT.kod)(a, b) * so.d);
+    // filtr „front otw.” (od 1.33.0): tylko budowy z urządzeniami, na których otworzył się front; zapamiętany na tablecie
+    const fFront = !!(await DB.get('filtrFront'));
+    if (UI.cur !== 'home') return;
+    const nFront = list.filter(p => (licz(p) || {}).f > 0).length;
+    if (fFront) list = list.filter(p => (licz(p) || {}).f > 0);
     const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : '% urządzeń z rozpoczętą pracą'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     const stat = (p, maly) => {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
         const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
-      return `<span class="lstat"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : ''}${pasek3(L, maly)}</span>`;
+      // od 1.33.0: do rozp. / otw. f. – odstęp – uruch. / podł. / rozp. / wszystkie; pod spodem usterki i notatki
+      const rz = L.w - L.d, f = L.f || 0;
+      const dod = [L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : '', L.nt ? `<span class="lnot">${ic('note')} ${L.nt} ${odm(L.nt, 'notatka', 'notatki', 'notatek')}</span>` : ''].filter(Boolean).join('');
+      return `<span class="lstat"><span class="lgrp"><span class="lg2"><span class="m"><b>${rz} / <span class="${f ? 'fr' : ''}">${f}</span></b></span><small>do rozp. / otw. f.</small></span><span class="lg1"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small></span></span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L, maly)}</span>`;
     };
+    // kierownik HUP-BUD opiekujący się budową (od 1.33.0, Baza → Projekty → Kierownik)
+    const kier = (p, maly) => p.kierownik ? `<span class="lkier${maly ? ' sm' : ''}" title="Kierownik budowy HUP-BUD">${ic('kier')}${U.esc(p.kierownik)}</span>` : '';
     const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? `<span class="chip ok chipic" title="Dostępne offline – zapisane w tablecie">${ic('offline')} offline</span>` : ''}`;
     wstawWidok(`
       <section class="bhero">
@@ -424,13 +434,15 @@ const Views = {
         <label class="search hsearch"><span hidden>Szukaj budowy</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
           <input type="search" id="q" value="${U.esc(q)}" placeholder="nazwa, kod lub adres" autocomplete="off"></label>
       </section>
-      <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${stat(p)}</button>`).join('')}</div>` : ''}
+      <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${kier(p)}${stat(p)}</button>`).join('')}</div>` : ''}
       <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : 'Wszystkie aktywne budowy'} (${list.length})</h2>
+        <button class="tab ffront ${fFront ? 'on' : ''}" id="fFront" aria-pressed="${fFront}" title="Pokaż tylko budowy, na których otworzył się front">${ic('front')} front otw.${nFront ? ` <small>${nFront}</small>` : ''}</button>
         <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Rozpoczęto %')}</div></div>
-      <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span></span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
+      <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span>${kier(p, true)}</span>${stat(p, true)}${znaczki(p)}</button>`).join('') || (fFront ? '<div class="li mute">Żadna budowa nie ma otwartego frontu.</div>' : '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>')}</div></div>`, '#wyn');
     dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
+    $('#fFront').onclick = async () => { await DB.set('filtrFront', !fFront); Views.home(); };
     view.querySelectorAll('[data-sb]').forEach(b => b.onclick = async () => {
       const k = b.dataset.sb; await DB.set('sortBud', { k, d: so.k === k ? -so.d : (k === 'podl' ? -1 : 1) });   // podłączone – domyślnie od największej
       Views.home();
@@ -649,11 +661,12 @@ const Views = {
     const lista = F.notes.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
     wstawWidok(`<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
       <label class="search" style="margin:14px 0"><span hidden>Szukaj w notatkach</span><input type="search" id="q" value="${U.esc(UI.par.q || '')}" placeholder="słowo, urządzenie, osoba" autocomplete="off"></label>
-      <div class="stack" id="wyn">${lista.map(e => `<article class="card note"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
+      <div class="stack" id="wyn">${lista.map(e => `<article class="card note" role="button" tabindex="0" data-nt="${U.esc(e.id)}"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
         <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`, '#wyn');
     $('#nNew').onclick = () => Dialogs.notatka('');
     szukajNaZywo($('#q'), () => Views.notatki());
-    view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
+    view.querySelectorAll('[data-u]').forEach(b => b.onclick = e => { e.stopPropagation(); Dialogs.device(b.dataset.u); });
+    view.querySelectorAll('[data-nt]').forEach(a => a.onclick = e => { if (e.target.closest('.thumbs')) return; Dialogs.notatkaOkno(a.dataset.nt); });   // od 1.33.0: otwarcie notatki
     hydrateFotos(view);
   },
 
@@ -708,8 +721,8 @@ const Views = {
     const nBrak = {}, nFoto = {};
     Object.values(F.braki).forEach(b => { if (!b.urz) return; if (!b.zamk) nBrak[b.urz] = (nBrak[b.urz] || 0) + 1; if (b.foto && b.foto.length) nFoto[b.urz] = (nFoto[b.urz] || 0) + b.foto.length; });
     Object.entries(F.dev).forEach(([id, st]) => { if (st.foto && st.foto.length) nFoto[id] = (nFoto[id] || 0) + st.foto.length; });
-    const uIkony = id => (nBrak[id] || nFoto[id]) ? `<span class="uico">${nBrak[id] ? `<span class="ui-brak" title="${nBrak[id]} ${odm(nBrak[id], 'otwarty brak', 'otwarte braki', 'otwartych braków')}">${ic('warn')}${nBrak[id] > 1 ? `<small>${nBrak[id]}</small>` : ''}</span>` : ''}${nFoto[id] ? `<span class="ui-foto" title="${nFoto[id]} ${odm(nFoto[id], 'zdjęcie', 'zdjęcia', 'zdjęć')}">${ic('cam')}${nFoto[id] > 1 ? `<small>${nFoto[id]}</small>` : ''}</span>` : ''}</span>` : '';
-    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+    const uIkony = id => (nBrak[id] || nFoto[id] || (F.dev[id] && F.dev[id].front)) ? `<span class="uico">${F.dev[id] && F.dev[id].front ? `<span class="ui-front" title="Otworzył się front – brak usunięty, można wrócić do pracy">${ic('front')}</span>` : ''}${nBrak[id] ? `<span class="ui-brak" title="${nBrak[id]} ${odm(nBrak[id], 'otwarty brak', 'otwarte braki', 'otwartych braków')}">${ic('warn')}${nBrak[id] > 1 ? `<small>${nBrak[id]}</small>` : ''}</span>` : ''}${nFoto[id] ? `<span class="ui-foto" title="${nFoto[id]} ${odm(nFoto[id], 'zdjęcie', 'zdjęcia', 'zdjęć')}">${ic('cam')}${nFoto[id] > 1 ? `<small>${nFoto[id]}</small>` : ''}</span>` : ''}</span>` : '';
+    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt === 'front' ? !!(F.dev[u.id] && F.dev[u.id].front) : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
       .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn, u.sys].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
@@ -723,7 +736,7 @@ const Views = {
           <option value="">Wszystkie systemy</option><optgroup label="System (szafa / rozdzielnica)">${systemy.map(x => `<option value="${U.esc(x)}" ${x === sysF ? 'selected' : ''}>${U.esc(idOz(x))} (${urz.filter(u => sysList(u).includes(x)).length})</option>`).join('')}
 </optgroup>
           <option value="-" ${sysF === '-' ? 'selected' : ''}>Bez systemu (${urz.filter(u => !sysList(u).length).length})</option></select></label>
-        <label class="tsel ${filt !== 'all' ? 'on' : ''}"><span hidden>Filtr</span><select id="uFil" aria-label="Filtr">${[['all', 'Wszystkie urządzenia'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === filt ? 'selected' : ''}>${U.esc(l)}</option>`).join('')}
+        <label class="tsel ${filt !== 'all' ? 'on' : ''}"><span hidden>Filtr</span><select id="uFil" aria-label="Filtr">${[['all', 'Wszystkie urządzenia'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ['front', 'Front otw.'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === filt ? 'selected' : ''}>${U.esc(l)}</option>`).join('')}
           <optgroup label="Typ urządzenia">${prefixes.map(x => `<option value="${U.esc(x)}" ${x === filt ? 'selected' : ''}>${U.esc(typOf(x + '1').nazwa)}</option>`).join('')}</optgroup></select></label>
 </div>
         ${biuro ? '<button class="tab pri" id="uAdd" title="Dodaj urządzenie (tylko rola biuro)" style="flex:none">+ Dodaj<span class="szer"> urządzenie</span></button>' : ''}
@@ -892,13 +905,14 @@ function liczZdarzen(urz, ev) {
   return L;
 }
 function liczBudowy(urz, F) {
-  const L = { u: 0, p: 0, d: 0, w: 0, b: Object.values(F.braki).filter(b => !b.zamk).length };
+  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, nt: F.notes.length, b: Object.values(F.braki).filter(b => !b.zamk).length };
   urz.forEach(u => {
     const kroki = typOf(u.id).kroki || [], st = F.dev[u.id];
     const zrob = kroki.map((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
     const pk = kroki.map((k, i) => /podłącz/i.test(k) ? i : -1).filter(i => i >= 0);
     L.w++;
-    if (zrob.some(Boolean) || (st && st.sn) || u.sn) L.d++;   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
+    if (zrob.some(Boolean) || (st && st.sn) || u.sn) L.d++;
+    if (st && st.front) L.f++;   // od 1.33.0: otworzył się front   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
     if (pk.length ? pk.every(i => zrob[i]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;
   });
@@ -1174,6 +1188,22 @@ const Dialogs = {
       if (!confirm('Usunąć ten brak? Zniknie z list (historia zostaje).')) return;
       await addEvent('brak_edyc', b.urz, { bid, usun: true }); UI.toast('Brak usunięty'); wroc();
     };
+  },
+
+  /* Podgląd notatki (od 1.33.0): pełny tekst, autor, urządzenie (karta, na rzucie), zdjęcia; notatek się nie edytuje */
+  notatkaOkno(eid) {
+    const F = fold(S.ev), e = F.notes.find(x => x.id === eid); if (!e) return;
+    const fot = (e.d.foto || []).filter(f => F.fotoInfo[f]);
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Notatka">
+      <div class="shead"><h3>Notatka – ${U.esc(e.kto)}</h3><span class="mute">${U.fmt(e.ts)}</span></div>
+      <div class="sbody">${e.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="noU">Urządzenie ${U.esc(idOz(e.urz))}</button>${maPozycje(e.urz) ? `<button class="btn sm" id="noR">${ic('cel')} Na rzucie</button>` : ''}</div>` : ''}
+        <p style="white-space:pre-wrap;line-height:1.55;margin:0;font-size:17px">${U.esc(e.d.tekst || '')}</p>
+        ${fot.length ? `<div class="thumbs" id="noF" data-fotos="${U.esc(fot.join(','))}"></div>` : ''}</div>
+      <div class="sfoot"><button class="btn" id="noX">Zamknij</button></div></div></div>`;
+    $('#noX').onclick = UI.close;
+    if ($('#noU')) $('#noU').onclick = () => Dialogs.device(e.urz);
+    if ($('#noR')) $('#noR').onclick = () => pokazNaRzucie(e.urz);
+    hydrateFotos(modal);
   },
 
   notatka(urz) {

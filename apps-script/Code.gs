@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.30.0';
+const SCRIPT_VERSION = '1.33.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -135,7 +135,8 @@ function aktywneBaza_() {
       zakres: txt_(r[6]).split(/[;,]/).map(s => s.trim()).filter(String), uwagi: txt_(r[7]),
       folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase(),
       etapy: etapy_(r[12]), listaCU: txt_(r[9]),
-      inwestor: txt_(r[13]), zamawiajacy: txt_(r[14])   // schemat 1.5 – do protokołów
+      inwestor: txt_(r[13]), zamawiajacy: txt_(r[14]),   // schemat 1.5 – do protokołów
+      kierownik: txt_(r[15])                               // schemat 1.10 – kierownik HUP-BUD opiekujący się budową
     }));
 }
 /** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
@@ -614,7 +615,21 @@ function przelicz_(p, ids, zmiany) {
   // liczniki budowy do listy budów (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki
   const stAll = {};
   ev.forEach(e => { if (e.typ === 'krok' && e.urz) { if (!stAll[e.urz]) stAll[e.urz] = {}; stAll[e.urz][e.d.krok] = !!e.d.wart; } });
-  const L = { u: 0, p: 0, d: 0, w: 0, b: Object.keys(braki).filter(b => braki[b].open).length };
+  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, b: Object.keys(braki).filter(b => braki[b].open).length,
+    nt: ev.filter(e => e.typ === 'notatka').length };   // od 1.33.0: notatki
+  // „Otworzył się front” (od 1.33.0): brak usunięty → TAK; czynność na urządzeniu (krok, nr seryjny) albo nowy brak → kasuje;
+  // urządzenie z innym otwartym brakiem – bez flagi
+  const front = {}, bUrz = {};
+  ev.forEach(e => {
+    if (e.typ === 'brak' && e.urz) { bUrz[e.id] = e.urz; front[e.urz] = false; }
+    else if ((e.typ === 'krok' || e.typ === 'nr') && e.urz) front[e.urz] = false;
+    else if (e.typ === 'brak_zamk' && bUrz[e.d.bid]) front[bUrz[e.d.bid]] = true;
+  });
+  Object.keys(braki).forEach(b => { if (braki[b].open && braki[b].urz) front[braki[b].urz] = false; });
+  const kolF = 15;   // kolumna O w zakładce Urządzenia
+  if (txt_(sh.getRange(1, kolF).getValue()) !== 'Otworzył się front') sh.getRange(1, kolF).setValue('Otworzył się front');
+  const fv = v.map(r => [txt_(r[0]) && front[txt_(r[0])] ? 'TAK' : '']);
+  if (fv.length) sh.getRange(2, kolF, fv.length, 1).setValues(fv);
   v.forEach(r => {
     const id = txt_(r[0]); if (!id) return;
     const kroki = (typy[(id.match(/^[A-Za-z]+/) || [''])[0].toUpperCase()] || { kroki: ['Podłączony'] }).kroki;
@@ -622,6 +637,7 @@ function przelicz_(p, ids, zmiany) {
     const zrob = kroki.map((k, j) => !!st[j]);
     const pk = kroki.map((k, j) => /podłącz/i.test(k) ? j : -1).filter(j => j >= 0);
     L.w++;
+    if (front[id]) L.f++;
     if (zrob.some(Boolean) || txt_(r[9])) L.d++;   // od 1.30.0: nr seryjny = rozpoczęte
     if (pk.length ? pk.every(j => zrob[j]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;

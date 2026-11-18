@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.33.0 – 2026-11-18
+- Lista budów i kafelki: licznik „do rozp. / otw. f.” (urządzenia bez żadnej czynności / urządzenia, na których otworzył się front), odstęp, dalej uruch. / podł. / rozp. / wszystkie; pod spodem usterki i liczba notatek.
+- Kierownik HUP-BUD budowy pod adresem (Baza → Projekty → Kierownik, schemat 1.10).
+- „Otworzył się front”: zamknięcie braku urządzenia ustawia flagę, czynność (krok, nr seryjny) lub nowy brak ją kasuje; ikona drzwi na liście urządzeń; serwer zapisuje kolumnę „Otworzył się front” w Urządzeniach.
+- Filtr „front otw.” na liście budów (zapamiętany na tablecie) i w filtrach listy urządzeń.
+- Notatki: dotknięcie otwiera okno z pełnym tekstem, autorem, urządzeniem („Na rzucie”) i zdjęciami.
+- Serwer 1.33.0: `licz.f`, `licz.nt`, pole `kierownik` w liście budów.
+
 ## 1.32.3 – 2026-11-17 (aplikacja)
 - Zdjęcia z budowy: przycisk „Na rzucie” na kafelku przeniesiony do pola opisu zdjęcia, po prawej.
 

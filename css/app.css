@@ -491,3 +491,20 @@ main{padding:16px 16px 100px}
 /* 1.32.3: „Na rzucie” na kafelku zdjęcia – w polu opisu, po prawej */
 .gph .gnav{top:auto;bottom:14px;right:12px;background:#fff;border:1px solid #CBD5E1;box-shadow:none}
 .gph:has(.gnav) .gcap{padding-right:64px}
+/* 1.33.0: liczniki do rozp. / otw. f., notatki, kierownik, ikonka otwartego frontu */
+.lstat .lgrp{display:flex;gap:22px;align-items:flex-end;justify-content:flex-end}
+.lstat .lg1,.lstat .lg2{display:flex;flex-direction:column;align-items:flex-end}
+.lstat .fr{color:#15803d}
+.lstat .ldod{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
+.lstat .lnot{display:inline-flex;align-items:center;gap:4px;color:#475569;font-weight:700;font-size:13px}
+.lstat .lnot .ic{width:16px;height:16px}
+.lkier{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:#334155;font-size:14px;font-weight:600}
+.lkier .ic{width:16px;height:16px;color:#64748b}.lkier.sm{display:flex;font-size:13px;margin-top:2px}
+.li .ui-front{color:#15803d}
+.tile.btc .lstat .lgrp{justify-content:flex-start}.tile.btc .lstat .lg1,.tile.btc .lstat .lg2{align-items:flex-start}.tile.btc .lstat .ldod{justify-content:flex-start}
+/* 1.33.0: filtr „front otw.” na liście budów */
+.bsort .ffront { display:inline-flex; align-items:center; gap:6px; margin-right:8px; white-space:nowrap }
+.bsort .ffront .ic { width:18px; height:18px; color:#15803d }
+.bsort .ffront.on { background:#15803d; color:#fff; border-color:#15803d }
+.bsort .ffront.on .ic { color:#fff }
+.bsort .ffront small { font-weight:700 }
