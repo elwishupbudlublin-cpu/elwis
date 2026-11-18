@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.36.0 – 2026-11-18 (aplikacja; numer wspólny z serwerem 1.36.0)
+- Ekran budowy, kafelek Urządzenia: dwie linie liczników – „do rozp. / otw. f.” i „uruch. / podł. / rozp. / wszystkie”, mniejsza czcionka (mieszczą się liczby trzycyfrowe na tablecie w pionie).
+- Lista urządzeń: filtr „Do rozp.” (bez żadnego kroku i nr seryjnego – ta sama reguła co licznik); filtr „Front otw.” przemianowany na „Otw. f.”.
+
 ## Serwer 1.36.0 – 2026-11-18 (schemat 1.11)
 - Zakładka „Liczniki” w Bazie: przy każdym przeliczeniu liczników skrypt wpisuje wiersz budowy (wszystkie, rozpoczęte, podłączone, uruchomione, do rozpoczęcia, otworzył się front, otwarte braki, notatki, ostatni wpis, autor) – źródło dla porannego zadania Claude → ClickUp (etap „Status”).
 - Priorytety: etap „Status” w liście ClickUp i jego podzadania pomijane w ocenie budowy.

@@ -488,7 +488,7 @@ const Views = {
       ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-bottom:12px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
       <div class="bgrid">
         <button class="big" id="tPodl"><span class="bi">${ic('plug')}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>
-          <span class="bst"><span class="sv">${LB.u} / ${LB.p} / ${LB.d} / ${LB.w}</span><small class="mute">uruch. / podł. / rozp. / wszystkie</small>${pasek3(LB)}</span>${openB.length ? `<span class="chip bad">⚠ ${openB.length} ${odmUsterki(openB.length)}</span>` : PUSTY}</button>
+          <span class="bst bst2"><span class="bl2"><span class="sv">${LB.w - LB.d} / <span class="${LB.f ? 'fr' : ''}">${LB.f || 0}</span></span><small class="mute">do rozp. / otw. f.</small></span><span class="bl2"><span class="sv">${LB.u} / ${LB.p} / ${LB.d} / ${LB.w}</span><small class="mute">uruch. / podł. / rozp. / wszystkie</small></span>${pasek3(LB)}</span>${openB.length ? `<span class="chip bad">⚠ ${openB.length} ${odmUsterki(openB.length)}</span>` : PUSTY}</button>
         <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>
           <span class="bst"><span class="sv">${protOk} / ${protWym} <small>wykonanych</small></span>${pasek(protWym ? Math.round(protOk / protWym * 100) : 0)}</span>${rob ? `<span class="chip warn">${rob} ${odm(rob, 'roboczy', 'robocze', 'roboczych')}</span>` : PUSTY}</button>
         <div class="big" id="tBraki" role="button" tabindex="0"><span class="bi">${ic('warn')}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Lista i zamykanie</span></span>
@@ -725,7 +725,7 @@ const Views = {
     Object.values(F.braki).forEach(b => { if (!b.urz) return; if (!b.zamk) nBrak[b.urz] = (nBrak[b.urz] || 0) + 1; if (b.foto && b.foto.length) nFoto[b.urz] = (nFoto[b.urz] || 0) + b.foto.length; });
     Object.entries(F.dev).forEach(([id, st]) => { if (st.foto && st.foto.length) nFoto[id] = (nFoto[id] || 0) + st.foto.length; });
     const uIkony = id => (nBrak[id] || nFoto[id] || (F.dev[id] && F.dev[id].front)) ? `<span class="uico">${F.dev[id] && F.dev[id].front ? `<span class="ui-front" title="Otworzył się front – brak usunięty, można wrócić do pracy">${ic('front')}</span>` : ''}${nBrak[id] ? `<span class="ui-brak" title="${nBrak[id]} ${odm(nBrak[id], 'otwarty brak', 'otwarte braki', 'otwartych braków')}">${ic('warn')}${nBrak[id] > 1 ? `<small>${nBrak[id]}</small>` : ''}</span>` : ''}${nFoto[id] ? `<span class="ui-foto" title="${nFoto[id]} ${odm(nFoto[id], 'zdjęcie', 'zdjęcia', 'zdjęć')}">${ic('cam')}${nFoto[id] > 1 ? `<small>${nFoto[id]}</small>` : ''}</span>` : ''}</span>` : '';
-    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt === 'front' ? !!(F.dev[u.id] && F.dev[u.id].front) : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt === 'front' ? !!(F.dev[u.id] && F.dev[u.id].front) : filt === 'rozp0' ? !rozpoczete(u, F) : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
       .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn, u.sys].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
@@ -739,7 +739,7 @@ const Views = {
           <option value="">Wszystkie systemy</option><optgroup label="System (szafa / rozdzielnica)">${systemy.map(x => `<option value="${U.esc(x)}" ${x === sysF ? 'selected' : ''}>${U.esc(idOz(x))} (${urz.filter(u => sysList(u).includes(x)).length})</option>`).join('')}
 </optgroup>
           <option value="-" ${sysF === '-' ? 'selected' : ''}>Bez systemu (${urz.filter(u => !sysList(u).length).length})</option></select></label>
-        <label class="tsel ${filt !== 'all' ? 'on' : ''}"><span hidden>Filtr</span><select id="uFil" aria-label="Filtr">${[['all', 'Wszystkie urządzenia'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ['front', 'Front otw.'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === filt ? 'selected' : ''}>${U.esc(l)}</option>`).join('')}
+        <label class="tsel ${filt !== 'all' ? 'on' : ''}"><span hidden>Filtr</span><select id="uFil" aria-label="Filtr">${[['all', 'Wszystkie urządzenia'], ['todo', 'Do zrobienia'], ['brak', 'Z brakiem'], ['rozp0', 'Do rozp.'], ['front', 'Otw. f.'], ...(Prot.wszystkie().length ? [['p:do', 'Bez protokołu'], ['p:rob', 'Protokół roboczy'], ['p:ok', 'Z protokołem']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === filt ? 'selected' : ''}>${U.esc(l)}</option>`).join('')}
           <optgroup label="Typ urządzenia">${prefixes.map(x => `<option value="${U.esc(x)}" ${x === filt ? 'selected' : ''}>${U.esc(typOf(x + '1').nazwa)}</option>`).join('')}</optgroup></select></label>
 </div>
         ${biuro ? '<button class="tab pri" id="uAdd" title="Dodaj urządzenie (tylko rola biuro)" style="flex:none">+ Dodaj<span class="szer"> urządzenie</span></button>' : ''}
@@ -906,6 +906,11 @@ function liczZdarzen(urz, ev) {
     if (t) { const last = ev.find(e => e.ts === t); L.t = t; L.k = last && last.kto || ''; L.n = s.filter(x => U.day(x) === U.day(t)).length; }
   }
   return L;
+}
+/* Urządzenie rozpoczęte (od 1.35.1 wspólna reguła listy budów i filtra „Do rozp.”): ≥1 krok albo nr seryjny */
+function rozpoczete(u, F) {
+  const st = F.dev[u.id]; if ((st && st.sn) || u.sn) return true;
+  return (typOf(u.id).kroki || []).some((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
 }
 function liczBudowy(urz, F) {
   const L = { u: 0, p: 0, d: 0, w: 0, f: 0, nt: F.notes.length, b: Object.values(F.braki).filter(b => !b.zamk).length };
