@@ -123,11 +123,12 @@ function dolaczNowe() {
     const d = e.d || {}, u = lst.find(x => x.id === e.urz); if (!u) return;
     if (e.typ === 'urz_poz') { u.x = d.x; u.y = d.y; if (d.ark) u.arkusz = d.ark; }
     if (e.typ === 'urz_sys') u.sys = d.sys || '';
+    if (e.typ === 'urz_edyc') ['typ', 'zasilanie', 'oz', 'uwagi'].forEach(k => { if (d[k] != null) u[k] = d[k]; });   // od 1.37.0
     if (e.typ === 'urz_usun') usun.add(u.id);
   });
   S.proj.urzadzenia = usun.size ? lst.filter(u => !usun.has(u.id)) : lst;
 }
-const ZM_URZ = ['urz_poz', 'urz_sys', 'urz_usun'];
+const ZM_URZ = ['urz_poz', 'urz_sys', 'urz_usun', 'urz_edyc'];
 /* ID nadane przez serwer → zamiana ID tymczasowych w zdarzeniach i nazwach zdjęć na tablecie */
 async function zamienTmp(kod, mapa, przyjete) {
   const tmp = Object.keys(mapa || {});

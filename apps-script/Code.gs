@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.36.0';
+const SCRIPT_VERSION = '1.37.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -381,7 +381,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'notatka_edyc'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'notatka_edyc', 'urz_edyc'];
 
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
@@ -467,6 +467,11 @@ function zmianaUrz_(p, e, biuro) {
     return true;
   }
   if (e.typ === 'urz_sys') { sh.getRange(row, 14).setNumberFormat(TEXT).setValue(txt_(d.sys).slice(0, 200)); return true; }
+  if (e.typ === 'urz_edyc') {   // od 1.37.0 (rola biuro): Typ (C), Zasilanie (D), Uwagi (G), Oznaczenie proj. (M)
+    const kol = { typ: [3, 120], zasilanie: [4, 60], uwagi: [7, 500], oz: [13, 40] }; let n = 0;
+    Object.keys(kol).forEach(k => { if (d[k] == null) return; sh.getRange(row, kol[k][0]).setNumberFormat(TEXT).setValue(txt_(d[k]).slice(0, kol[k][1])); n++; });
+    return n > 0;
+  }
   if (e.typ === 'urz_usun') {
     const nc = Math.max(14, sh.getLastColumn());
     let us = ss.getSheetByName('Usunięte');
@@ -564,7 +569,7 @@ function push_(b, tablet) {
           if (biuro === null) biuro = rolaBiuro_();
           if (!pinezka_(p.kod, e, biuro)) return;
         }
-        if (e.typ === 'urz_poz' || e.typ === 'urz_sys' || e.typ === 'urz_usun') {
+        if (e.typ === 'urz_poz' || e.typ === 'urz_sys' || e.typ === 'urz_usun' || e.typ === 'urz_edyc') {
           if (biuro === null) biuro = rolaBiuro_();
           if (!zmianaUrz_(p, e, biuro)) return;
         }

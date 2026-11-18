@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.37.0 – 2026-11-18 (aplikacja i serwer)
+- Karta urządzenia (rola biuro): „Edytuj” – Typ, Zasilanie, Oznaczenie z projektu, Uwagi; podpowiedzi z wartości na budowie; ID i rodzaj urządzenia bez zmian.
+- Zdarzenie `urz_edyc` (tylko rola biuro): zmiana widoczna od razu na tablecie, w historii urządzenia z poprzednią wartością; serwer poprawia kolumny C, D, G, M w zakładce Urządzenia.
+
 ## 1.36.0 – 2026-11-18 (aplikacja; numer wspólny z serwerem 1.36.0)
 - Ekran budowy, kafelek Urządzenia: dwie linie liczników – „do rozp. / otw. f.” i „uruch. / podł. / rozp. / wszystkie”, mniejsza czcionka (mieszczą się liczby trzycyfrowe na tablecie w pionie).
 - Lista urządzeń: filtr „Do rozp.” (bez żadnego kroku i nr seryjnego – ta sama reguła co licznik); filtr „Front otw.” przemianowany na „Otw. f.”.

@@ -3,7 +3,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const view = $('#view'), modal = $('#modal');
 const ST = { 'czeka': 'czeka', 'w toku': 'wtoku', 'gotowe': 'gotowe', 'brak': 'brak' };
 /* ikony liniowe (wygląd B, od 1.12.0) */
-const IKONY = { trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"></path>', download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path>', plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
+const IKONY = { edit: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"></path>', trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"></path>', download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path>', plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
@@ -955,7 +955,7 @@ const Dialogs = {
     const br = Object.values(F.braki).filter(b => b.urz === id);
     const blocked = br.some(b => !b.zamk && b.blokuje);
     modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(idOz(u))}">
-      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
+      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3>${Session.isBiuro() && !czyTmp(id) ? `<button class="btn sm" id="dEd" title="Edytuj dane urządzenia (biuro)">${ic('edit')} Edytuj</button>` : ''}<button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
       <div class="sbody">
         ${czyTmp(id) ? '<div class="card mute">Nowe urządzenie dodane na tablecie – numer nada serwer przy synchronizacji.</div>' : ''}
         <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
@@ -1013,6 +1013,7 @@ const Dialogs = {
     modal.querySelectorAll('[data-npr]').forEach(b => b.onclick = () => { UI.close(); UI.go('protokol', { nowy: b.dataset.npr, urz: id }, { dlg: id }); });
     $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); const z = UI.cur; UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }, { dlg: z !== 'rzut' ? id : null }); };
     if ($('#aSys')) $('#aSys').onclick = () => Dialogs.systemUrz(id);
+    if ($('#dEd')) $('#dEd').onclick = () => Dialogs.edytujUrz(id);
     if ($('#aDel')) $('#aDel').onclick = () => Dialogs.usunUrz(id);
     if ($('#aPoz')) $('#aPoz').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, wskaz: { urz: id } }); };
     bindIssue(modal, () => Dialogs.device(id));
@@ -1030,6 +1031,31 @@ const Dialogs = {
       <div class="sfoot"><button class="btn" id="pzx">Anuluj</button><button class="btn pri" id="pzs">Zapisz pozycję</button></div></div></div>`;
     $('#pzx').onclick = () => { UI.close(); wroc(); };
     $('#pzs').onclick = async () => { await addEvent('urz_poz', id, { x: p.x, y: p.y, ark: p.ark }); UI.close(); ok(); UI.toast('Pozycja zapisana'); };
+  },
+
+  /* Edycja danych urządzenia (od 1.37.0) – tylko rola biuro: Typ, Zasilanie, Oznaczenie proj., Uwagi.
+     ID i rodzaj urządzenia (prefiks ze Słowników) się nie zmieniają; zapis = zdarzenie urz_edyc, serwer poprawia wiersz w Urządzeniach */
+  edytujUrz(id) {
+    if (!Session.isBiuro()) return;
+    const wsz = (S.proj || {}).urzadzenia || [], u = wsz.find(x => x.id === id); if (!u) return;
+    const podp = (k, filtr) => [...new Set(wsz.filter(filtr || (() => true)).map(x => (x[k] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl')).slice(0, 40);
+    const dl = (nm, arr) => `<datalist id="${nm}">${arr.map(v => `<option value="${U.esc(v)}">`).join('')}</datalist>`;
+    const pola = [['typ', 'Typ', 'np. HAT.160.1B.HD'], ['zasilanie', 'Zasilanie', 'np. 230 V'], ['oz', 'Oznaczenie z projektu', 'np. Wk5'], ['uwagi', 'Uwagi', '']];
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Edycja urządzenia">
+      <div class="shead"><h3>Edycja – ${U.esc(idOz(u))}</h3><span class="chip">biuro</span></div>
+      <div class="sbody stack">
+        <div class="mute">Rodzaj urządzenia (${U.esc(typOf(id).nazwa)}) i ID ${U.esc(id)} się nie zmieniają.</div>
+        ${pola.map(([k, l, ph]) => `<label class="fld"><span class="mute">${l}</span>${k === 'uwagi' ? `<textarea id="e_${k}" rows="3" style="width:100%">${U.esc(u[k] || '')}</textarea>` : `<input type="text" id="e_${k}" value="${U.esc(u[k] || '')}" placeholder="${U.esc(ph)}" list="dl_${k}" autocomplete="off" style="width:100%">`}</label>`).join('')}
+        ${dl('dl_typ', podp('typ', x => U.prefix(x.id) === U.prefix(id)))}${dl('dl_zasilanie', podp('zasilanie'))}
+      </div>
+      <div class="sfoot"><button class="btn" id="edx">Anuluj</button><button class="btn pri" id="eds">Zapisz</button></div></div></div>`;
+    $('#edx').onclick = () => Dialogs.device(id);
+    $('#eds').onclick = async () => {
+      const zm = {}, było = {};
+      pola.forEach(([k]) => { const v = $('#e_' + k).value.trim(); if (v !== (u[k] || '').trim()) { zm[k] = v; było[k] = u[k] || ''; } });
+      if (!Object.keys(zm).length) { Dialogs.device(id); return; }
+      await addEvent('urz_edyc', id, Object.assign(zm, { było })); UI.toast('Dane urządzenia zapisane'); Dialogs.device(id); UI.refresh();
+    };
   },
 
   /* Zmiana systemu urządzenia (od 1.30.0) – tylko rola biuro */
@@ -1461,7 +1487,7 @@ function bindIssue(root, after) {
 }
 function histTxt(e) {
   const d = e.d || {};
-  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ === 'urz_poz' ? 'zmiana pozycji na rzucie ' + (d.ark || '') : e.typ === 'urz_sys' ? 'system: ' + (d.sys || 'brak') : e.typ === 'urz_usun' ? 'usunięto urządzenie – ' + (d.powod || '') : e.typ;
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ === 'urz_poz' ? 'zmiana pozycji na rzucie ' + (d.ark || '') : e.typ === 'urz_sys' ? 'system: ' + (d.sys || 'brak') : e.typ === 'urz_edyc' ? 'edycja danych: ' + Object.keys(d).filter(k => k !== 'było').map(k => ({ typ: 'typ', zasilanie: 'zasilanie', oz: 'oznaczenie', uwagi: 'uwagi' })[k] + ' „' + (d[k] || '—') + '”').join(', ') : e.typ === 'urz_usun' ? 'usunięto urządzenie – ' + (d.powod || '') : e.typ;
 }
 async function thumbs(el, foto) {
   if (!el) return;
