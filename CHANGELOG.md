@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.39.0 – 2026-11-18 (serwer; aplikacja bez zmian – numer wspólny)
+- Kopie zapasowe: porządki w _Archiwum – kopie starsze niż 12 tygodni do kosza Dysku, z każdego pliku zawsze zostaje najnowsza kopia.
+- Kopia różnicowa folderów aktywnych budów (Zdjęcia, Protokoły, Notatki budowy i inne pliki poza „Do wglądu” i arkuszami) do _Archiwum/Foldery budów – tylko pliki nowe lub zmienione od ostatniej kopii; usunięcie pliku na Dysku nie kasuje kopii; przy braku czasu dokończenie wyzwalaczem po 5 min.
+
 ## 1.38.0 – 2026-11-18 (aplikacja i serwer)
 - Liczniki w kolumnach – każda liczba nad swoim opisem (lista budów, kafelki ostatnich budów, kafelek Urządzenia na ekranie budowy); pasek postępu wrócił na kafelek Urządzenia.
 - „Do rozp.” = urządzenia, na których nic nie wpisano: bez kroku, nr seryjnego, zdjęcia, braku (także zamkniętego), notatki i protokołu; zmiany biura (pozycja, system, edycja) się nie liczą. Ta sama reguła: filtr listy urządzeń, liczniki aplikacji, serwer (`licz.r`) i zakładka Liczniki.

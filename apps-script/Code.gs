@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.38.0';
+const SCRIPT_VERSION = '1.39.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -934,6 +934,14 @@ function sub_(folder, name, create) {
 
 /* ===================== Kopie tygodniowe (wyzwalacz czasowy) ===================== */
 
+/* ===================== Kopie zapasowe (_Archiwum) =====================
+ * Poniedziałek ok. 5:00 (wyzwalacz z „instalacja”):
+ * 1) kopia Bazy projektów i list urządzeń wszystkich budów: `rrrr-mm-dd <nazwa>` w _Archiwum;
+ * 2) od 1.39.0 porządki: kopie starsze niż ARCH_TYGODNIE do kosza, ale z każdego pliku zawsze zostaje najnowsza kopia;
+ * 3) od 1.39.0 kopia różnicowa folderów aktywnych budów (Zdjęcia, Protokoły, Notatki budowy i inne pliki poza „Do wglądu”
+ *    i arkuszami) do _Archiwum/Foldery budów/<folder budowy>/… – kopiowane tylko pliki nowe lub zmienione od ostatniej kopii;
+ *    pliku usuniętego na Dysku kopia nie kasuje. Gdy nie zdąży w limicie czasu skryptu – dokańcza sama kilka minut później. */
+const ARCH_TYGODNIE = 12;
 function archiwizuj() {
   const k = konfig_();
   const arch = DriveApp.getFolderById(k.folder_archiwum_id);
@@ -941,6 +949,62 @@ function archiwizuj() {
   const kopia = id => { const f = DriveApp.getFileById(id); f.makeCopy(day + ' ' + f.getName(), arch); };
   kopia(P.getProperty('BAZA_ID'));
   rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
+  try { porzadkiArchiwum_(arch); } catch (e) { Logger.log('porządki: ' + e); }
+  P.setProperty('ARCH_FOLD_START', String(Date.now()));   // początek nowej kopii folderów
+  archiwizujFoldery();
+}
+/* Kopie `rrrr-mm-dd nazwa` starsze niż ARCH_TYGODNIE → kosz Dysku; najnowsza kopia każdej nazwy zostaje zawsze. */
+function porzadkiArchiwum_(arch) {
+  const granica = Date.now() - ARCH_TYGODNIE * 7 * 864e5, grupy = {};
+  const it = arch.getFiles();
+  while (it.hasNext()) {
+    const f = it.next(), m = f.getName().match(/^(\d{4}-\d{2}-\d{2}) (.+)$/); if (!m) continue;
+    (grupy[m[2]] = grupy[m[2]] || []).push({ f, d: m[1] });
+  }
+  let n = 0;
+  Object.keys(grupy).forEach(nm => {
+    const g = grupy[nm].sort((a, b) => a.d < b.d ? 1 : -1);
+    g.slice(1).forEach(x => { if (new Date(x.d + 'T12:00:00').getTime() < granica) { x.f.setTrashed(true); n++; } });
+  });
+  Logger.log('Porządki archiwum: do kosza ' + n + ' starych kopii (najnowsza każdej zostaje).');
+}
+/* Kopia różnicowa folderów aktywnych budów. Wznawiana wyzwalaczem jednorazowym, gdy nie zmieści się w czasie. */
+function archiwizujFoldery() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'archiwizujFoldery').forEach(t => ScriptApp.deleteTrigger(t));
+  const t0 = Date.now(), LIMIT = 4.5 * 60 * 1000;
+  const od = Number(P.getProperty('ARCH_FOLD_OD') || 0);          // pliki zmienione po tym czasie (koniec poprzedniej pełnej kopii)
+  const start = Number(P.getProperty('ARCH_FOLD_START') || Date.now());
+  const k = konfig_(), arch = DriveApp.getFolderById(k.folder_archiwum_id);
+  const pod = (par, nm) => { const it = par.getFoldersByName(nm); return it.hasNext() ? it.next() : par.createFolder(nm); };
+  const korzen = pod(arch, 'Foldery budów');
+  let skop = 0, brakCzasu = false;
+  const kopiujFolder = (src, dst) => {
+    const fs = src.getFiles();
+    while (fs.hasNext()) {
+      if (Date.now() - t0 > LIMIT) { brakCzasu = true; return; }
+      const f = fs.next();
+      if (f.getMimeType() === MimeType.GOOGLE_SHEETS) continue;          // listy urządzeń – kopia tygodniowa wyżej
+      const zm = f.getLastUpdated().getTime(); if (zm <= od) continue;
+      const ist = dst.getFilesByName(f.getName()); let swieza = false;
+      while (ist.hasNext()) { const a = ist.next(); if (a.getLastUpdated().getTime() >= zm) swieza = true; else a.setTrashed(true); }
+      if (swieza) continue;
+      try { f.makeCopy(f.getName(), dst); skop++; } catch (e) { Logger.log(f.getName() + ': ' + e); }
+    }
+    const ds = src.getFolders();
+    while (ds.hasNext() && !brakCzasu) { const d = ds.next(); if (d.getName() === 'Do wglądu') continue; kopiujFolder(d, pod(dst, d.getName())); }
+  };
+  rowsT_(baza_().getSheetByName('Projekty')).forEach(r => {
+    if (brakCzasu || txt_(r[5]).toLowerCase() !== 'tak') return;
+    const id = idFromUrl_(r[8]); if (!id) return;
+    try { const src = DriveApp.getFolderById(id); kopiujFolder(src, pod(korzen, src.getName())); } catch (e) { Logger.log(r[0] + ': ' + e); }
+  });
+  if (brakCzasu) {
+    ScriptApp.newTrigger('archiwizujFoldery').timeBased().after(5 * 60 * 1000).create();
+    Logger.log('Kopia folderów: skopiowano ' + skop + ', dokończenie za 5 min.');
+  } else {
+    P.setProperty('ARCH_FOLD_OD', String(start));
+    Logger.log('Kopia folderów zakończona: skopiowano ' + skop + ' plików.');
+  }
 }
 
 /* ===================== Priorytety budów i wydajność ekip (od 1.17.0) =====================
