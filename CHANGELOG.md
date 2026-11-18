@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.38.0 – 2026-11-18 (aplikacja i serwer)
+- Liczniki w kolumnach – każda liczba nad swoim opisem (lista budów, kafelki ostatnich budów, kafelek Urządzenia na ekranie budowy); pasek postępu wrócił na kafelek Urządzenia.
+- „Do rozp.” = urządzenia, na których nic nie wpisano: bez kroku, nr seryjnego, zdjęcia, braku (także zamkniętego), notatki i protokołu; zmiany biura (pozycja, system, edycja) się nie liczą. Ta sama reguła: filtr listy urządzeń, liczniki aplikacji, serwer (`licz.r`) i zakładka Liczniki.
+
 ## 1.37.0 – 2026-11-18 (aplikacja i serwer)
 - Karta urządzenia (rola biuro): „Edytuj” – Typ, Zasilanie, Oznaczenie z projektu, Uwagi; podpowiedzi z wartości na budowie; ID i rodzaj urządzenia bez zmian.
 - Zdarzenie `urz_edyc` (tylko rola biuro): zmiana widoczna od razu na tablecie, w historii urządzenia z poprzednią wartością; serwer poprawia kolumny C, D, G, M w zakładce Urządzenia.

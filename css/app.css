@@ -534,3 +534,17 @@ main{padding:16px 16px 100px}
 .bst2 .sv{font-size:16px;white-space:nowrap;letter-spacing:-.02em}
 .bst2 .sv .fr{color:#15803d}
 .bst2 small{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 1.38.0: liczniki w kolumnach – liczba nad opisem */
+.kol .kolg{display:inline-grid;grid-auto-flow:column;grid-auto-columns:max-content;column-gap:10px;align-items:end}
+.kol .kc{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:28px}
+.kol .kc b{font-size:16px;line-height:1.15;font-weight:700}
+.kol .kc b.fr{color:#15803d}
+.kol .kc small{font-size:11px;line-height:1.2;color:var(--mute);white-space:nowrap}
+.lstat .lgrp.kol{display:flex;gap:18px;align-items:flex-end;justify-content:flex-end;flex-wrap:nowrap}
+.tile.btc .lstat .lgrp.kol{justify-content:flex-start}
+.bst2.kol{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.bst2.kol .kc b{font-size:17px}
+@media (max-width:760px){.blist .lstat .lgrp.kol{justify-content:flex-start}}
+.kol .kc b{min-width:0}
+.bst2.kol .tbar3,.bst2.kol .tbar{width:100%;align-self:stretch}
+@media (max-width:760px){.blist .lstat .lgrp.kol{gap:12px;flex-wrap:wrap}.blist .kol .kolg{column-gap:8px}}

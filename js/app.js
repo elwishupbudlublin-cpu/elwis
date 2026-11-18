@@ -419,10 +419,10 @@ const Views = {
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
         const v = Math.round(x[0] / x[1] * 100); return `<span class="lstat"><span class="m"><b>${x[0]} / ${x[1]}</b></span> <small>gotowych · ${v}%</small><span class="tbar${maly ? ' sm' : ''}"><i style="width:${v}%"></i></span></span>`; }
       // od 1.33.0: do rozp. / otw. f. – odstęp – uruch. / podł. / rozp. / wszystkie; pod spodem usterki i notatki
-      const rz = L.w - L.d, f = L.f || 0;
+      const f = L.f || 0;
       // od 1.33.1: na kafelkach „Ostatnio” otwarty front tylko jako ikona drzwi z liczbą (obok usterek i notatek)
       const dod = [!maly && f ? `<span class="lfront" title="Otworzył się front – ${f} ${odm(f, 'urządzenie', 'urządzenia', 'urządzeń')}">${ic('front')} ${f}</span>` : '', L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : '', L.nt ? `<span class="lnot">${ic('note')} ${L.nt} ${odm(L.nt, 'notatka', 'notatki', 'notatek')}</span>` : ''].filter(Boolean).join('');
-      return `<span class="lstat"><span class="lgrp"><span class="lg2">${maly ? `<span class="m"><b>${rz} / <span class="${f ? 'fr' : ''}">${f}</span></b></span><small>do rozp. / otw. f.</small>` : `<span class="m"><b>${rz}</b></span><small>do rozp.</small>`}</span><span class="lg1"><span class="m"><b>${L.u} / ${L.p} / ${L.d} / ${L.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small></span></span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L, maly)}</span>`;
+      return `<span class="lstat"><span class="lgrp kol">${kolDoRozp(L, maly)}${kolPostep(L)}</span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L, maly)}</span>`;
     };
     // kierownik HUP-BUD opiekujący się budową (od 1.33.0, Baza → Projekty → Kierownik)
     const kier = (p, maly) => p.kierownik ? `<span class="lkier${maly ? ' sm' : ''}" title="Kierownik budowy HUP-BUD">${ic('kier')}${U.esc(p.kierownik)}</span>` : '';
@@ -488,7 +488,7 @@ const Views = {
       ${Session.isBiuro() && (pd.ostrzezenia || []).length ? `<div class="badbox" style="margin-bottom:12px"><b>Dane do poprawy (widzi tylko biuro)</b><br>${pd.ostrzezenia.map(U.esc).join('<br>')}</div>` : ''}
       <div class="bgrid">
         <button class="big" id="tPodl"><span class="bi">${ic('plug')}</span><span class="bt"><b>Urządzenia</b><span>Lista, rzuty, podłączenia</span></span>
-          <span class="bst bst2"><span class="bl2"><span class="sv">${LB.w - LB.d} / <span class="${LB.f ? 'fr' : ''}">${LB.f || 0}</span></span><small class="mute">do rozp. / otw. f.</small></span><span class="bl2"><span class="sv">${LB.u} / ${LB.p} / ${LB.d} / ${LB.w}</span><small class="mute">uruch. / podł. / rozp. / wszystkie</small></span>${pasek3(LB)}</span>${openB.length ? `<span class="chip bad">⚠ ${openB.length} ${odmUsterki(openB.length)}</span>` : PUSTY}</button>
+          <span class="bst bst2 kol">${kolDoRozp(LB, true)}${kolPostep(LB)}${pasek3(LB)}</span>${openB.length ? `<span class="chip bad">⚠ ${openB.length} ${odmUsterki(openB.length)}</span>` : PUSTY}</button>
         <button class="big" id="tProt" ${Prot.wszystkie().length ? '' : 'disabled'}><span class="bi">${ic('proto')}</span><span class="bt"><b>Protokoły</b><span>Uruchomienia i pomiary</span></span>
           <span class="bst"><span class="sv">${protOk} / ${protWym} <small>wykonanych</small></span>${pasek(protWym ? Math.round(protOk / protWym * 100) : 0)}</span>${rob ? `<span class="chip warn">${rob} ${odm(rob, 'roboczy', 'robocze', 'roboczych')}</span>` : PUSTY}</button>
         <div class="big" id="tBraki" role="button" tabindex="0"><span class="bi">${ic('warn')}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Lista i zamykanie</span></span>
@@ -725,7 +725,7 @@ const Views = {
     Object.values(F.braki).forEach(b => { if (!b.urz) return; if (!b.zamk) nBrak[b.urz] = (nBrak[b.urz] || 0) + 1; if (b.foto && b.foto.length) nFoto[b.urz] = (nFoto[b.urz] || 0) + b.foto.length; });
     Object.entries(F.dev).forEach(([id, st]) => { if (st.foto && st.foto.length) nFoto[id] = (nFoto[id] || 0) + st.foto.length; });
     const uIkony = id => (nBrak[id] || nFoto[id] || (F.dev[id] && F.dev[id].front)) ? `<span class="uico">${F.dev[id] && F.dev[id].front ? `<span class="ui-front" title="Otworzył się front – brak usunięty, można wrócić do pracy">${ic('front')}</span>` : ''}${nBrak[id] ? `<span class="ui-brak" title="${nBrak[id]} ${odm(nBrak[id], 'otwarty brak', 'otwarte braki', 'otwartych braków')}">${ic('warn')}${nBrak[id] > 1 ? `<small>${nBrak[id]}</small>` : ''}</span>` : ''}${nFoto[id] ? `<span class="ui-foto" title="${nFoto[id]} ${odm(nFoto[id], 'zdjęcie', 'zdjęcia', 'zdjęć')}">${ic('cam')}${nFoto[id] > 1 ? `<small>${nFoto[id]}</small>` : ''}</span>` : ''}</span>` : '';
-    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt === 'front' ? !!(F.dev[u.id] && F.dev[u.id].front) : filt === 'rozp0' ? !rozpoczete(u, F) : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
+    const vis = urz.filter(wSys).filter(u => mode !== 'lista' || !ark || u.arkusz === ark).filter(u => filt === 'all' || (filt === 'todo' ? sOf(u) !== 'gotowe' : filt === 'brak' ? sOf(u) === 'brak' : filt === 'front' ? !!(F.dev[u.id] && F.dev[u.id].front) : filt === 'rozp0' ? nicNieWpisano(u, F) : filt.startsWith('p:') ? protZnacznik(u.id, F).k === filt.slice(2) : U.prefix(u.id) === filt))
       .filter(u => !q || U.norm([u.id, u.oz, u.typ, u.grupa, u.uwagi, u.sn, u.sys].join(' ')).includes(q));
     const posort = arr => arr.slice().sort((a, b) => sortUrz === 'oz' ? (natCmp(a.oz || '~', b.oz || '~') || natCmp(a.id, b.id)) : natCmp(a.id, b.id));
     const maOz = urz.some(u => u.oz);
@@ -912,13 +912,24 @@ function rozpoczete(u, F) {
   const st = F.dev[u.id]; if ((st && st.sn) || u.sn) return true;
   return (typOf(u.id).kroki || []).some((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
 }
+/* Urządzenie „do rozpoczęcia” (od 1.38.0): nic na nim nie wpisano – żadnego kroku, nr seryjnego, zdjęcia, braku (także zamkniętego),
+   notatki ani protokołu. Zmiany biura (pozycja, system, edycja danych) się nie liczą. */
+function nicNieWpisano(u, F) {
+  if (rozpoczete(u, F)) return false;
+  const st = F.dev[u.id];
+  if (st && st.foto.some(f => !F.usuniete.has(f.fid))) return false;
+  if (Object.values(F.braki).some(b => b.urz === u.id)) return false;
+  if (F.notes.some(n => n.urz === u.id)) return false;
+  return !Object.values(F.prot).some(x => x.urz === u.id);
+}
 function liczBudowy(urz, F) {
-  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, nt: F.notes.length, b: Object.values(F.braki).filter(b => !b.zamk).length };
+  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, r: 0, nt: F.notes.length, b: Object.values(F.braki).filter(b => !b.zamk).length };
   urz.forEach(u => {
     const kroki = typOf(u.id).kroki || [], st = F.dev[u.id];
     const zrob = kroki.map((k, i) => !!(st && st.kroki[i] && st.kroki[i].val));
     const pk = kroki.map((k, i) => /podłącz/i.test(k) ? i : -1).filter(i => i >= 0);
     L.w++;
+    if (nicNieWpisano(u, F)) L.r++;
     if (zrob.some(Boolean) || (st && st.sn) || u.sn) L.d++;
     if (st && st.front) L.f++;   // od 1.33.0: otworzył się front   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
     if (pk.length ? pk.every(i => zrob[i]) : zrob[0]) L.p++;
@@ -926,6 +937,11 @@ function liczBudowy(urz, F) {
   });
   return L;
 }
+/* Liczniki w kolumnach (od 1.38.0): każda liczba dokładnie nad swoim opisem; grupy oddzielone odstępem */
+const kolG = arr => `<span class="kolg">${arr.map(([v, l, c]) => `<span class="kc"><b class="m${c ? ' ' + c : ''}">${v}</b><small>${l}</small></span>`).join('')}</span>`;
+const doRozp = L => L.r != null ? L.r : L.w - L.d;   // starszy serwer bez L.r – przybliżenie
+const kolDoRozp = (L, zFrontem) => kolG([[doRozp(L), 'do rozp.'], ...(zFrontem ? [[L.f || 0, 'otw. f.', L.f ? 'fr' : '']] : [])]);
+const kolPostep = L => kolG([[L.u, 'uruch.'], [L.p, 'podł.'], [L.d, 'rozp.'], [L.w, 'wszystkie']]);
 const pasek3 = (L, maly) => { const pr = n => L.w ? Math.round(n / L.w * 100) : 0;
   return `<span class="tbar3${maly ? ' sm' : ''}" title="uruchomione ${pr(L.u)}% · podłączone ${pr(L.p)}% · rozpoczęte ${pr(L.d)}%"><i class="t3" style="width:${pr(L.d)}%"></i><i class="t2" style="width:${pr(L.p)}%"></i><i class="t1" style="width:${pr(L.u)}%"></i></span>`; };
 const odmUsterki = n => n === 1 ? 'usterka' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'usterki' : 'usterek';

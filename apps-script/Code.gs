@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.37.0';
+const SCRIPT_VERSION = '1.38.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -624,7 +624,7 @@ function przelicz_(p, ids, zmiany) {
   // liczniki budowy do listy budów (od 1.23.0): uruchomione (wszystkie kroki) / podłączone (kroki „podłącz…”) / rozpoczęte (≥1 krok) / wszystkie + otwarte braki
   const stAll = {};
   ev.forEach(e => { if (e.typ === 'krok' && e.urz) { if (!stAll[e.urz]) stAll[e.urz] = {}; stAll[e.urz][e.d.krok] = !!e.d.wart; } });
-  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, b: Object.keys(braki).filter(b => braki[b].open).length,
+  const L = { u: 0, p: 0, d: 0, w: 0, f: 0, r: 0, b: Object.keys(braki).filter(b => braki[b].open).length,
     nt: 0 };   // od 1.33.0: notatki (od 1.34.0 bez notatek w koszu)
   const wKoszu = {}; ev.forEach(e => { if (e.typ === 'notatka_edyc' && e.d.nid) { if (e.d.usun) wKoszu[e.d.nid] = true; else if (e.d.przywroc) delete wKoszu[e.d.nid]; } });
   L.nt = ev.filter(e => e.typ === 'notatka' && !wKoszu[e.id]).length;
@@ -639,6 +639,17 @@ function przelicz_(p, ids, zmiany) {
   Object.keys(braki).forEach(b => { if (braki[b].open && braki[b].urz) front[braki[b].urz] = false; });
   const kolF = 15;   // kolumna O w zakładce Urządzenia
   if (txt_(sh.getRange(1, kolF).getValue()) !== 'Otworzył się front') sh.getRange(1, kolF).setValue('Otworzył się front');
+  // „do rozpoczęcia” (od 1.38.0): urządzenia, na których nic nie wpisano – bez kroku, nr seryjnego, zdjęcia, braku, notatki, protokołu
+  const wpis = {}, fotoU = {}, fotoDel = {}, protU = {}, protDel = {};
+  ev.forEach(e => {
+    if (e.typ === 'foto_usun' && e.d.fid) fotoDel[e.d.fid] = true;
+    if (e.typ === 'foto' && e.urz && e.d.fid) fotoU[e.d.fid] = e.urz;
+    if (e.typ === 'protokol' && e.d.pid) { if (e.d.stan === 'usuniety') protDel[e.d.pid] = true; else if (e.urz) protU[e.d.pid] = e.urz; }
+    if (e.typ === 'brak' && e.urz) wpis[e.urz] = true;
+    if (e.typ === 'notatka' && e.urz && !wKoszu[e.id]) wpis[e.urz] = true;
+  });
+  Object.keys(fotoU).forEach(f => { if (!fotoDel[f]) wpis[fotoU[f]] = true; });
+  Object.keys(protU).forEach(x => { if (!protDel[x]) wpis[protU[x]] = true; });
   const fv = v.map(r => [txt_(r[0]) && front[txt_(r[0])] ? 'TAK' : '']);
   if (fv.length) sh.getRange(2, kolF, fv.length, 1).setValues(fv);
   v.forEach(r => {
@@ -649,6 +660,7 @@ function przelicz_(p, ids, zmiany) {
     const pk = kroki.map((k, j) => /podłącz/i.test(k) ? j : -1).filter(j => j >= 0);
     L.w++;
     if (front[id]) L.f++;
+    if (!wpis[id] && !txt_(r[9]) && !zrob.some(Boolean)) L.r++;
     if (zrob.some(Boolean) || txt_(r[9])) L.d++;   // od 1.30.0: nr seryjny = rozpoczęte
     if (pk.length ? pk.every(j => zrob[j]) : zrob[0]) L.p++;
     if (kroki.length && zrob.every(Boolean)) L.u++;
@@ -691,7 +703,7 @@ function zapiszLiczBaza_(kod, L) {
     const b = baza_(); let sh = b.getSheetByName('Liczniki');
     if (!sh) { sh = b.insertSheet('Liczniki'); sh.getRange(1, 1, 1, LICZ_NAGL.length).setValues([LICZ_NAGL]).setFontWeight('bold'); sh.setFrozenRows(1); }
     const fmt = ts => { try { return ts ? Utilities.formatDate(new Date(ts), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm') : ''; } catch (e) { return ''; } };
-    const w = [kod, L.w || 0, L.d || 0, L.p || 0, L.u || 0, (L.w || 0) - (L.d || 0), L.f || 0, L.b || 0, L.nt || 0, fmt(L.t), L.k || '', fmt(new Date().toISOString())];
+    const w = [kod, L.w || 0, L.d || 0, L.p || 0, L.u || 0, L.r != null ? L.r : (L.w || 0) - (L.d || 0), L.f || 0, L.b || 0, L.nt || 0, fmt(L.t), L.k || '', fmt(new Date().toISOString())];
     const n = sh.getLastRow(), kody = n > 1 ? sh.getRange(2, 1, n - 1, 1).getDisplayValues().map(r => r[0]) : [];
     const i = kody.indexOf(kod), r = i >= 0 ? i + 2 : n + 1;
     sh.getRange(r, 1, 1, 1).setNumberFormat('@'); sh.getRange(r, 1, 1, w.length).setValues([w]);
