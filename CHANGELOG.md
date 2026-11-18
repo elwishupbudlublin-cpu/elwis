@@ -1,5 +1,9 @@
 # Zmiany
 
+## Serwer 1.36.0 – 2026-11-18 (schemat 1.11)
+- Zakładka „Liczniki” w Bazie: przy każdym przeliczeniu liczników skrypt wpisuje wiersz budowy (wszystkie, rozpoczęte, podłączone, uruchomione, do rozpoczęcia, otworzył się front, otwarte braki, notatki, ostatni wpis, autor) – źródło dla porannego zadania Claude → ClickUp (etap „Status”).
+- Priorytety: etap „Status” w liście ClickUp i jego podzadania pomijane w ocenie budowy.
+
 ## 1.35.0 – 2026-11-18 (aplikacja)
 - Zdjęcia z budowy (rola biuro): „Pobierz miniatury” – archiwum ZIP ze zdjęciami z wybranej zakładki, 800 px; brakujące na tablecie pobierane z Dysku (wymaga sieci); komunikat o pominiętych.
 

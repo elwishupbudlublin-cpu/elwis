@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.34.0';
+const SCRIPT_VERSION = '1.36.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -676,6 +676,21 @@ function przeliczLiczniki() {
 
 function zapiszLicz_(kod, L) {
   try { const m = safeJson_(P.getProperty('LICZ') || '{}'); m[kod] = L; P.setProperty('LICZ', JSON.stringify(m)); } catch (e) { }
+  zapiszLiczBaza_(kod, L);
+}
+/* Zakładka „Liczniki” w Bazie (od 1.36.0, schemat 1.11): kopia liczników budowy do odczytu (poranne zadanie Claude → ClickUp, etap „Status”).
+   Jeden wiersz na budowę; zakładkę i nagłówek zakłada skrypt. Nie edytować ręcznie. */
+const LICZ_NAGL = ['Kod', 'Wszystkie', 'Rozpoczęte', 'Podłączone', 'Uruchomione', 'Do rozpoczęcia', 'Otworzył się front', 'Otwarte braki', 'Notatki', 'Ostatni wpis', 'Autor ostatniego wpisu', 'Aktualizacja'];
+function zapiszLiczBaza_(kod, L) {
+  try {
+    const b = baza_(); let sh = b.getSheetByName('Liczniki');
+    if (!sh) { sh = b.insertSheet('Liczniki'); sh.getRange(1, 1, 1, LICZ_NAGL.length).setValues([LICZ_NAGL]).setFontWeight('bold'); sh.setFrozenRows(1); }
+    const fmt = ts => { try { return ts ? Utilities.formatDate(new Date(ts), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm') : ''; } catch (e) { return ''; } };
+    const w = [kod, L.w || 0, L.d || 0, L.p || 0, L.u || 0, (L.w || 0) - (L.d || 0), L.f || 0, L.b || 0, L.nt || 0, fmt(L.t), L.k || '', fmt(new Date().toISOString())];
+    const n = sh.getLastRow(), kody = n > 1 ? sh.getRange(2, 1, n - 1, 1).getDisplayValues().map(r => r[0]) : [];
+    const i = kody.indexOf(kod), r = i >= 0 ? i + 2 : n + 1;
+    sh.getRange(r, 1, 1, 1).setNumberFormat('@'); sh.getRange(r, 1, 1, w.length).setValues([w]);
+  } catch (e) { }
 }
 
 function zapiszLicznik_(kod, n) {
@@ -1051,7 +1066,10 @@ function przeliczPriorytety() {
     } catch (e) { dodaj(1, 'Lista urządzeń niedostępna'); }
 
     /* --- ClickUp: terminy, zamówienia, zależności --- */
-    const zad = p.listaCU && cu.ok ? ((cu.listy[p.listaCU] || {}).zad || []) : null; let koniec = 0, nast = null, koniecZamk = false;
+    const zad0 = p.listaCU && cu.ok ? ((cu.listy[p.listaCU] || {}).zad || []) : null; let koniec = 0, nast = null, koniecZamk = false;
+    // od 1.36.0: etap „Status” (liczniki ELWIS wpisywane rano przez Claude) nie jest pracą – pomijany w ocenie
+    const stId = (zad0 || []).filter(t => /^status$/i.test(txt_(t.name).trim())).map(t => t.id);
+    const zad = zad0 ? zad0.filter(t => stId.indexOf(t.id) < 0 && stId.indexOf(t.parent) < 0) : null;
     if (!p.listaCU) dodaj(1, 'Brak listy ClickUp w Bazie');
     else if (!zad) dodaj(1, 'Lista ClickUp niedostępna');
     else {
