@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.40.0';
+const SCRIPT_VERSION = '1.42.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -552,7 +552,7 @@ function push_(b, tablet) {
           if (numery[e.d.pid] && !biuro[txt_(e.kto)]) return;
           usuniete.push(e.d.pid);
         }
-        if (e.typ === 'notatka_edyc') {   // edycja / kosz / przywrócenie notatki – tylko rola biuro (od 1.34.0)
+        if (e.typ === 'notatka_edyc' && e.d && (e.d.usun || e.d.przywroc)) {   // kosz / przywrócenie notatki – tylko rola biuro (od 1.34.0); edycja tekstu – każdy (od 1.42.0)
           if (biuro === null) biuro = rolaBiuro_();
           if (!biuro[txt_(e.kto)]) return;
         }

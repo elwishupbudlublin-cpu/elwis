@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.42.0 – 2026-11-18 (aplikacja i serwer)
+- Notatki: „Edytuj” dla każdego pracownika (wcześniej tylko biuro); „Usuń” (kosz) i „Przywróć” nadal tylko rola biuro. Serwer przyjmuje edycję tekstu od każdego, kosz / przywrócenie tylko od biura.
+
 ## 1.41.0 – 2026-11-18 (aplikacja; serwer bez zmian – 1.40.0)
 - Mój plan: przesunięcie palcem po harmonogramie w lewo – następny dzień, w prawo – poprzedni (wyraźny ruch poziomy; przewijanie godzin bez zmian; w widoku „Wszyscy” z przewijanymi kolumnami – dopiero na krawędzi).
 

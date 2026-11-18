@@ -1278,9 +1278,9 @@ const Dialogs = {
         <p id="noT" style="white-space:pre-wrap;line-height:1.55;margin:0;font-size:17px">${U.esc(e.d.tekst || '')}</p>
         ${ed ? `<p class="mute" style="margin:0;font-size:13px">Edytowana: ${U.esc(ed.kto)} ${U.fmt(ed.ts)}</p>` : ''}
         ${fot.length ? `<div class="thumbs" id="noF" data-fotos="${U.esc(fot.join(','))}"></div>` : ''}</div>
-      <div class="sfoot">${biuro ? (wKoszu ? '<button class="btn pri" id="noP">Przywróć</button>' : `<button class="btn bad" id="noD">${ic('trash')} Usuń</button><button class="btn" id="noE">Edytuj</button>`) : ''}<button class="btn" id="noX">Zamknij</button></div></div></div>`;
+      <div class="sfoot">${wKoszu ? (biuro ? '<button class="btn pri" id="noP">Przywróć</button>' : '') : `${biuro ? `<button class="btn bad" id="noD">${ic('trash')} Usuń</button>` : ''}<button class="btn" id="noE">Edytuj</button>`}<button class="btn" id="noX">Zamknij</button></div></div></div>`;
     $('#noX').onclick = UI.close;
-    // od 1.34.0: edycja, kosz i przywrócenie – tylko rola biuro (serwer odrzuca od innych); zmiana = nowe zdarzenie, historia zostaje
+    // edycja tekstu – każdy pracownik (od 1.42.0); kosz i przywrócenie – tylko rola biuro (serwer odrzuca od innych); zmiana = nowe zdarzenie, historia zostaje
     const zm = async (d, msg) => { await addEvent('notatka_edyc', e.urz || '', Object.assign({ nid: e.id }, d)); UI.toast(msg); UI.close(); UI.refresh(); };
     if ($('#noD')) $('#noD').onclick = () => { if (confirm('Przenieść notatkę do kosza? Biuro może ją przywrócić z kosza.')) zm({ usun: true }, 'Notatka w koszu'); };
     if ($('#noP')) $('#noP').onclick = () => zm({ przywroc: true }, 'Notatka przywrócona');
