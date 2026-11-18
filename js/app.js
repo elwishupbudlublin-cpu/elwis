@@ -682,13 +682,14 @@ const Views = {
     const rodz = f => f.rodzaj === 'brak' ? 'brak' : f.rodzaj === 'notatka' ? 'notatka' : 'urz';
     const lista = wszystkie.filter(f => filtr === 'all' || rodz(f) === filtr);
     const n = k => wszystkie.filter(f => rodz(f) === k).length;
-    view.innerHTML = `<h1>Zdjęcia z budowy (${wszystkie.length})</h1>
+    view.innerHTML = `<div class="row" style="flex-wrap:wrap;gap:10px"><h1 class="grow" style="margin:0">Zdjęcia z budowy (${wszystkie.length})</h1>${Session.isBiuro() && lista.length ? `<button class="btn" id="gMini" title="Archiwum ZIP ze zdjęciami z wybranej zakładki w zmniejszonej rozdzielczości (800 px)">${ic('download')} Pobierz miniatury (${lista.length})</button>` : ''}</div>
       <div class="tabs">${[['all', 'Wszystkie', wszystkie.length], ['urz', 'Urządzenia', n('urz')], ['brak', 'Braki', n('brak')], ['notatka', 'Notatki', n('notatka')]].map(([k, l, c]) => `<button class="tab ${k === filtr ? 'on' : ''}" data-fl="${k}">${l} ${c}</button>`).join('')}</div>
       ${groupBy(lista.slice(0, ile), f => U.day(f.ts)).map(([d, arr]) => `<h2>${new Date(d + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
         <div class="gal">${arr.map(f => { const o = opisZdjecia(f, F); return `<button class="gph" data-g="${U.esc(f.fid)}"><span class="gimg" data-gi="${U.esc(f.fid)}">zdjęcie na Dysku</span><span class="gcap"><b>${U.esc(o.t)}</b>${o.s ? `<span>${U.esc(o.s)}</span>` : ''}<span class="m">${U.esc(f.kto)} · ${U.fmt(f.ts)}</span></span>${f.urz && maPozycje(f.urz) ? `<span class="gnav" role="button" tabindex="0" data-gr="${U.esc(f.urz)}" title="Pokaż ${U.esc(f.urz)} na rzucie" aria-label="Na rzucie">${ic('cel')}</span>` : ''}</button>`; }).join('')}</div>`).join('') || '<p class="mute">Brak zdjęć.</p>'}
       ${lista.length > ile ? `<div class="row" style="margin-top:14px"><button class="btn grow" id="gMore">Pokaż kolejne (${lista.length - ile})</button></div>` : ''}
       <p class="mute">Pełna rozdzielczość tylko dla zdjęć z tego tabletu – pozostałe pobierane w podglądzie pomniejszonym.</p>`;
     view.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => UI.go('zdjecia', { f: b.dataset.fl }));
+    if ($('#gMini')) $('#gMini').onclick = () => Foto.pobierzMiniatury(lista, filtr);
     if ($('#gMore')) $('#gMore').onclick = () => UI.go('zdjecia', { ...par, ile: ile + 40 });
     view.querySelectorAll('[data-gr]').forEach(b => b.onclick = e => { e.stopPropagation(); pokazNaRzucie(b.dataset.gr); });
     view.querySelectorAll('[data-g]').forEach(b => b.onclick = () => Foto.podglad(b.dataset.g));
@@ -1533,6 +1534,36 @@ const Foto = {
       a.download = `${S.kod}_${(i.urz && i.urz !== 'BUDOWA') ? i.urz + '_' : ''}${dz}_${fid}.jpg`.replace(/[^\w.\-]+/g, '_');
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     } catch (e) { UI.toast(e.message); }
+  },
+  /* Miniatury do ZIP (od 1.35.0, rola biuro): zdjęcia z zakładki, 800 px; brakujące na tablecie pobierane z Dysku (i zapamiętane jako podgląd) */
+  async pobierzMiniatury(lista, filtr) {
+    const b = $('#gMini'); if (!b || b.disabled) return;
+    const pliki = [], uzyte = {}; let brak = 0;
+    b.disabled = true;
+    try {
+      for (let k = 0; k < lista.length; k++) {
+        b.textContent = `Przygotowuję ${k + 1} / ${lista.length}…`;
+        const f = lista[k];
+        try {
+          let blob; const ph = await DB.getPhoto(f.fid);
+          if (ph) blob = await U.compress(ph.blob, 800, 0.7);
+          else {
+            const m = await DB.getFile('mini:' + f.fid);
+            if (m) blob = m.blob;
+            else if (navigator.onLine) blob = (await this.obraz(f.fid)).blob;
+          }
+          if (!blob) { brak++; continue; }
+          let nm = `${(f.ts || '').slice(0, 10)}_${(f.urz && f.urz !== 'BUDOWA') ? f.urz : f.rodzaj || 'budowa'}`.replace(/[^\w\-]+/g, '_');
+          uzyte[nm] = (uzyte[nm] || 0) + 1; if (uzyte[nm] > 1) nm += '_' + uzyte[nm];
+          pliki.push({ name: nm + '.jpg', data: new Uint8Array(await blob.arrayBuffer()) });
+        } catch (e) { brak++; }
+      }
+      if (!pliki.length) { UI.toast('Brak zdjęć do pobrania – połącz się z siecią'); return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(U.zip(pliki));
+      a.download = `${S.kod}_zdjecia_${filtr === 'all' ? 'wszystkie' : filtr}_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      UI.toast(`Pobrano ${pliki.length} ${odm(pliki.length, 'zdjęcie', 'zdjęcia', 'zdjęć')}${brak ? ` · pominięto ${brak} (brak sieci lub pliku na Dysku)` : ''}`);
+    } finally { if ($('#gMini')) { b.disabled = false; b.innerHTML = `${ic('download')} Pobierz miniatury (${lista.length})`; } }
   },
   async usun(fid) {
     const i = this.info(fid);

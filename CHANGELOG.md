@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.35.0 – 2026-11-18 (aplikacja)
+- Zdjęcia z budowy (rola biuro): „Pobierz miniatury” – archiwum ZIP ze zdjęciami z wybranej zakładki, 800 px; brakujące na tablecie pobierane z Dysku (wymaga sieci); komunikat o pominiętych.
+
 ## 1.34.0 – 2026-11-18
 - Notatki (rola biuro): „Edytuj”, „Usuń” (do kosza) i „Przywróć”; kosz notatek w widoku Notatki; zmiany jako zdarzenie `notatka_edyc` (historia zostaje); notatki w koszu poza listą, licznikami i zdjęciami budowy.
 - Okno zdjęcia (rola biuro): „Pobierz” – plik w pełnej rozdzielczości (z tego tabletu oryginał, z innych – pełny plik z Dysku).
