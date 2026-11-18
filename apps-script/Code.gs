@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.39.0';
+const SCRIPT_VERSION = '1.40.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -942,6 +942,26 @@ function sub_(folder, name, create) {
  *    i arkuszami) do _Archiwum/Foldery budów/<folder budowy>/… – kopiowane tylko pliki nowe lub zmienione od ostatniej kopii;
  *    pliku usuniętego na Dysku kopia nie kasuje. Gdy nie zdąży w limicie czasu skryptu – dokańcza sama kilka minut później. */
 const ARCH_TYGODNIE = 12;
+const ARCH_PROG_WOLNE = 0.20;   // od 1.40.0: przy wolnym miejscu na Dysku poniżej 20% – porządki bez czekania na 12 tygodni
+/* Wolne miejsce na Dysku konta ELWIS (część 0–1) – null, gdy konto bez limitu */
+function wolneMiejsce_() {
+  try { const lim = DriveApp.getStorageLimit(), uz = DriveApp.getStorageUsed(); return lim > 0 ? Math.max(0, 1 - uz / lim) : null; } catch (e) { return null; }
+}
+/* Codzienna kontrola miejsca (od 1.40.0) – wywoływana z przeliczania priorytetów (co godzinę), działa raz na dzień.
+   Mało miejsca → porządki archiwum w trybie pilnym: stare kopie usuwane trwale (kosz też zajmuje miejsce). */
+function kontrolaMiejsca_() {
+  const dzis = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd');
+  if (P.getProperty('MIEJSCE_DZIEN') === dzis) return;
+  P.setProperty('MIEJSCE_DZIEN', dzis);
+  const w = wolneMiejsce_(); if (w == null) return;
+  P.setProperty('MIEJSCE_WOLNE', String(Math.round(w * 100)));
+  if (w < ARCH_PROG_WOLNE) try { porzadkiArchiwum_(DriveApp.getFolderById(konfig_().folder_archiwum_id), true); } catch (e) { Logger.log('kontrola miejsca: ' + e); }
+}
+/* Trwałe usunięcie pliku (z pominięciem kosza) – Drive API, uprawnienia jak DriveApp */
+function usunTrwale_(f) {
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.getId(), { method: 'delete', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (r.getResponseCode() >= 300) f.setTrashed(true);
+}
 function archiwizuj() {
   const k = konfig_();
   const arch = DriveApp.getFolderById(k.folder_archiwum_id);
@@ -949,13 +969,14 @@ function archiwizuj() {
   const kopia = id => { const f = DriveApp.getFileById(id); f.makeCopy(day + ' ' + f.getName(), arch); };
   kopia(P.getProperty('BAZA_ID'));
   rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
-  try { porzadkiArchiwum_(arch); } catch (e) { Logger.log('porządki: ' + e); }
+  try { const w = wolneMiejsce_(); porzadkiArchiwum_(arch, w != null && w < ARCH_PROG_WOLNE); } catch (e) { Logger.log('porządki: ' + e); }
   P.setProperty('ARCH_FOLD_START', String(Date.now()));   // początek nowej kopii folderów
   archiwizujFoldery();
 }
-/* Kopie `rrrr-mm-dd nazwa` starsze niż ARCH_TYGODNIE → kosz Dysku; najnowsza kopia każdej nazwy zostaje zawsze. */
-function porzadkiArchiwum_(arch) {
-  const granica = Date.now() - ARCH_TYGODNIE * 7 * 864e5, grupy = {};
+/* Kopie `rrrr-mm-dd nazwa` starsze niż ARCH_TYGODNIE → kosz Dysku; najnowsza kopia każdej nazwy zostaje zawsze.
+   Tryb pilny (mało miejsca): wszystkie kopie poza najnowszą usuwane trwale, bez względu na wiek. */
+function porzadkiArchiwum_(arch, pilnie) {
+  const granica = pilnie ? Infinity : Date.now() - ARCH_TYGODNIE * 7 * 864e5, grupy = {};
   const it = arch.getFiles();
   while (it.hasNext()) {
     const f = it.next(), m = f.getName().match(/^(\d{4}-\d{2}-\d{2}) (.+)$/); if (!m) continue;
@@ -964,13 +985,15 @@ function porzadkiArchiwum_(arch) {
   let n = 0;
   Object.keys(grupy).forEach(nm => {
     const g = grupy[nm].sort((a, b) => a.d < b.d ? 1 : -1);
-    g.slice(1).forEach(x => { if (new Date(x.d + 'T12:00:00').getTime() < granica) { x.f.setTrashed(true); n++; } });
+    g.slice(1).forEach(x => { if (new Date(x.d + 'T12:00:00').getTime() < granica) { if (pilnie) usunTrwale_(x.f); else x.f.setTrashed(true); n++; } });
   });
-  Logger.log('Porządki archiwum: do kosza ' + n + ' starych kopii (najnowsza każdej zostaje).');
+  Logger.log('Porządki archiwum' + (pilnie ? ' (mało miejsca – usunięte trwale)' : ' – do kosza') + ': ' + n + ' starych kopii (najnowsza każdej zostaje).');
 }
 /* Kopia różnicowa folderów aktywnych budów. Wznawiana wyzwalaczem jednorazowym, gdy nie zmieści się w czasie. */
 function archiwizujFoldery() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'archiwizujFoldery').forEach(t => ScriptApp.deleteTrigger(t));
+  const w0 = wolneMiejsce_();
+  if (w0 != null && w0 < 0.05) { Logger.log('Kopia folderów pominięta: na Dysku zostało ' + Math.round(w0 * 100) + '% miejsca.'); return; }
   const t0 = Date.now(), LIMIT = 4.5 * 60 * 1000;
   const od = Number(P.getProperty('ARCH_FOLD_OD') || 0);          // pliki zmienione po tym czasie (koniec poprzedniej pełnej kopii)
   const start = Number(P.getProperty('ARCH_FOLD_START') || Date.now());
@@ -1063,6 +1086,7 @@ function zadaniaWszystkie_() {
 
 function przeliczPriorytety() {
   try { uzupelnijLicz_(5); } catch (e) { }   // od 1.25.1: brakujące liczniki budów, po 5 na godzinę
+  try { kontrolaMiejsca_(); } catch (e) { }   // od 1.40.0: raz dziennie – wolne miejsce na Dysku, przy < 20% porządki archiwum
   const start = Date.now(), k = konfig_();
   const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
   const cu = zadaniaWszystkie_();

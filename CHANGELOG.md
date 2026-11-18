@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.40.0 – 2026-11-18 (serwer; aplikacja bez zmian – numer wspólny)
+- Kontrola miejsca na Dysku konta ELWIS raz dziennie (przy przeliczaniu priorytetów) i przy kopii tygodniowej: gdy wolnego miejsca zostaje mniej niż 20% – porządki archiwum bez czekania na 12 tygodni; wszystkie kopie poza najnowszą każdego pliku usuwane trwale (kosz też zajmuje miejsce).
+- Kopia folderów budów pomijana, gdy wolnego miejsca jest mniej niż 5%.
+
 ## 1.39.0 – 2026-11-18 (serwer; aplikacja bez zmian – numer wspólny)
 - Kopie zapasowe: porządki w _Archiwum – kopie starsze niż 12 tygodni do kosza Dysku, z każdego pliku zawsze zostaje najnowsza kopia.
 - Kopia różnicowa folderów aktywnych budów (Zdjęcia, Protokoły, Notatki budowy i inne pliki poza „Do wglądu” i arkuszami) do _Archiwum/Foldery budów – tylko pliki nowe lub zmienione od ostatniej kopii; usunięcie pliku na Dysku nie kasuje kopii; przy braku czasu dokończenie wyzwalaczem po 5 min.
