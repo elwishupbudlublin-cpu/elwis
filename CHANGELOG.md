@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.41.0 – 2026-11-18 (aplikacja; serwer bez zmian – 1.40.0)
+- Mój plan: przesunięcie palcem po harmonogramie w lewo – następny dzień, w prawo – poprzedni (wyraźny ruch poziomy; przewijanie godzin bez zmian; w widoku „Wszyscy” z przewijanymi kolumnami – dopiero na krawędzi).
+
 ## 1.40.0 – 2026-11-18 (serwer; aplikacja bez zmian – numer wspólny)
 - Kontrola miejsca na Dysku konta ELWIS raz dziennie (przy przeliczaniu priorytetów) i przy kopii tygodniowej: gdy wolnego miejsca zostaje mniej niż 20% – porządki archiwum bez czekania na 12 tygodni; wszystkie kopie poza najnowszą każdego pliku usuwane trwale (kosz też zajmuje miejsce).
 - Kopia folderów budów pomijana, gdy wolnego miejsca jest mniej niż 5%.

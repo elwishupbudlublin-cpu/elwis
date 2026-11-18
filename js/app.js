@@ -370,6 +370,31 @@ const Views = {
       w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
       w.addEventListener('click', e => { if (przeciagniete) { e.stopPropagation(); e.preventDefault(); przeciagniete = false; } }, true);
     })();
+    // od 1.41.0: przesunięcie palcem po harmonogramie w lewo → następny dzień, w prawo → poprzedni
+    // (tylko wyraźny ruch poziomy; gdy kolumny osób przewijają się w poziomie – dopiero na krawędzi przewijania)
+    (() => {
+      const pt = view.querySelector('.ptime'); if (!pt) return;
+      let x0 = null, y0 = 0, t0 = 0, sl0 = 0, poziomo = false;
+      const doRuchu = (dx) => { pt.style.transition = 'none'; pt.style.transform = `translateX(${dx * 0.35}px)`; pt.style.opacity = String(1 - Math.min(Math.abs(dx) / 600, 0.35)); };
+      const wroc = () => { pt.style.transition = 'transform .15s ease-out, opacity .15s'; pt.style.transform = ''; pt.style.opacity = ''; };
+      pt.addEventListener('touchstart', e => { if (e.touches.length !== 1) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); sl0 = pt.scrollLeft; poziomo = false; }, { passive: true });
+      pt.addEventListener('touchmove', e => {
+        if (x0 === null || e.touches.length !== 1) { x0 = null; wroc(); return; }
+        const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+        if (!poziomo && Math.abs(dx) > 14 && Math.abs(dx) > 1.6 * Math.abs(dy) && pt.scrollLeft === sl0) poziomo = true;
+        if (poziomo) doRuchu(dx);
+      }, { passive: true });
+      pt.addEventListener('touchend', e => {
+        if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+        const przew = pt.scrollWidth > pt.clientWidth + 2, naKrawedzi = dx < 0 ? pt.scrollLeft + pt.clientWidth >= pt.scrollWidth - 2 : pt.scrollLeft <= 2;
+        if (poziomo && Math.abs(dx) > 70 && Math.abs(dx) > 1.6 * Math.abs(dy) && Date.now() - t0 < 900 && (!przew || (naKrawedzi && pt.scrollLeft === sl0))) {
+          const n = dx < 0 ? 1 : -1, nowy = dzienPlus(dzien, n), konOd = dzienPlus(od, 6);
+          pt.style.transition = 'transform .14s ease-in, opacity .14s'; pt.style.transform = `translateX(${n < 0 ? 60 : -60}px)`; pt.style.opacity = '0.3';
+          setTimeout(() => idz({ d: nowy, od: nowy < od || nowy > konOd ? dzienPlus(od, n) : od }), 140);
+        } else wroc();
+      }, { passive: true });
+      pt.addEventListener('touchcancel', () => { x0 = null; wroc(); }, { passive: true });
+    })();
     const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
