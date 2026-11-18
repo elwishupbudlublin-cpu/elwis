@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.33.0';
+const SCRIPT_VERSION = '1.34.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -381,7 +381,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'notatka_edyc'];
 
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
@@ -547,6 +547,10 @@ function push_(b, tablet) {
           if (numery[e.d.pid] && !biuro[txt_(e.kto)]) return;
           usuniete.push(e.d.pid);
         }
+        if (e.typ === 'notatka_edyc') {   // edycja / kosz / przywrócenie notatki – tylko rola biuro (od 1.34.0)
+          if (biuro === null) biuro = rolaBiuro_();
+          if (!biuro[txt_(e.kto)]) return;
+        }
         if (e.typ === 'brak_edyc' && e.d && (e.d.usun || e.d.otworz)) {
           // usunięcie braku – autor lub biuro; ponowne otwarcie – biuro (od 1.9.0)
           if (biuro === null) biuro = rolaBiuro_();
@@ -616,7 +620,9 @@ function przelicz_(p, ids, zmiany) {
   const stAll = {};
   ev.forEach(e => { if (e.typ === 'krok' && e.urz) { if (!stAll[e.urz]) stAll[e.urz] = {}; stAll[e.urz][e.d.krok] = !!e.d.wart; } });
   const L = { u: 0, p: 0, d: 0, w: 0, f: 0, b: Object.keys(braki).filter(b => braki[b].open).length,
-    nt: ev.filter(e => e.typ === 'notatka').length };   // od 1.33.0: notatki
+    nt: 0 };   // od 1.33.0: notatki (od 1.34.0 bez notatek w koszu)
+  const wKoszu = {}; ev.forEach(e => { if (e.typ === 'notatka_edyc' && e.d.nid) { if (e.d.usun) wKoszu[e.d.nid] = true; else if (e.d.przywroc) delete wKoszu[e.d.nid]; } });
+  L.nt = ev.filter(e => e.typ === 'notatka' && !wKoszu[e.id]).length;
   // „Otworzył się front” (od 1.33.0): brak usunięty → TAK; czynność na urządzeniu (krok, nr seryjny) albo nowy brak → kasuje;
   // urządzenie z innym otwartym brakiem – bez flagi
   const front = {}, bUrz = {};

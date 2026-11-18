@@ -3,7 +3,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const view = $('#view'), modal = $('#modal');
 const ST = { 'czeka': 'czeka', 'w toku': 'wtoku', 'gotowe': 'gotowe', 'brak': 'brak' };
 /* ikony liniowe (wygląd B, od 1.12.0) */
-const IKONY = { plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
+const IKONY = { trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"></path>', download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path>', plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
@@ -408,14 +408,12 @@ const Views = {
     const SORT = { kod: (a, b) => natCmp(a.kod, b.kod), naz: (a, b) => naz(a).localeCompare(naz(b), 'pl', { sensitivity: 'base' }),
       // od 1.31.2: % urządzeń z rozpoczętą pracą (rozp. / wszystkie); budowy bez liczników – zawsze na końcu
       podl: (a, b) => { const pr = p => { const L = licz(p); return L && L.w ? L.d / L.w : -1; };
-        const x = pr(a), y = pr(b); if ((x < 0) !== (y < 0)) return (x < 0 ? 1 : -1) * so.d; return (x - y) || natCmp(a.kod, b.kod); } };
+        const x = pr(a), y = pr(b); if ((x < 0) !== (y < 0)) return (x < 0 ? 1 : -1) * so.d; return (x - y) || natCmp(a.kod, b.kod); },
+      // od 1.33.3: liczba urządzeń z otwartym frontem; budowy bez liczników – zawsze na końcu
+      front: (a, b) => { const fr = p => { const L = licz(p); return L ? (L.f || 0) : -1; };
+        const x = fr(a), y = fr(b); if ((x < 0) !== (y < 0)) return (x < 0 ? 1 : -1) * so.d; return (x - y) || natCmp(a.kod, b.kod); } };
     list.sort((a, b) => (SORT[so.k] || SORT.kod)(a, b) * so.d);
-    // filtr „front otw.” (od 1.33.0): tylko budowy z urządzeniami, na których otworzył się front; zapamiętany na tablecie
-    const fFront = !!(await DB.get('filtrFront'));
-    if (UI.cur !== 'home') return;
-    const nFront = list.filter(p => (licz(p) || {}).f > 0).length;
-    if (fFront) list = list.filter(p => (licz(p) || {}).f > 0);
-    const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : '% urządzeń z rozpoczętą pracą'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
+    const sBtn = (k, t) => `<button class="tab ${so.k === k ? 'on' : ''}" data-sb="${k}" title="Sortuj: ${k === 'kod' ? 'nr budowy' : k === 'naz' ? 'nazwa' : k === 'front' ? 'liczba urządzeń z otwartym frontem' : '% urządzeń z rozpoczętą pracą'}">${t}${so.k === k ? (so.d > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     const stat = (p, maly) => {
       const L = licz(p);
       if (!L) { const x = p.postep; if (!x || !x[1]) return `<span class="lstat mute">${maly ? '' : 'postęp po pierwszym pobraniu'}</span>`;
@@ -437,15 +435,13 @@ const Views = {
       </section>
       <div id="wyn">${rec.length && !q ? `<h2>Ostatnio na tym tablecie</h2><div class="grid2">${rec.map(p => `<button class="tile btc" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span><span style="margin-left:auto" class="row">${znaczki(p)}</span></span><b>${U.esc(naz(p))}</b><span class="mute">${U.esc(p.adres || '')}</span>${kier(p)}${stat(p)}</button>`).join('')}</div>` : ''}
       <div class="row bsort"><h2 class="grow">${q ? 'Wyniki' : '<span class="hdl">Wszystkie aktywne budowy</span><span class="hkr">Aktywne budowy</span>'} (${list.length})</h2>
-        <button class="tab ffront ${fFront ? 'on' : ''}" id="fFront" aria-pressed="${fFront}" title="Pokaż tylko budowy, na których otworzył się front">${ic('front')} front otw.${nFront ? ` <small>${nFront}</small>` : ''}</button>
-        <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Nazwa')}${sBtn('podl', 'Rozpoczęto %')}</div></div>
-      <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span>${kier(p, true)}</span>${stat(p, true)}${znaczki(p)}</button>`).join('') || (fFront ? '<div class="li mute">Żadna budowa nie ma otwartego frontu.</div>' : '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>')}</div></div>`, '#wyn');
+        <div class="seg2" role="group" aria-label="Sortowanie listy budów">${sBtn('kod', 'Nr')}${sBtn('naz', 'Naz.')}${sBtn('podl', 'Rozp')}${sBtn('front', 'Fr.otw')}</div></div>
+      <div class="list blist" id="blist">${list.map(p => `<button class="li" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b><span class="grow">${U.esc(naz(p))}<br><span class="mute">${U.esc(p.adres || '')}</span>${kier(p, true)}</span>${stat(p, true)}${znaczki(p)}</button>`).join('') || '<div class="li mute">Brak aktywnych budów. Połącz się z siecią, aby pobrać listę.</div>'}</div></div>`, '#wyn');
     dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
-    $('#fFront').onclick = async () => { await DB.set('filtrFront', !fFront); Views.home(); };
     view.querySelectorAll('[data-sb]').forEach(b => b.onclick = async () => {
-      const k = b.dataset.sb; await DB.set('sortBud', { k, d: so.k === k ? -so.d : (k === 'podl' ? -1 : 1) });   // podłączone – domyślnie od największej
+      const k = b.dataset.sb; await DB.set('sortBud', { k, d: so.k === k ? -so.d : (k === 'podl' || k === 'front' ? -1 : 1) });   // podłączone – domyślnie od największej
       Views.home();
     });
   },
@@ -659,12 +655,17 @@ const Views = {
     UI.header(p.kod + ' · notatki', () => UI.wstecz('budowa'));
     const q = U.norm(UI.par.q || '');
     const F = fold(S.ev);
-    const lista = F.notes.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
-    wstawWidok(`<div class="row"><h1 class="grow" style="margin:0">Notatki (${F.notes.length})</h1><button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button></div>
+    // kosz notatek (od 1.34.0, tylko rola biuro): notatki usunięte, z możliwością przywrócenia
+    const biuro = Session.isBiuro(), kosz = biuro && !!S.notKosz;
+    const zrodlo = kosz ? F.notesKosz : F.notes;
+    const lista = zrodlo.slice().sort((a, b) => a.ts < b.ts ? 1 : -1).filter(e => !q || U.norm([e.d.tekst, e.kto, e.urz].join(' ')).includes(q));
+    const fotyN = e => kosz ? (e.d.foto || []) : (e.d.foto || []).filter(f => F.fotoInfo[f]);
+    wstawWidok(`<div class="row"><h1 class="grow" style="margin:0">${kosz ? 'Kosz notatek' : 'Notatki'} (${zrodlo.length})</h1>${biuro ? `<button class="btn ${kosz ? 'pri' : ''}" id="nKosz" title="Notatki usunięte – można je przywrócić">${ic('trash')} ${kosz ? 'Wróć do notatek' : `Kosz (${F.notesKosz.length})`}</button>` : ''}${kosz ? '' : `<button class="btn pri" id="nNew">${ic('plus')} Nowa notatka</button>`}</div>
       <label class="search" style="margin:14px 0"><span hidden>Szukaj w notatkach</span><input type="search" id="q" value="${U.esc(UI.par.q || '')}" placeholder="słowo, urządzenie, osoba" autocomplete="off"></label>
-      <div class="stack" id="wyn">${lista.map(e => `<article class="card note" role="button" tabindex="0" data-nt="${U.esc(e.id)}"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}</div>
-        <p>${U.esc(e.d.tekst || '')}</p>${(e.d.foto || []).filter(f => F.fotoInfo[f]).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(e.d.foto.filter(f => F.fotoInfo[f]).join(','))}"></div>` : ''}</article>`).join('') || '<p class="mute">Brak notatek.</p>'}</div>`, '#wyn');
-    $('#nNew').onclick = () => Dialogs.notatka('');
+      <div class="stack" id="wyn">${lista.map(e => `<article class="card note${kosz ? ' wkoszu' : ''}" role="button" tabindex="0" data-nt="${U.esc(e.id)}"><div class="row"><b>${U.esc(e.kto)}</b><span class="mute">${U.fmt(e.ts)}</span>${e.urz ? `<button class="chip" data-u="${U.esc(e.urz)}">${U.esc(idOz(e.urz))}</button>` : ''}${e.zm.some(z => z.co === 'edycja') ? '<span class="mute">· edytowana</span>' : ''}${kosz ? `<span class="mute">· usunięta ${U.esc(e.usun.kto)} ${U.fmt(e.usun.ts)}</span>` : ''}</div>
+        <p>${U.esc(e.d.tekst || '')}</p>${fotyN(e).length ? `<div class="thumbs" style="margin-top:8px" data-fotos="${U.esc(fotyN(e).join(','))}"></div>` : ''}</article>`).join('') || `<p class="mute">${kosz ? 'Kosz jest pusty.' : 'Brak notatek.'}</p>`}</div>`, '#wyn');
+    if ($('#nNew')) $('#nNew').onclick = () => Dialogs.notatka('');
+    if ($('#nKosz')) $('#nKosz').onclick = () => { S.notKosz = !kosz; Views.notatki(); };
     szukajNaZywo($('#q'), () => Views.notatki());
     view.querySelectorAll('[data-u]').forEach(b => b.onclick = e => { e.stopPropagation(); Dialogs.device(b.dataset.u); });
     view.querySelectorAll('[data-nt]').forEach(a => a.onclick = e => { if (e.target.closest('.thumbs')) return; Dialogs.notatkaOkno(a.dataset.nt); });   // od 1.33.0: otwarcie notatki
@@ -1193,15 +1194,28 @@ const Dialogs = {
 
   /* Podgląd notatki (od 1.33.0): pełny tekst, autor, urządzenie (karta, na rzucie), zdjęcia; notatek się nie edytuje */
   notatkaOkno(eid) {
-    const F = fold(S.ev), e = F.notes.find(x => x.id === eid); if (!e) return;
-    const fot = (e.d.foto || []).filter(f => F.fotoInfo[f]);
+    const F = fold(S.ev), e = F.notes.find(x => x.id === eid) || F.notesKosz.find(x => x.id === eid); if (!e) return;
+    const biuro = Session.isBiuro(), wKoszu = !!e.usun;
+    const fot = wKoszu ? (e.d.foto || []) : (e.d.foto || []).filter(f => F.fotoInfo[f]);
+    const ed = e.zm.filter(z => z.co === 'edycja').pop();
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Notatka">
       <div class="shead"><h3>Notatka – ${U.esc(e.kto)}</h3><span class="mute">${U.fmt(e.ts)}</span></div>
       <div class="sbody">${e.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="noU">Urządzenie ${U.esc(idOz(e.urz))}</button>${maPozycje(e.urz) ? `<button class="btn sm" id="noR">${ic('cel')} Na rzucie</button>` : ''}</div>` : ''}
-        <p style="white-space:pre-wrap;line-height:1.55;margin:0;font-size:17px">${U.esc(e.d.tekst || '')}</p>
+        ${wKoszu ? `<p class="mute" style="margin:0">W koszu – usunął ${U.esc(e.usun.kto)} ${U.fmt(e.usun.ts)}</p>` : ''}
+        <p id="noT" style="white-space:pre-wrap;line-height:1.55;margin:0;font-size:17px">${U.esc(e.d.tekst || '')}</p>
+        ${ed ? `<p class="mute" style="margin:0;font-size:13px">Edytowana: ${U.esc(ed.kto)} ${U.fmt(ed.ts)}</p>` : ''}
         ${fot.length ? `<div class="thumbs" id="noF" data-fotos="${U.esc(fot.join(','))}"></div>` : ''}</div>
-      <div class="sfoot"><button class="btn" id="noX">Zamknij</button></div></div></div>`;
+      <div class="sfoot">${biuro ? (wKoszu ? '<button class="btn pri" id="noP">Przywróć</button>' : `<button class="btn bad" id="noD">${ic('trash')} Usuń</button><button class="btn" id="noE">Edytuj</button>`) : ''}<button class="btn" id="noX">Zamknij</button></div></div></div>`;
     $('#noX').onclick = UI.close;
+    // od 1.34.0: edycja, kosz i przywrócenie – tylko rola biuro (serwer odrzuca od innych); zmiana = nowe zdarzenie, historia zostaje
+    const zm = async (d, msg) => { await addEvent('notatka_edyc', e.urz || '', Object.assign({ nid: e.id }, d)); UI.toast(msg); UI.close(); UI.refresh(); };
+    if ($('#noD')) $('#noD').onclick = () => { if (confirm('Przenieść notatkę do kosza? Biuro może ją przywrócić z kosza.')) zm({ usun: true }, 'Notatka w koszu'); };
+    if ($('#noP')) $('#noP').onclick = () => zm({ przywroc: true }, 'Notatka przywrócona');
+    if ($('#noE')) $('#noE').onclick = () => {
+      $('#noT').outerHTML = `<textarea id="noTa" rows="6" style="width:100%;font-size:17px">${U.esc(e.d.tekst || '')}</textarea>`;
+      $('#noE').outerHTML = '<button class="btn pri" id="noS">Zapisz</button>'; $('#noTa').focus();
+      $('#noS').onclick = () => { const t = $('#noTa').value.trim(); if (!t) { UI.toast('Notatka nie może być pusta – użyj „Usuń”'); return; } if (t === (e.d.tekst || '')) { UI.close(); return; } zm({ tekst: t }, 'Notatka zapisana'); };
+    };
     if ($('#noU')) $('#noU').onclick = () => Dialogs.device(e.urz);
     if ($('#noR')) $('#noR').onclick = () => pokazNaRzucie(e.urz);
     hydrateFotos(modal);
@@ -1487,12 +1501,14 @@ const Foto = {
     const i = this.info(fid);
     wrap.innerHTML = `<div class="fvbar"><span class="grow">${U.esc(i.urz || '')} ${U.esc(({ tabliczka: 'tabliczka', brak: 'zdjęcie braku', notatka: 'zdjęcie notatki' })[i.rodzaj] || 'zdjęcie')} · ${U.esc(i.kto || '')} ${i.ts ? U.fmt(i.ts) : ''} <span class="mute" id="fvJak"></span></span>
       ${i.urz && maPozycje(i.urz) ? `<button class="btn sm" id="fvRz" title="Pokaż urządzenie na rzucie">${ic('cel')} Na rzucie</button>` : ''}
+      ${Session.isBiuro() ? `<button class="btn sm" id="fvPob" title="Zapisz zdjęcie w pełnej rozdzielczości">${ic('download')} Pobierz</button>` : ''}
       ${this.mozeUsunac(fid) ? '<button class="btn bad sm" id="fvDel">Usuń zdjęcie</button>' : ''}<button class="btn sm" id="fvX">✕ Zamknij</button></div>
       <div class="fvimg" id="fvImg"><span class="mute">Wczytuję…</span></div>`;
     document.body.appendChild(wrap);
     const zamknij = () => wrap.remove();
     $('#fvX').onclick = zamknij;
     if ($('#fvRz')) $('#fvRz').onclick = () => pokazNaRzucie(i.urz);
+    if ($('#fvPob')) $('#fvPob').onclick = () => this.pobierz(fid);
     if ($('#fvDel')) $('#fvDel').onclick = async () => {
       if (!confirm('Usunąć to zdjęcie? Zniknie z aplikacji, a plik na Dysku trafi do kosza.')) return;
       await this.usun(fid); zamknij();
@@ -1502,6 +1518,21 @@ const Foto = {
       $('#fvImg').innerHTML = ''; const img = new Image(); img.src = URL.createObjectURL(o.blob); img.alt = 'zdjęcie'; $('#fvImg').appendChild(img);
       $('#fvJak').textContent = o.pelne ? '· z tego tabletu' : '· podgląd pomniejszony';
     } catch (e) { $('#fvImg').innerHTML = `<p class="mute" style="color:#fff">${U.esc(e.message)}</p>`; }
+  },
+  /* Pobranie zdjęcia (od 1.34.0, rola biuro): z tego tabletu – oryginał, z innych – pełny plik z Dysku (nie pomniejszony podgląd) */
+  async pobierz(fid) {
+    const i = this.info(fid);
+    try {
+      let blob = ((await DB.getPhoto(fid)) || {}).blob;
+      if (!blob) {
+        if (!navigator.onLine) { UI.toast('Połącz się z siecią, aby pobrać zdjęcie z Dysku'); return; }
+        UI.toast('Pobieram zdjęcie…'); const r = await API.foto(S.kod, fid); blob = U.b64ToBlob(r.b64, r.mime || 'image/jpeg');
+      }
+      const dz = (i.ts || new Date().toISOString()).slice(0, 10);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `${S.kod}_${(i.urz && i.urz !== 'BUDOWA') ? i.urz + '_' : ''}${dz}_${fid}.jpg`.replace(/[^\w.\-]+/g, '_');
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    } catch (e) { UI.toast(e.message); }
   },
   async usun(fid) {
     const i = this.info(fid);

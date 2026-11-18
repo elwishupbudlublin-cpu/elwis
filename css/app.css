@@ -518,7 +518,7 @@ main{padding:16px 16px 100px}
 .bsort .hkr{display:none}
 @media (max-width:760px){
   .bsort .hdl{display:none}.bsort .hkr{display:inline}
-  .bsort{flex-wrap:wrap}.bsort h2{flex-basis:100%}.bsort .ffront{margin-right:auto}
+  .bsort{flex-wrap:wrap}.bsort h2{flex-basis:100%}.bsort .seg2{margin-left:auto}
   .blist .li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:14px;row-gap:6px;align-items:start}
   .blist .li > .lstat{grid-column:2 / 4;grid-row:2;min-width:0;text-align:left}
   .blist .li > .chip{grid-column:3;justify-self:end}

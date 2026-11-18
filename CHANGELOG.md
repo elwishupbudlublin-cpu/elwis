@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.34.0 – 2026-11-18
+- Notatki (rola biuro): „Edytuj”, „Usuń” (do kosza) i „Przywróć”; kosz notatek w widoku Notatki; zmiany jako zdarzenie `notatka_edyc` (historia zostaje); notatki w koszu poza listą, licznikami i zdjęciami budowy.
+- Okno zdjęcia (rola biuro): „Pobierz” – plik w pełnej rozdzielczości (z tego tabletu oryginał, z innych – pełny plik z Dysku).
+- Lista budów: sortowanie „Nr / Naz. / Rozp / Fr.otw” (Fr.otw – liczba urządzeń z otwartym frontem, malejąco); filtr „front otw.” zastąpiony sortowaniem.
+- Serwer 1.34.0: zdarzenie `notatka_edyc` przyjmowane tylko od roli biuro; licznik notatek bez notatek w koszu.
+
 ## 1.33.2 – 2026-11-18 (aplikacja)
 - Lista budów na wąskim ekranie (tablet w pionie): liczniki w drugiej linii wiersza pod nazwą, mniejsza czcionka, pasek postępu na całą szerokość; nagłówek „Aktywne budowy (N)”, filtr i sortowanie w osobnej linii.
 

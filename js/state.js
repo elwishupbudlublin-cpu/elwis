@@ -64,7 +64,15 @@ function fold(events) {
         break;
       }
       case 'brak_kom': if (braki[d.bid]) { braki[d.bid].kom.push({ kto: e.kto, ts: e.ts, tekst: d.tekst || '', foto: d.foto || [] }); (d.foto || []).forEach(f => fi(f, e, 'brak')); } break;
-      case 'notatka': notes.push(e); (d.foto || []).forEach(f => fi(f, e, 'notatka')); break;
+      case 'notatka': notes.push(Object.assign({}, e, { d: Object.assign({}, d), zm: [], usun: null })); (d.foto || []).forEach(f => fi(f, e, 'notatka')); break;
+      case 'notatka_edyc': {   // od 1.34.0 (tylko rola biuro): edycja tekstu, przeniesienie do kosza, przywrócenie
+        const n = notes.find(x => x.id === d.nid); if (!n) break;
+        if (d.usun) n.usun = { kto: e.kto, ts: e.ts };
+        else if (d.przywroc) n.usun = null;
+        else if (d.tekst != null) n.d.tekst = d.tekst;
+        n.zm.push({ kto: e.kto, ts: e.ts, co: d.usun ? 'do kosza' : d.przywroc ? 'przywrócenie' : 'edycja' });
+        break;
+      }
       case 'foto_usun': if (d.fid) usuniete.add(d.fid); break;
       case 'protokol': if (d.pid && d.stan === 'usuniety') { delete prot[d.pid]; break; }   // usunięty (1.6.1) – znika z list
         if (d.pid) prot[d.pid] = { pid: d.pid, def: d.def, wersja: d.wersja, prefiks: d.prefiks, stan: d.stan || 'roboczy', nr: d.nr || (prot[d.pid] && prot[d.pid].nr) || '', dane: d.dane || {}, urz: e.urz, kto: e.kto, ts: e.ts }; break;
@@ -78,7 +86,10 @@ function fold(events) {
     Object.values(braki).forEach(b => { b.foto = (b.foto || []).filter(f => !usuniete.has(f)); b.kom.forEach(k => { k.foto = k.foto.filter(f => !usuniete.has(f)); }); });
     usuniete.forEach(f => delete fotoInfo[f]);
   }
-  return { dev, braki, notes, prot, fotoInfo, usuniete };
+  // notatki w koszu (od 1.34.0): poza listą i licznikami; ich zdjęcia znikają z widoku Zdjęcia
+  const notesKosz = notes.filter(n => n.usun);
+  notesKosz.forEach(n => (n.d.foto || []).forEach(f => { if (fotoInfo[f] && fotoInfo[f].rodzaj === 'notatka') delete fotoInfo[f]; }));
+  return { dev, braki, notes: notes.filter(n => !n.usun), notesKosz, prot, fotoInfo, usuniete };
 }
 
 function devStatus(u, F) {
