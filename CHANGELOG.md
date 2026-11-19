@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.45.1 – 2026-11-19 (aplikacja)
+- Nagłówek budowy: numer budowy za nazwą, ta sama wielkość czcionki; etykiety „K. AKPiA” i „K. Sanit.” (zamiast „Kierownik AKPiA” / „Kierownik HUP-BUD”).
+- Okno „i”: numer za nazwą; kierownicy i inne kontakty w jednej zwartej liście „Kontakty” (jeden wiersz na kontakt) nad notatką o budowie.
+
 ## 1.45.0 – 2026-11-19 (aplikacja i serwer, schemat 1.14)
 - Okno „i” budowy: sekcja „Inne kontakty” (rola, imię i nazwisko / firma, telefon do dotknięcia); rola biuro dodaje i usuwa kontakty w trakcie budowy („+ Dodaj kontakt” lub „Edytuj”).
 - Dodawanie: „Wpisz ręcznie” albo „Z kontaktów urządzenia” (książka kontaktów tabletu / telefonu – Chrome na Androidzie, Contact Picker API; można wybrać kilka osób, rolę dopisuje się ręcznie). Gdzie przeglądarka nie obsługuje wyboru kontaktów, przycisk jest ukryty.

@@ -298,6 +298,7 @@ main{padding:16px 16px 100px}
 /* ekran budowy */
 .bhero{background:var(--navy);color:#fff;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
 .bhero .bkod{font-family:'JetBrains Mono',monospace;color:#93B4FF;font-weight:600;font-size:15px}
+.bhero h1 .bkod{font-size:inherit;white-space:nowrap}  /* od 1.45.1: kod za nazwą, ta sama wielkość */
 .bhero h1{margin:0;color:#fff;font-size:28px}
 .bhero .bsub{color:#A9B8CC;font-size:14px;margin-top:2px}
 .bhero .bpill{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.1);font-size:13px;color:#E5ECF6}
@@ -567,3 +568,11 @@ main{padding:16px 16px 100px}
 .ikedit input{width:100%;min-width:0}
 .ikedit .kR{grid-area:r}.ikedit .kN{grid-area:n}.ikedit .kT{grid-area:t}
 .ikedit button{grid-area:x;width:44px;min-width:44px;padding:0;justify-self:end}
+
+/* 1.45.1: zwarta lista kontaktów w oknie „i” (kierownicy + inne) */
+.ikont .ikrow{padding:6px 0;gap:10px;flex-wrap:wrap}
+.ikont .ikrola{flex:0 0 92px;font-size:12.5px;color:var(--mute,#64748b);line-height:1.25}
+.ikont .ikrow b{font-size:15px;min-width:0}
+.ikont .ikrow.kier .ikrola{color:var(--blue);font-weight:600}
+.ikont .iktel{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-weight:600;font-size:14px;color:var(--blue);text-decoration:none;white-space:nowrap}
+.ikont .iktel .ic{width:15px;height:15px}

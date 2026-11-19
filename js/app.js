@@ -507,10 +507,9 @@ const Views = {
     const PUSTY = '<span class="chip" style="visibility:hidden">–</span>';
     view.innerHTML = `
       <section class="bhero">
-        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}<button class="binfo" id="bInfo" aria-label="Informacje o budowie" title="Pełna informacja o budowie">i</button></div>
-        <div><h1>${U.esc(nazwa || p.nazwa)}</h1><div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div>
-          ${(a => a && a.nazwa ? `<div class="bkier">${ic('kier')}<span>Kierownik AKPiA:&nbsp;<b>${U.esc(a.nazwa)}</b></span>${a.tel ? `<a href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
-          ${p.kierownik ? `<div class="bkier">${ic('kier')}<span>Kierownik HUP-BUD:&nbsp;<b>${U.esc(p.kierownik)}</b></span>${telKier(p) ? `<a href="tel:${U.esc(telKier(p).replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(telKier(p))}</a>` : ''}</div>` : ''}</div>
+        <div><div class="row" style="align-items:flex-start"><h1 class="grow">${U.esc(nazwa || p.nazwa)} <span class="bkod">${U.esc(p.kod)}</span></h1><button class="binfo" id="bInfo" aria-label="Informacje o budowie" title="Pełna informacja o budowie">i</button></div>${p.wojskowy === 'tak' ? '<span class="bpill" style="margin:6px 0 2px">obiekt wojskowy · uprawnienie M</span>' : ''}<div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div>
+          ${(a => a && a.nazwa ? `<div class="bkier">${ic('kier')}<span>K.&nbsp;AKPiA:&nbsp;<b>${U.esc(a.nazwa)}</b></span>${a.tel ? `<a href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
+          ${p.kierownik ? `<div class="bkier">${ic('kier')}<span>K.&nbsp;Sanit.:&nbsp;<b>${U.esc(p.kierownik)}</b></span>${telKier(p) ? `<a href="tel:${U.esc(telKier(p).replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(telKier(p))}</a>` : ''}</div>` : ''}</div>
         ${p.uwagi ? `<div class="bsub buwagi" id="bUw" role="button" tabindex="0" title="Pokaż całość">${U.esc(p.uwagi)}</div>` : ''}
         ${navUrl || mozePin ? `<div class="bhact">
           ${navUrl ? `<a class="hb pri" href="${U.esc(navUrl)}" target="_blank" rel="noopener">${ic('nav')}Nawiguj</a>` : ''}
@@ -1295,19 +1294,22 @@ const Dialogs = {
     // znani kierownicy i ich telefony – z innych budów w Bazie (źródło: ekipy-i-pracownicy.md)
     const znani = {}; ((S.boot && S.boot.projekty) || []).forEach(x => { if (x.kierownik && (x.telKier || !znani[x.kierownik])) znani[x.kierownik] = x.telKier || ''; });
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Informacje o budowie">
-      <div class="shead"><h3>${U.esc(p.nazwa)}</h3>${biuro && !edycja ? `<button class="btn sm" id="iEd">${ic('edit')} Edytuj</button>` : ''}</div>
+      <div class="shead"><h3>${U.esc(String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa)} <span style="color:var(--accent,#2563eb);white-space:nowrap">${U.esc(p.kod)}</span></h3>${biuro && !edycja ? `<button class="btn sm" id="iEd">${ic('edit')} Edytuj</button>` : ''}</div>
       <div class="sbody stack">
         ${edycja ? `
-          <label class="fld"><span class="mute">Kierownik HUP-BUD</span><input id="iK" type="text" list="dlK" value="${U.esc(p.kierownik || '')}" autocomplete="off" style="width:100%"><datalist id="dlK">${Object.keys(znani).sort((a, b) => a.localeCompare(b, 'pl')).map(k => `<option value="${U.esc(k)}">`).join('')}</datalist></label>
+          <label class="fld"><span class="mute">K. Sanit.</span><input id="iK" type="text" list="dlK" value="${U.esc(p.kierownik || '')}" autocomplete="off" style="width:100%"><datalist id="dlK">${Object.keys(znani).sort((a, b) => a.localeCompare(b, 'pl')).map(k => `<option value="${U.esc(k)}">`).join('')}</datalist></label>
           <label class="fld"><span class="mute">Telefon kierownika</span><input id="iT" type="text" inputmode="tel" value="${U.esc(p.telKier || '')}" placeholder="np. 502 500 669" style="width:100%"></label>
           <label class="fld"><span class="mute">Notatka o budowie (dla ekip)</span><textarea id="iU" rows="9" style="width:100%">${U.esc(p.uwagi || '')}</textarea></label>
           <div><div class="lbl">Inne kontakty</div><div id="iKL" class="stack" style="gap:8px;margin-top:6px"></div>
             <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn sm" id="iKA" type="button">${ic('plus')} Wpisz ręcznie</button>${'contacts' in navigator && navigator.contacts && navigator.contacts.select ? `<button class="btn sm" id="iKC" type="button">${ic('kier')} Z kontaktów urządzenia</button>` : ''}</div></div>`
-        : `${(a => a && a.nazwa ? `<div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik AKPiA</div><b>${U.esc(a.nazwa)}</b></div>${a.tel ? `<a class="btn sm" href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
-          <div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik HUP-BUD</div><b>${U.esc(p.kierownik || '— nie przypisano')}</b></div>${tel}</div>
+        : `<div><div class="row" style="align-items:center"><div class="lbl grow">Kontakty</div>${biuro ? `<button class="btn sm" id="iKon">${ic('plus')} Dodaj kontakt</button>` : ''}</div>
+            <div class="ikont">${(() => {   // od 1.45.1: kierownicy i inne kontakty w jednej zwartej liście
+              const w = (rola, nazwa, t, kier) => `<div class="ikrow${kier ? ' kier' : ''}"><span class="ikrola">${U.esc(rola)}</span><b class="grow">${U.esc(nazwa || '—')}</b>${t ? `<a class="iktel" href="tel:${U.esc(t.replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(t)}</a>` : ''}</div>`;
+              const a = S.boot && S.boot.kierownikAkpia;
+              return (a && a.nazwa ? w('K. AKPiA', a.nazwa, a.tel, 1) : '') + w('K. Sanit.', p.kierownik || 'nie przypisano', telKier(p), 1)
+                + (p.kontakty || []).map(k => w(k.rola || 'kontakt', k.nazwa, k.tel)).join('');
+            })()}</div></div>
           <div><div class="lbl">Notatka o budowie</div><p style="white-space:pre-wrap;line-height:1.55;margin:6px 0 0">${U.esc(p.uwagi || '— brak')}</p></div>
-          <div><div class="row" style="align-items:center"><div class="lbl grow">Inne kontakty</div>${biuro ? `<button class="btn sm" id="iKon">${ic('plus')} Dodaj kontakt</button>` : ''}</div>
-            <div class="ikont">${(p.kontakty || []).map(k => `<div class="ikrow"><div class="grow"><div class="mute">${U.esc(k.rola || 'kontakt')}</div><b>${U.esc(k.nazwa || '—')}</b></div>${k.tel ? `<a class="btn sm" href="tel:${U.esc(k.tel.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(k.tel)}</a>` : ''}</div>`).join('') || '<span class="mute">Brak – biuro dodaje kontakty w trakcie budowy (np. elektryk, kierownik GW, dostawca).</span>'}</div></div>
           <div class="ilist">${wiersz('Adres', U.esc(p.adres))}${wiersz('Kontakt na budowie', U.esc(p.kontakt))}${wiersz('Zakres prac', U.esc((p.zakres || []).join(', ')))}${wiersz('Etapy budowy', etapy)}${wiersz('Inwestor', U.esc(p.inwestor))}${wiersz('Zamawiający', U.esc(p.zamawiajacy))}${wiersz('Obiekt wojskowy', p.wojskowy === 'tak' ? 'tak – tylko osoby z uprawnieniem M' : '')}</div>`}
       </div>
       <div class="sfoot">${edycja ? '<button class="btn" id="iX">Anuluj</button><button class="btn pri" id="iS">Zapisz</button>' : '<button class="btn" id="iX">Zamknij</button>'}</div></div></div>`;
