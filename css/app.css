@@ -549,3 +549,14 @@ main{padding:16px 16px 100px}
 .bst2.kol .tbar3,.bst2.kol .tbar{width:100%;align-self:stretch}
 @media (max-width:760px){.blist .lstat .lgrp.kol{gap:12px;flex-wrap:wrap}.blist .kol .kolg{column-gap:8px}}
 .bnav.n2{grid-template-columns:repeat(2,1fr)}
+/* 1.44.0: nagłówek budowy – notatka w 2 liniach, przycisk „i”, kierownik z telefonem; okno informacji */
+.bhero .binfo{margin-left:auto;width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);background:transparent;color:#fff;font:700 17px/1 Georgia,serif;font-style:italic;cursor:pointer}
+.bhero .buwagi{color:#E5ECF6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.bhero .bkier{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:8px;color:#E5ECF6;font-size:14px}
+.bhero .bkier .ic{width:17px;height:17px;vertical-align:-3px;margin-right:5px}
+.bhero .bkier>span{display:inline-flex;align-items:center}
+.bhero .bkier a{display:inline-flex;align-items:center;color:#93B4FF;font-weight:600;text-decoration:none}
+.ikier{display:flex;align-items:center;gap:12px}
+.ikier>.ic{width:26px;height:26px;color:var(--blue)}
+.ilist{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.ilist .irow{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}

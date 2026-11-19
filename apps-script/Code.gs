@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.43.0';
+const SCRIPT_VERSION = '1.44.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -173,7 +173,8 @@ function aktywneBaza_() {
       folder: idFromUrl_(r[8]), lista: idFromUrl_(r[10]), wojskowy: txt_(r[11]).toLowerCase(),
       etapy: etapy_(r[12]), listaCU: txt_(r[9]),
       inwestor: txt_(r[13]), zamawiajacy: txt_(r[14]),   // schemat 1.5 – do protokołów
-      kierownik: txt_(r[15])                               // schemat 1.10 – kierownik HUP-BUD opiekujący się budową
+      kierownik: txt_(r[15]),                              // schemat 1.10 – kierownik HUP-BUD opiekujący się budową
+      telKier: txt_(r[16])                                 // schemat 1.13 – telefon kierownika (skill kopiuje z ekipy-i-pracownicy.md)
     }));
 }
 /** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
@@ -219,7 +220,8 @@ function bootstrap_(tablet, dost) {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
     pracownicy: pr, projekty: projekty, slowniki: slowniki_(), protokoly: protokolyAktywne_(),
-    dostep: pod ? { budowy: dost.budowy, wazny: dost.wazny || '' } : null
+    dostep: pod ? { budowy: dost.budowy, wazny: dost.wazny || '' } : null,
+    kierownikAkpia: (m => m ? { nazwa: txt_(m[1]), tel: txt_(m[2]) } : null)(String(k.kierownik_akpia || '').match(/^([^:]+):?(.*)$/))   // od 1.44.0, Konfiguracja
   };
 }
 
@@ -421,7 +423,7 @@ function events_(kod, since) {
 }
 function safeJson_(s) { try { return JSON.parse(s); } catch (e) { return {}; } }
 
-const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'notatka_edyc', 'urz_edyc'];
+const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'protokol', 'foto_usun', 'brak_edyc', 'brak_kom', 'pinezka', 'urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'notatka_edyc', 'urz_edyc', 'projekt_edyc'];
 
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
@@ -461,6 +463,19 @@ function pinezka_(kod, e, biuro) {
   for (let i = 1; i < v.length; i++) if (txt_(v[i][0]) === kod) {
     if (txt_(v[i][3]) && !biuro[txt_(e.kto)]) return false;
     sh.getRange(i + 1, 4).setNumberFormat(TEXT).setValue(lat.toFixed(5) + ',' + lon.toFixed(5));
+    CACHE.remove('aktywne');
+    return true;
+  }
+  return false;
+}
+
+/* Informacja o budowie z tabletu (od 1.44.0, rola biuro): Uwagi dla ekip (H), Kierownik (P), Telefon kierownika (Q) w Projekty */
+function projektEdyc_(kod, e) {
+  const d = e.d || {}, sh = baza_().getSheetByName('Projekty'), v = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues();
+  for (let i = 1; i < v.length; i++) if (txt_(v[i][0]) === kod) {
+    if (d.uwagi != null) sh.getRange(i + 1, 8).setNumberFormat(TEXT).setValue(txt_(d.uwagi).slice(0, 5000));
+    if (d.kierownik != null) sh.getRange(i + 1, 16).setNumberFormat(TEXT).setValue(txt_(d.kierownik).slice(0, 80));
+    if (d.telKier != null) sh.getRange(i + 1, 17).setNumberFormat(TEXT).setValue(txt_(d.telKier).slice(0, 40));
     CACHE.remove('aktywne');
     return true;
   }
@@ -540,7 +555,7 @@ function push_(b, tablet, dost) {
   const p = projekt_(String(b.kod || ''));
   if (dost && dost.budowy) {   // podwykonawca: wpisy tylko jako konto podwykonawcy tej firmy, bez zmian biura
     const konta = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (txt_(r[2]) === 'podwykonawca' && txt_(r[1]) === dost.ekipa && tak_(r[4])) konta[txt_(r[0])] = true; });
-    (b.events || []).forEach(e => { if (e && (!konta[txt_(e.kto)] || ['urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'urz_edyc', 'pinezka'].indexOf(e.typ) >= 0)) { e.pomin = true; } });
+    (b.events || []).forEach(e => { if (e && (!konta[txt_(e.kto)] || ['urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'urz_edyc', 'pinezka', 'projekt_edyc'].indexOf(e.typ) >= 0)) { e.pomin = true; } });
   }
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   let numery = {}, nowe = {};
@@ -612,6 +627,10 @@ function push_(b, tablet, dost) {
         if (e.typ === 'pinezka') {
           if (biuro === null) biuro = rolaBiuro_();
           if (!pinezka_(p.kod, e, biuro)) return;
+        }
+        if (e.typ === 'projekt_edyc') {   // od 1.44.0: notatka o budowie i kierownik – tylko rola biuro
+          if (biuro === null) biuro = rolaBiuro_();
+          if (!biuro[txt_(e.kto)] || !projektEdyc_(p.kod, e)) return;
         }
         if (e.typ === 'urz_poz' || e.typ === 'urz_sys' || e.typ === 'urz_usun' || e.typ === 'urz_edyc') {
           if (biuro === null) biuro = rolaBiuro_();

@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.44.0 – 2026-11-19 (aplikacja i serwer, schemat 1.13)
+- Nagłówek budowy: Kierownik AKPiA (pierwszy, na każdej budowie – Konfiguracja → `kierownik_akpia`) i Kierownik HUP-BUD budowy (Projekty → P, telefon z nowej kolumny Q „Telefon kierownika”), telefony do dotknięcia (dzwonienie); notatka o budowie skrócona do 2 linii.
+- Przycisk „i”: pełna informacja o budowie – kierownicy z telefonami, cała notatka, adres, kontakt, zakres prac, etapy, inwestor, zamawiający, obiekt wojskowy.
+- Rola biuro: „Edytuj” w oknie „i” – notatka o budowie, kierownik i telefon (podpowiedzi z innych budów); zdarzenie `projekt_edyc`, serwer zapisuje Projekty H, P, Q (tylko od roli biuro; od podwykonawcy pomijane).
+
 ## 1.43.1 – 2026-11-19 (aplikacja)
 - Okno braku: „Zapisz zmiany” bez opisu, gdy brak ma wybrany rodzaj (np. „Brak urządzenia”, „Uszkodzenie”); opis wymagany tylko bez rodzaju albo przy „Inne” – jak przy zgłaszaniu.
 

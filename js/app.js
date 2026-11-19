@@ -3,7 +3,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const view = $('#view'), modal = $('#modal');
 const ST = { 'czeka': 'czeka', 'w toku': 'wtoku', 'gotowe': 'gotowe', 'brak': 'brak' };
 /* ikony liniowe (wygląd B, od 1.12.0) */
-const IKONY = { edit: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"></path>', trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"></path>', download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path>', plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
+const IKONY = { tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"></path>', edit: '<path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"></path>', trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"></path>', download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path>', plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>', doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"></path>',
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
@@ -507,9 +507,11 @@ const Views = {
     const PUSTY = '<span class="chip" style="visibility:hidden">–</span>';
     view.innerHTML = `
       <section class="bhero">
-        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}</div>
-        <div><h1>${U.esc(nazwa || p.nazwa)}</h1><div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div></div>
-        ${p.uwagi ? `<div class="bsub" style="color:#E5ECF6">${U.esc(p.uwagi)}</div>` : ''}
+        <div class="row"><span class="bkod">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="bpill">obiekt wojskowy · uprawnienie M</span>' : ''}<button class="binfo" id="bInfo" aria-label="Informacje o budowie" title="Pełna informacja o budowie">i</button></div>
+        <div><h1>${U.esc(nazwa || p.nazwa)}</h1><div class="bsub">${U.esc([p.adres, p.kontakt && 'kontakt: ' + p.kontakt].filter(Boolean).join(' · ') || 'brak adresu')}</div>
+          ${(a => a && a.nazwa ? `<div class="bkier">${ic('kier')}<span>Kierownik AKPiA:&nbsp;<b>${U.esc(a.nazwa)}</b></span>${a.tel ? `<a href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
+          ${p.kierownik ? `<div class="bkier">${ic('kier')}<span>Kierownik HUP-BUD:&nbsp;<b>${U.esc(p.kierownik)}</b></span>${telKier(p) ? `<a href="tel:${U.esc(telKier(p).replace(/[^\d+]/g, ''))}">${ic('tel')}${U.esc(telKier(p))}</a>` : ''}</div>` : ''}</div>
+        ${p.uwagi ? `<div class="bsub buwagi" id="bUw" role="button" tabindex="0" title="Pokaż całość">${U.esc(p.uwagi)}</div>` : ''}
         ${navUrl || mozePin ? `<div class="bhact">
           ${navUrl ? `<a class="hb pri" href="${U.esc(navUrl)}" target="_blank" rel="noopener">${ic('nav')}Nawiguj</a>` : ''}
           ${mozePin ? `<button class="hb ${navUrl ? '' : 'pri'}" id="bPin">${ic('pin')}${navUrl ? 'Zapisz pinezkę' : 'Dodaj pinezkę'}</button>` : ''}
@@ -549,6 +551,8 @@ const Views = {
     $('#mPost').onclick = () => UI.go('postep');
     $('#bBrak').onclick = () => Dialogs.brak('');
     $('#bNote').onclick = () => Dialogs.notatka('');
+    $('#bInfo').onclick = () => Dialogs.infoBudowy(p.kod);
+    if ($('#bUw')) $('#bUw').onclick = () => Dialogs.infoBudowy(p.kod);
     if ($('#bPin')) $('#bPin').onclick = () => zapiszPinezke(p);
   },
 
@@ -1280,6 +1284,42 @@ const Dialogs = {
     };
   },
 
+  /* Informacja o budowie (od 1.44.0): kierownik HUP-BUD z telefonem, notatka o budowie (Uwagi dla ekip), pełne dane z Bazy.
+     Rola biuro: edycja notatki, kierownika i telefonu – zdarzenie projekt_edyc, serwer zapisuje w Bazie → Projekty (H, P, Q). */
+  infoBudowy(kod, edycja) {
+    const p = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod); if (!p) return;
+    const biuro = Session.isBiuro();
+    const wiersz = (l, v) => v ? `<div class="irow"><span class="mute">${l}</span><span>${v}</span></div>` : '';
+    const tk = telKier(p), tel = tk ? `<a class="btn sm" href="tel:${U.esc(tk.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(tk)}</a>` : '';
+    const etapy = (p.etapy || []).map(e => U.esc(e.id + (e.opis ? ': ' + e.opis : ''))).join('<br>');
+    // znani kierownicy i ich telefony – z innych budów w Bazie (źródło: ekipy-i-pracownicy.md)
+    const znani = {}; ((S.boot && S.boot.projekty) || []).forEach(x => { if (x.kierownik && (x.telKier || !znani[x.kierownik])) znani[x.kierownik] = x.telKier || ''; });
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Informacje o budowie">
+      <div class="shead"><h3>${U.esc(p.nazwa)}</h3>${biuro && !edycja ? `<button class="btn sm" id="iEd">${ic('edit')} Edytuj</button>` : ''}</div>
+      <div class="sbody stack">
+        ${edycja ? `
+          <label class="fld"><span class="mute">Kierownik HUP-BUD</span><input id="iK" type="text" list="dlK" value="${U.esc(p.kierownik || '')}" autocomplete="off" style="width:100%"><datalist id="dlK">${Object.keys(znani).sort((a, b) => a.localeCompare(b, 'pl')).map(k => `<option value="${U.esc(k)}">`).join('')}</datalist></label>
+          <label class="fld"><span class="mute">Telefon kierownika</span><input id="iT" type="text" inputmode="tel" value="${U.esc(p.telKier || '')}" placeholder="np. 502 500 669" style="width:100%"></label>
+          <label class="fld"><span class="mute">Notatka o budowie (dla ekip)</span><textarea id="iU" rows="9" style="width:100%">${U.esc(p.uwagi || '')}</textarea></label>`
+        : `${(a => a && a.nazwa ? `<div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik AKPiA</div><b>${U.esc(a.nazwa)}</b></div>${a.tel ? `<a class="btn sm" href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
+          <div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik HUP-BUD</div><b>${U.esc(p.kierownik || '— nie przypisano')}</b></div>${tel}</div>
+          <div><div class="lbl">Notatka o budowie</div><p style="white-space:pre-wrap;line-height:1.55;margin:6px 0 0">${U.esc(p.uwagi || '— brak')}</p></div>
+          <div class="ilist">${wiersz('Adres', U.esc(p.adres))}${wiersz('Kontakt na budowie', U.esc(p.kontakt))}${wiersz('Zakres prac', U.esc((p.zakres || []).join(', ')))}${wiersz('Etapy budowy', etapy)}${wiersz('Inwestor', U.esc(p.inwestor))}${wiersz('Zamawiający', U.esc(p.zamawiajacy))}${wiersz('Obiekt wojskowy', p.wojskowy === 'tak' ? 'tak – tylko osoby z uprawnieniem M' : '')}</div>`}
+      </div>
+      <div class="sfoot">${edycja ? '<button class="btn" id="iX">Anuluj</button><button class="btn pri" id="iS">Zapisz</button>' : '<button class="btn" id="iX">Zamknij</button>'}</div></div></div>`;
+    $('#iX').onclick = () => edycja ? Dialogs.infoBudowy(kod) : UI.close();
+    if ($('#iEd')) $('#iEd').onclick = () => Dialogs.infoBudowy(kod, true);
+    if ($('#iK')) $('#iK').oninput = () => { const t = znani[$('#iK').value.trim()]; if (t) $('#iT').value = t; };   // wybór znanego kierownika podstawia jego telefon
+    if ($('#iS')) $('#iS').onclick = async () => {
+      const nowe = { kierownik: $('#iK').value.trim(), telKier: $('#iT').value.trim(), uwagi: $('#iU').value.replace(/\s+$/, '') }, d = {};
+      Object.keys(nowe).forEach(k => { if (nowe[k] !== (p[k] || '')) d[k] = nowe[k]; });
+      if (!Object.keys(d).length) return Dialogs.infoBudowy(kod);
+      await addEvent('projekt_edyc', '', d);
+      Object.assign(p, d); await DB.set('boot', S.boot);   // widoczne od razu na tym tablecie; inne – po synchronizacji
+      UI.toast('Informacje o budowie zapisane'); Dialogs.infoBudowy(kod); UI.refresh();
+    };
+  },
+
   /* Podgląd notatki (od 1.33.0): pełny tekst, autor, urządzenie (karta, na rzucie), zdjęcia; notatek się nie edytuje */
   notatkaOkno(eid) {
     const F = fold(S.ev), e = F.notes.find(x => x.id === eid) || F.notesKosz.find(x => x.id === eid); if (!e) return;
@@ -1723,6 +1763,8 @@ async function przywrocEkran() {
   UI.cur = o.v; UI.par = o.par || {}; UI.pv = null; UI.refresh();
   return true;
 }
+/* Telefon kierownika HUP-BUD (od 1.44.0): Baza → Projekty → Q (wpisuje skill z ekipy-i-pracownicy.md) */
+function telKier(p) { return (p && p.kierownik && p.telKier) || ''; }
 /* Dostęp podwykonawcy (od 1.43.0): klucz z ograniczeniem do wybranych budów – serwer odsyła `dostep` w bootstrap */
 function podw() { return !!(S.boot && S.boot.dostep); }
 async function openProject(kod) {
