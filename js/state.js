@@ -404,15 +404,28 @@ const Pamiec = {
     const niewyslane = new Set([...(await DB.unsynced()).map(e => e.kod), ...(await DB.unsentPhotos()).map(p => p.kod)]);
     const keep = new Set([S.kod, ...recent, ...niewyslane].filter(Boolean));
     const l = await this.lista();
-    for (const kod of l.filter(k => !keep.has(k))) {
-      const p = await DB.get('proj:' + kod);
-      if (p) for (const id of [...Object.values(p.rzuty || {}), ...(p.pliki || []).map(f => f.id)]) if (!(await this.uzywany(id, kod))) await DB.delFile(id);
-      await DB.del('proj:' + kod); await DB.del('seq:' + kod);
-      const Fk = fold(await DB.eventsFor(kod));   // pomniejszone zdjęcia z innych tabletów
-      for (const fid of [...Object.keys(Fk.fotoInfo), ...Fk.usuniete]) await DB.delFile('mini:' + fid);
-      await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod); await DB.del('rozmiar:' + kod);
-    }
+    for (const kod of l.filter(k => !keep.has(k))) await this.usunDane(kod);
     await DB.set('offline', l.filter(k => keep.has(k)));
+  },
+  /* usunięcie danych jednej budowy z tabletu (rzuty, dokumenty, wysłane zdarzenia i zdjęcia, miniatury) */
+  async usunDane(kod) {
+    const p = await DB.get('proj:' + kod);
+    if (p) for (const id of [...Object.values(p.rzuty || {}), ...(p.pliki || []).map(f => f.id)]) if (!(await this.uzywany(id, kod))) await DB.delFile(id);
+    await DB.del('proj:' + kod); await DB.del('seq:' + kod);
+    const Fk = fold(await DB.eventsFor(kod));   // pomniejszone zdjęcia z innych tabletów
+    for (const fid of [...Object.keys(Fk.fotoInfo), ...Fk.usuniete]) await DB.delFile('mini:' + fid);
+    await DB.delSyncedEvents(kod); await DB.delSentPhotos(kod); await DB.del('rozmiar:' + kod);
+  },
+  /* „Zwolnij” z listy budów (od 1.46.0): budowa znika z pamięci i z synchronizacji do czasu ponownego otwarcia.
+     Nie zwalnia budowy z niewysłanymi wpisami lub zdjęciami. Liczniki na liście zostają – liczy je serwer. */
+  async zwolnij(kod) {
+    const niewyslane = (await DB.unsynced()).some(e => e.kod === kod) || (await DB.unsentPhotos()).some(f => f.kod === kod);
+    if (niewyslane) return 'niewyslane';
+    await this.usunDane(kod);
+    await DB.set('offline', (await this.lista()).filter(k => k !== kod));
+    await DB.set('recent', ((await DB.get('recent')) || []).filter(k => k !== kod));
+    if (S.kod === kod) { S.kod = null; S.proj = null; S.ev = []; }
+    return 'ok';
   },
   async zajete() {
     try { const e = await navigator.storage.estimate(); return e.usage || 0; } catch (e) { return 0; }

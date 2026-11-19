@@ -7,7 +7,7 @@ const IKONY = { tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 
   warn: '<path d="M12 3l9 17H3zM12 10v4M12 17v.5"></path>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>',
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
-  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', kier: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"></path><path d="M9 4.5h6"></path>', front: '<path d="M13 12v.01M3 21h18M5 21V5a2 2 0 0 1 2-2h7.5M17 13.5V21M14 7h7M18 4l3 3-3 3"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
+  nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', kier: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"></path><path d="M9 4.5h6"></path>', front: '<path d="M13 12v.01M3 21h18M5 21V5a2 2 0 0 1 2-2h7.5M17 13.5V21M14 7h7M18 4l3 3-3 3"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', offline0: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path><path d="M3 3l18 18"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
   chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
   x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
   plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
@@ -457,7 +457,7 @@ const Views = {
     };
     // kierownik HUP-BUD opiekujący się budową (od 1.33.0, Baza → Projekty → Kierownik)
     const kier = (p, maly) => p.kierownik ? `<span class="lkier${maly ? ' sm' : ''}" title="Kierownik budowy HUP-BUD">${ic('kier')}${U.esc(p.kierownik)}</span>` : '';
-    const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? `<span class="chip ok chipic" title="Dostępne offline – zapisane w tablecie">${ic('offline')} offline</span>` : ''}`;
+    const znaczki = p => `${p.wojskowy === 'tak' ? `<span class="chip warn">${dostepDoBudowy(p) ? '' : '🔒 '}obiekt wojskowy</span>` : ''}${off.has(p.kod) ? `<span class="offbox"><span class="chip ok chipic" title="Dostępne offline – zapisane w tablecie">${ic('offline')} offline</span>${Session.isBiuro() ? `<span class="chip chipic zwolnij" role="button" tabindex="0" data-zw="${U.esc(p.kod)}" title="Usuń dane tej budowy z tabletu – pobiorą się ponownie przy otwarciu">Zwolnij</span>` : ''}</span>` : `<span class="chip gr chipic offno" title="Nie pobrano na tablet – pobierze się przy otwarciu (wymaga internetu)">${ic('offline0')} offline</span>`}`;   // od 1.46.0: przekreślona ikona = budowa niepobrana
     wstawWidok(`
       <section class="bhero">
         <h1>Wyszukaj budowę</h1>
@@ -471,6 +471,14 @@ const Views = {
     dopasujListeBudow();
     szukajNaZywo($('#q'), () => Views.home());
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
+    // „Zwolnij” (od 1.46.0): usuwa budowę z pamięci tabletu i z synchronizacji; wróci przy otwarciu
+    view.querySelectorAll('[data-zw]').forEach(b => b.onclick = async ev => {
+      ev.stopPropagation(); const kod = b.dataset.zw;
+      if (!confirm(`Zwolnić pamięć budowy ${kod}?\nRzuty, dokumenty i zdjęcia tej budowy zostaną usunięte z tabletu i nie będą synchronizowane. Pobiorą się ponownie przy otwarciu budowy (wymaga internetu).`)) return;
+      const r = await Pamiec.zwolnij(kod); delete LICZ_PAM[kod];
+      UI.toast(r === 'ok' ? `Zwolniono pamięć budowy ${kod}` : `Budowa ${kod} ma niewysłane wpisy lub zdjęcia – najpierw zsynchronizuj.`);
+      Views.home();
+    });
     view.querySelectorAll('[data-sb]').forEach(b => b.onclick = async () => {
       const k = b.dataset.sb; await DB.set('sortBud', { k, d: so.k === k ? -so.d : (k === 'podl' || k === 'front' ? -1 : 1) });   // podłączone – domyślnie od największej
       Views.home();
@@ -1844,7 +1852,11 @@ function settings() {
   (async () => { const st = await Pamiec.stan(); $('#sBud').textContent = st.budowy; $('#sLim').textContent = st.limit; $('#sMem').textContent = st.usage ? mbTxt(st.usage) : 'brak danych'; $('#sFree').textContent = st.quota ? mbTxt(st.wolne) : 'brak danych'; })();
   $('#sx').onclick = UI.close;
   $('#sLogout').onclick = async () => { await Session.logout(); UI.close(); UI.go('login'); };
-  $('#sFull').onclick = () => { UI.close(); Sync.run(true); };
+  $('#sFull').onclick = async () => {   // od 1.46.0: potwierdzenie przed pełnym pobraniem
+    const st = await Pamiec.stan();
+    if (!confirm(`Pobrać wszystko ponownie?\nTablet pobierze od nowa dane ${st.budowy} ${odm(st.budowy, 'budowy', 'budów', 'budów')} z pamięci i dokumenty techniczne. Może to potrwać kilka–kilkanaście minut i zużyć dużo danych – używaj tylko przez WiFi.`)) return;
+    UI.close(); Sync.run(true);
+  };
   if ($('#sReset')) $('#sReset').onclick = async () => {
     if ((await DB.unsynced()).length && !confirm('Na tablecie są niewysłane wpisy. Na pewno usunąć?')) return;
     if (!confirm('Usunąć konfigurację i dane z tego tabletu?')) return;

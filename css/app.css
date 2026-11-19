@@ -522,7 +522,7 @@ main{padding:16px 16px 100px}
   .bsort{flex-wrap:wrap}.bsort h2{flex-basis:100%}.bsort .seg2{margin-left:auto}
   .blist .li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:14px;row-gap:6px;align-items:start}
   .blist .li > .lstat{grid-column:2 / 4;grid-row:2;min-width:0;text-align:left}
-  .blist .li > .chip{grid-column:3;justify-self:end}
+  .blist .li > .chip,.blist .li > .offbox{grid-column:3;justify-self:end}
   .blist .lstat .lgrp{justify-content:flex-start;gap:16px}
   .blist .lstat .lg1,.blist .lstat .lg2{align-items:flex-start}
   .blist .lstat .ldod{justify-content:flex-start}
@@ -576,3 +576,10 @@ main{padding:16px 16px 100px}
 .ikont .ikrow.kier .ikrola{color:var(--blue);font-weight:600}
 .ikont .iktel{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-weight:600;font-size:14px;color:var(--blue);text-decoration:none;white-space:nowrap}
 .ikont .iktel .ic{width:15px;height:15px}
+
+/* 1.46.0: „Zwolnij” pod znaczkiem offline (rola biuro), ten sam rozmiar co znaczek; budowa niepobrana – przekreślona ikona */
+.offbox{display:inline-flex;flex-direction:column;align-items:stretch;gap:4px}
+.offbox .chip{justify-content:center;margin-left:0}
+.chip.zwolnij{background:#fff;color:#334155;box-shadow:inset 0 0 0 1px var(--line);cursor:pointer}
+.chip.zwolnij:active{background:#EEF1F5}
+.chip.offno{color:#94A3B8;background:#F1F5F9}

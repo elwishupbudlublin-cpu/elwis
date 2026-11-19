@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.46.0 – 2026-11-19 (aplikacja)
+- Lista budów: przycisk „Zwolnij” pod znaczkiem „offline” (tylko rola biuro) – usuwa dane budowy z tabletu (rzuty, dokumenty, wysłane zdarzenia i zdjęcia) i wyłącza ją z synchronizacji do czasu ponownego otwarcia; budowy z niewysłanymi wpisami nie zwalnia. Liczniki na liście zostają (liczy je serwer).
+- Budowa niepobrana na tablet: szary znaczek „offline” z przekreśloną ikoną.
+- „Pobierz wszystko ponownie (WiFi)” wymaga potwierdzenia (liczba budów, czas, WiFi).
+
 ## 1.45.1 – 2026-11-19 (aplikacja)
 - Nagłówek budowy: numer budowy za nazwą, ta sama wielkość czcionki; etykiety „K. AKPiA” i „K. Sanit.” (zamiast „Kierownik AKPiA” / „Kierownik HUP-BUD”).
 - Okno „i”: numer za nazwą; kierownicy i inne kontakty w jednej zwartej liście „Kontakty” (jeden wiersz na kontakt) nad notatką o budowie.
