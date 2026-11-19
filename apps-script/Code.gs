@@ -645,6 +645,7 @@ function przelicz_(p, ids, zmiany) {
   const ss = SpreadsheetApp.openById(p.lista);
   const ev = rowsT_(zdarzeniaSheet_(p)).map(r => ({ id: txt_(r[0]), ts: txt_(r[1]), kto: txt_(r[2]), urz: txt_(r[4]), typ: txt_(r[5]), d: safeJson_(r[6]) }))
     .sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0);
+  zapiszLicznik_(p.kod, ev.length);   // od 1.43.0: liczba zdarzeń także z przeliczania – wpisy dopisane poza tabletem (np. naprawy) trafiają na tablety
   const typy = {}; slowniki_().typy.forEach(t => { typy[t.prefix] = t; });
   const braki = {}; ev.forEach(e => {
     if (e.typ === 'brak') braki[e.id] = { urz: e.urz, open: true };
