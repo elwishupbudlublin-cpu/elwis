@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.50.0 – 2026-11-19 (aplikacja i serwer)
+- Zapotrzebowanie – zmiana budowy w edycji (tylko rola biuro): po potwierdzeniu zgłoszenie jest odrzucane („przeniesione do <nr>”), a powstaje nowe na wybraną budowę z tym samym zgłaszającym, wszystkimi pozycjami (po edycji), uwagami i kopią zdjęć; nowy numer nadaje serwer. Zdarzenie `zap_przen`, wpisy w logach obu zgłoszeń.
+
 ## 1.49.0 – 2026-11-19 (aplikacja i serwer)
 - Zapotrzebowanie – edycja zgłoszenia (tylko rola biuro): budowa (numer bez zmian), pozycje (nazwa, ilość, jednostka, uwaga, nowe zdjęcia), dodanie i usunięcie pozycji, uwagi; zdarzenie `zap_edyc` z opisem zmian. Usunięta pozycja zostaje w arkuszu ze statusem „usunięta”.
 - Log zmian w oknie zgłoszenia nad przyciskami (tylko rola biuro): zgłoszenie, statusy (pozycje, powód), edycje; wpisy niewysłane z dopiskiem „czeka na wysłanie”. Przyciski okna w dwóch rzędach.

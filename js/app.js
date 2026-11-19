@@ -1534,7 +1534,7 @@ const Dialogs = {
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zapotrzebowanie">
       <div class="shead"><h3>${ed ? 'Edycja ' + U.esc(ed.nr || 'zgłoszenia') : 'Zapotrzebowanie'}</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody zapform">
-        <label class="fld"><span class="mute">Budowa${ed ? ' (numer zgłoszenia się nie zmienia)' : ''}</span><select id="zB"><option value="">— zakupy ogólne (AKPiA) —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}</select></label>
+        <label class="fld"><span class="mute">Budowa${ed ? ' (zmiana budowy = to zgłoszenie odrzucone i nowe z tymi samymi pozycjami)' : ''}</span><select id="zB"><option value="">— zakupy ogólne (AKPiA) —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}</select></label>
         <div class="row"><div class="lbl grow">Pozycje <span id="zLn"></span></div></div>
         <div id="zL" class="zlist"></div>
         <button class="btn pri" id="zA" type="button">${ic('plus')} Dodaj pozycję</button>
@@ -1586,7 +1586,13 @@ const Dialogs = {
       const fot = poz.flatMap(x => x.foto);
       if (ed) {   // zdarzenie zap_edyc: pełna nowa lista pozycji (lp = istniejąca), usunięte Lp, uwagi, budowa + opis zmian do logu
         const kodN = $('#zB').value, uw = $('#zO').value.trim(), il = x => String(x.il).replace('.', ',') + ' ' + (x.j || ''), zm = [];
-        if ((ed.kod || '') !== kodN) zm.push('budowa: ' + (ed.kod || 'AKPiA') + ' → ' + (kodN || 'AKPiA'));
+        if ((ed.kod || '') !== kodN) {   // od 1.50.0: zmiana budowy → odrzucenie tego zgłoszenia i nowe (zgłaszający bez zmian, wszystkie pozycje po edycji)
+          if (!confirm(`Zmiana budowy na: ${zakBud(kodN)}.\nZgłoszenie ${ed.nr || ''} zostanie odrzucone, a powstanie nowe z ${poz.length} ${odm(poz.length, 'pozycją', 'pozycjami', 'pozycjami')}; zgłaszający: ${ed.kto}. Kontynuować?`)) return;
+          const e = await Zakupy.dodaj('zap_przen', { zid: ed.nr || ed.id, kod: kodN, kto: ed.kto, poz: poz.map(x => ({ n: x.n, il: x.il, j: x.j, uw: x.uw, foto: x.foto.map(f => f.fid) })), uwagi: uw, foto: [...(ed.foto || []), ...fot.map(f => f.fid)] });
+          for (const f of fot) await DB.set('zakFoto:' + f.fid, { blob: f.blob, zid: e.id });
+          if (fot.length) { await DB.set('zakFotoKolejka', [...((await DB.get('zakFotoKolejka')) || []), ...fot.map(f => f.fid)]); await liczOczekujace(); }
+          UI.toast('Zgłoszenie przeniesione – nowe czeka na numer'); UI.close(); if (UI.cur === 'zakupy') UI.refresh(); return;
+        }
         poz.filter(x => x.lp).forEach(x => { const o = ed.poz.find(y => y.lp === x.lp); if (!o) return; const r = [];
           if (o.n !== x.n) r.push('„' + o.n + '” → „' + x.n + '”'); if (il(o) !== il(x)) r.push(il(o) + ' → ' + il(x)); if ((o.uw || '') !== x.uw) r.push('uwaga: ' + (x.uw || '—')); if (x.foto.length) r.push('+' + x.foto.length + ' zdj.');
           if (r.length) zm.push(x.n + ': ' + r.join(', ')); });

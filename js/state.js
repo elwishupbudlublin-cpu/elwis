@@ -194,6 +194,10 @@ const Zakupy = {
     const L = srv.map(z => Object.assign({}, z, { poz: z.poz.map(x => Object.assign({}, x)) }));
     kol.filter(e => e.typ === 'zap').forEach(e => { if (!L.some(z => z.id === e.id)) L.unshift({ id: e.id, nr: nr[e.id] || '', kod: e.d.kod || '', ts: e.ts, kto: e.kto, uwagi: e.d.uwagi || '', foto: e.d.foto || [], czeka: 1, poz: (e.d.poz || []).map((x, i) => Object.assign({ lp: i + 1, st: 'nowe', zm: '' }, x)) }); });
     const znajdz = zid => L.find(x => x.nr === zid || x.id === zid || (nr[zid] && x.nr === nr[zid]));
+    kol.filter(e => e.typ === 'zap_przen').forEach(e => {   // zmiana budowy (od 1.50.0): stare → odrzucone, nowe czeka na numer
+      const z = znajdz(e.d.zid); if (z) { z.poz.forEach(x => { x.st = 'odrzucone'; x.zm = e.kto + ' · czeka na wysłanie'; }); z.log = [...(z.log || []), { ts: e.ts, kto: e.kto, opis: 'Zmiana budowy – zgłoszenie zostanie odrzucone, powstanie nowe (czeka na wysłanie)' }]; }
+      if (!nr[e.id]) L.unshift({ id: e.id, nr: '', kod: e.d.kod || '', ts: e.ts, kto: e.d.kto || e.kto, uwagi: e.d.uwagi || '', foto: e.d.foto || [], czeka: 1, log: [{ ts: e.ts, kto: e.kto, opis: 'Utworzone z ' + (z && z.nr || 'zgłoszenia') + ' – zmiana budowy (czeka na wysłanie)' }], poz: (e.d.poz || []).map((x, i) => ({ lp: i + 1, n: x.n, il: x.il, j: x.j, uw: x.uw, st: 'nowe', zm: '' })) });
+    });
     kol.filter(e => e.typ === 'zap_stat' || e.typ === 'zap_edyc').forEach(e => {
       const z = znajdz(e.d.zid); if (!z) return; z.log = (z.log || []).slice();
       if (e.typ === 'zap_stat') { z.poz.forEach(x => { if (!e.d.lp || e.d.lp.includes(x.lp)) { x.st = e.d.st; x.zm = e.kto + ' · czeka na wysłanie'; } }); z.log.push({ ts: e.ts, kto: e.kto, opis: 'Status: ' + ZAK_ST[e.d.st] + ' (czeka na wysłanie)' }); return; }

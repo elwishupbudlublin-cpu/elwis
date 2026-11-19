@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.49.0';
+const SCRIPT_VERSION = '1.50.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -501,7 +501,7 @@ function zakupy_(b, tablet) {
   const odp = { ok: true, accepted: [], nr: {} };
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   try {
-    const evs = (b.zdarzenia || []).filter(e => e && e.id && ['zap', 'zap_stat', 'zap_edyc'].indexOf(e.typ) >= 0).slice(0, 100);
+    const evs = (b.zdarzenia || []).filter(e => e && e.id && ['zap', 'zap_stat', 'zap_edyc', 'zap_przen'].indexOf(e.typ) >= 0).slice(0, 100);
     const konta = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (tak_(r[4]) && txt_(r[2]) !== 'podwykonawca') konta[txt_(r[0])] = txt_(r[2]) || 'pracownik'; });
     const zv = zd.getLastRow() > 1 ? zd.getRange(2, 1, zd.getLastRow() - 1, 6).getDisplayValues() : [];
     const have = {}, mapa = {};   // id zdarzenia → true; id zgłoszenia (tymczasowe) → nr
@@ -522,6 +522,23 @@ function zakupy_(b, tablet) {
         const rows = pozycje.map((x, i) => [nr, i + 1, kod || 'AKPiA', kiedy, c(e.kto), c(x.n).slice(0, 200), c(x.il).slice(0, 20), c(x.j).slice(0, 10), [c(x.uw), i === 0 && txt_(d.uwagi) ? 'całe zgłoszenie: ' + c(d.uwagi) : ''].filter(String).join(' · ').slice(0, 1000), ZAK_ST.nowe, '']);
         poz.getRange(poz.getLastRow() + 1, 1, rows.length, 11).setNumberFormat(TEXT).setValues(rows);
         mapa[e.id] = nr; odp.nr[e.id] = nr;
+      } else if (e.typ === 'zap_przen') {   // zmiana budowy (od 1.50.0, tylko biuro): stare zgłoszenie → odrzucone, nowe z tymi samymi pozycjami i zgłaszającym
+        if (rola !== 'biuro') { odp.accepted.push(e.id); return; }
+        const stary = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(stary)) return;
+        const kod = txt_(d.kod) && aktywne_().some(p => p.kod === txt_(d.kod)) ? txt_(d.kod) : '';
+        const pozycje = (d.poz || []).filter(x => x && txt_(x.n)).slice(0, 50); if (!pozycje.length) { odp.accepted.push(e.id); return; }
+        const v = poz.getLastRow() > 1 ? poz.getRange(2, 1, poz.getLastRow() - 1, 11).getDisplayValues() : [];
+        const r0 = v.find(r => txt_(r[0]) === stary); if (!r0) { odp.accepted.push(e.id); return; }
+        if (nast === null) nast = zakNastepny_(poz);
+        const nowy = 'Z-' + ('0000' + nast++).slice(-5) + '-' + (kod || 'AKPiA') + '-' + Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyMM');
+        const kiedy = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm'), zm = txt_(e.kto) + ' ' + Utilities.formatDate(new Date(), 'Europe/Warsaw', 'dd.MM HH:mm');
+        const rows = pozycje.map((x, i) => [nowy, i + 1, kod || 'AKPiA', kiedy, txt_(r0[4]), c(x.n).slice(0, 200), c(x.il).slice(0, 20), c(x.j).slice(0, 10), [c(x.uw), i === 0 && txt_(d.uwagi) ? 'całe zgłoszenie: ' + c(d.uwagi) : '', i === 0 ? 'przeniesione z ' + stary : ''].filter(String).join(' · ').slice(0, 1000), ZAK_ST.nowe, zm]);
+        poz.getRange(poz.getLastRow() + 1, 1, rows.length, 11).setNumberFormat(TEXT).setValues(rows);
+        v.forEach((r, i) => { if (txt_(r[0]) === stary && txt_(r[9]) !== ZAK_ST.usuniete) poz.getRange(i + 2, 9, 1, 3).setNumberFormat(TEXT).setValues([[(txt_(r[8]) ? txt_(r[8]) + ' · ' : '') + 'przeniesione do ' + nowy, ZAK_ST.odrzucone, zm]]); });
+        try { const fs = zakFolder_(stary, false); if (fs) { const fn = zakFolder_(nowy, true), it = fs.getFiles(); while (it.hasNext()) it.next().makeCopy(fn); } } catch (err) { Logger.log('zdjęcia przeniesienia: ' + err); }
+        d.nowy = nowy; mapa[e.id] = nowy; odp.nr[e.id] = nowy;
+        const zap = { kod, poz: pozycje, uwagi: txt_(d.uwagi), foto: (d.foto || []).slice(0, 30), z: stary, przez: txt_(e.kto) };
+        zd.getRange(zd.getLastRow() + 1, 1, 1, 8).setNumberFormat(TEXT).setValues([[e.id + '-n', txt_(e.ts), txt_(r0[4]), tablet, nowy, 'zap', JSON.stringify(zap).slice(0, 45000), now]]);
       } else if (e.typ === 'zap_edyc') {   // edycja zgłoszenia – tylko rola biuro (od 1.49.0)
         if (rola !== 'biuro') { odp.accepted.push(e.id); return; }
         const nr = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(nr)) return;
@@ -532,7 +549,7 @@ function zakupy_(b, tablet) {
         const nr = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(nr)) return;   // zgłoszenie jeszcze bez numeru – tablet ponowi
         zakStatus_(poz, nr, d, txt_(e.kto));
       }
-      zd.getRange(zd.getLastRow() + 1, 1, 1, 8).setNumberFormat(TEXT).setValues([[e.id, txt_(e.ts), c(e.kto).slice(0, 80), tablet, e.typ === 'zap' ? mapa[e.id] : (mapa[txt_(d.zid)] || txt_(d.zid)), e.typ, JSON.stringify(d).slice(0, 45000), now]]);
+      zd.getRange(zd.getLastRow() + 1, 1, 1, 8).setNumberFormat(TEXT).setValues([[e.id, txt_(e.ts), c(e.kto).slice(0, 80), tablet, e.typ === 'zap' ? mapa[e.id] : e.typ === 'zap_przen' ? (mapa[txt_(d.zid)] || txt_(d.zid)) : (mapa[txt_(d.zid)] || txt_(d.zid)), e.typ, JSON.stringify(d).slice(0, 45000), now]]);
       have[e.id] = true; odp.accepted.push(e.id);
     });
     if (b.zdjecie && b.zdjecie.b64) odp.zdjecie = zakZdjecie_(b.zdjecie, mapa);
@@ -601,7 +618,8 @@ function zakLista_(poz, zd) {
     const z = m[txt_(r[4])]; if (!z) return;
     const d = safeJson_(r[6]), typ = txt_(r[5]), kto = txt_(r[2]), ts = txt_(r[1]);
     z.log = z.log || [];
-    if (typ === 'zap') { z.foto = (d.foto || []).slice(0, 30); z.id = txt_(r[0]); z.uwagi = txt_(d.uwagi); (d.poz || []).forEach((x, i) => { const q = z.poz.find(y => y.lp === i + 1); if (q) q.foto = (x && x.foto) || []; }); z.log.push({ ts, kto, opis: 'Zgłoszenie: ' + (d.poz || []).length + ' poz.' }); }
+    if (typ === 'zap') { z.foto = (d.foto || []).slice(0, 30); z.id = txt_(r[0]); z.uwagi = txt_(d.uwagi); (d.poz || []).forEach((x, i) => { const q = z.poz.find(y => y.lp === i + 1); if (q) q.foto = (x && x.foto) || []; }); z.log.push({ ts, kto: d.przez || kto, opis: d.z ? 'Utworzone z ' + d.z + ' – zmiana budowy (zgłaszający: ' + kto + ')' : 'Zgłoszenie: ' + (d.poz || []).length + ' poz.' }); }
+    else if (typ === 'zap_przen') z.log.push({ ts, kto, opis: 'Zmiana budowy → ' + txt_(d.nowy) + ' – to zgłoszenie odrzucone' });
     else if (typ === 'zap_stat') z.log.push({ ts, kto, opis: 'Status: ' + (STN[d.st] || d.st) + (Array.isArray(d.lp) && d.lp.length ? ' (poz. ' + d.lp.join(', ') + ')' : ' (wszystkie)') + (txt_(d.powod) ? ' – ' + txt_(d.powod) : '') });
     else if (typ === 'zap_edyc') { z.uwagi = txt_(d.uwagi); (d.poz || []).forEach(x => { if (x && (x.foto || []).length) z.foto = z.foto.concat(x.foto).slice(0, 30); }); z.log.push({ ts, kto, opis: 'Edycja: ' + txt_(d.opis) }); }
   });
