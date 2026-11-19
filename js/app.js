@@ -2162,6 +2162,8 @@ function settings() {
   $('#nDok').onclick = () => { UI.close(); UI.go('dokumenty', { typ: 'tech' }); };
   $('#nPrio').onclick = () => { UI.close(); UI.go('priorytety'); };
   $('#nZak').onclick = () => { UI.close(); UI.go('zakupy'); };
+  // od 1.50.1: przy otwartym oknie (modal) tło nie przewija się i nie powiększa (blokada gestu powiększania poza oknem)
+  new MutationObserver(() => document.body.classList.toggle('mopen', !!modal.firstElementChild)).observe(modal, { childList: true });
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });
   window.addEventListener('offline', () => UI.net());

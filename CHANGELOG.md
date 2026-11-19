@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.50.1 – 2026-11-19 (aplikacja)
+- Protokoły: sekcja „Zapisane protokoły poza tym widokiem” – protokoły z urządzeń w innym etapie, o niepasującym typie albo spoza listy urządzeń (wcześniej licznik na kafelku je liczył, a lista ich nie pokazywała).
+- Otwarte okno (modal): tło zablokowane – bez przewijania i powiększania strony pod oknem; w oknie przewijanie w pionie.
+
 ## 1.50.0 – 2026-11-19 (aplikacja i serwer)
 - Zapotrzebowanie – zmiana budowy w edycji (tylko rola biuro): po potwierdzeniu zgłoszenie jest odrzucane („przeniesione do <nr>”), a powstaje nowe na wybraną budowę z tym samym zgłaszającym, wszystkimi pozycjami (po edycji), uwagami i kopią zdjęć; nowy numer nadaje serwer. Zdarzenie `zap_przen`, wpisy w logach obu zgłoszeń.
 

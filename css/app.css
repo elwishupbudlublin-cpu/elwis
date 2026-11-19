@@ -618,3 +618,8 @@ main{padding:16px 16px 100px}
 .zlog{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
 .zlogw{display:grid;grid-template-columns:auto auto 1fr;gap:8px;font-size:13px;align-items:baseline}.zlogw .m{color:#64748b;white-space:nowrap}.zlogw b{white-space:nowrap}
 .sfoot.zfoot{flex-direction:column;align-items:stretch;gap:8px}.zfoot .zfr{display:flex;gap:8px}.zfoot .zfr .btn{flex:1 1 0;min-width:0;white-space:nowrap}
+
+/* 1.50.1: otwarte okno – tło zablokowane (bez przewijania i powiększania strony pod oknem) */
+body.mopen{overflow:hidden}
+body.mopen .ov{touch-action:pan-y;overscroll-behavior:contain}
+body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}

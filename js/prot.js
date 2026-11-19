@@ -205,7 +205,15 @@ ProtViews.protokoly = function () {
   const blokPoz = pr => `<div class="card stack"><b>${U.esc(pr.nazwa)} <span class="mute">v${U.esc(pr.wersja)}</span></b>
       ${zapisane(pr).map(x => `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc(x.urz || 'bez urządzenia')}</span>${Prot.chip(x)}</button>`).join('')}
       ${wybor(pr, urz)}</div>`;
-  view.innerHTML = etapSwitch()
+  // od 1.50.1: zapisane protokoły, których nie widać wyżej (urządzenie w innym etapie, typ niepasujący do powiązania, protokół spoza listy) – licznik na kafelku liczy wszystkie
+  const urzIds = new Set(urz.map(u => u.id)), widoczne = new Set();
+  ded.forEach(pr => Object.values(F.prot).filter(x => x.def === pr.id && (!x.urz || (urzIds.has(x.urz) && Prot.pow(pr).length && Prot.pasuje(pr, x.urz)))).forEach(x => widoczne.add(x.pid)));
+  poz.forEach(pr => zapisane(pr).forEach(x => widoczne.add(x.pid)));
+  const poza = Object.values(F.prot).filter(x => x.stan !== 'usuniety' && !widoczne.has(x.pid)).sort((a, b) => a.ts < b.ts ? 1 : -1);
+  const urzWsz = (S.proj && S.proj.urzadzenia) || [];
+  const blokPoza = poza.length ? `<div class="card stack" style="border-left:4px solid var(--warn,#d97706)"><b>Zapisane protokoły poza tym widokiem (${poza.length})</b><span class="mute" style="font-size:13px">Urządzenie w innym etapie albo protokół niepowiązany z typem urządzenia.</span>
+      ${poza.map(x => { const u = urzWsz.find(y => y.id === x.urz), pr = Prot.def(x.def, x.wersja); return `<button class="btn sm" data-pid="${U.esc(x.pid)}" style="text-align:left"><span class="grow">${U.esc((pr && pr.nazwa) || x.def)} · ${U.esc(x.urz || 'bez urządzenia')}${u && u.etap ? ' · etap ' + U.esc(u.etap) : ''}${x.urz && !u ? ' · urządzenia nie ma na liście' : ''}</span>${Prot.chip(x)}</button>`; }).join('')}</div>` : '';
+  view.innerHTML = etapSwitch() + blokPoza
     + (ded.length ? '<div class="lbl">Dedykowane tej budowie</div>' + ded.map(blokDed).join('') : '<p class="mute">Brak protokołów dedykowanych tej budowie (zakres prac i typy urządzeń).</p>')
     + (poz.length ? `<details class="card" style="margin-top:12px"><summary><b>Pozostałe protokoły (${poz.length})</b></summary><div class="stack" style="margin-top:8px">${poz.map(blokPoz).join('')}</div></details>` : '');
   bindEtap();
