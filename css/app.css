@@ -560,3 +560,10 @@ main{padding:16px 16px 100px}
 .ikier>.ic{width:26px;height:26px;color:var(--blue)}
 .ilist{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .ilist .irow{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
+/* 1.45.0: inne kontakty w oknie „i” */
+.ikont{display:flex;flex-direction:column;margin-top:6px;border-top:1px solid var(--line)}
+.ikont .ikrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.ikedit{display:grid;grid-template-columns:1fr 1fr 44px;grid-template-areas:"r r x" "n t t";gap:6px;padding:8px;border:1px solid var(--line);border-radius:12px;background:#f8fafc}
+.ikedit input{width:100%;min-width:0}
+.ikedit .kR{grid-area:r}.ikedit .kN{grid-area:n}.ikedit .kT{grid-area:t}
+.ikedit button{grid-area:x;width:44px;min-width:44px;padding:0;justify-self:end}

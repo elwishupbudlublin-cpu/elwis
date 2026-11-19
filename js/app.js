@@ -1286,7 +1286,7 @@ const Dialogs = {
 
   /* Informacja o budowie (od 1.44.0): kierownik HUP-BUD z telefonem, notatka o budowie (Uwagi dla ekip), pełne dane z Bazy.
      Rola biuro: edycja notatki, kierownika i telefonu – zdarzenie projekt_edyc, serwer zapisuje w Bazie → Projekty (H, P, Q). */
-  infoBudowy(kod, edycja) {
+  infoBudowy(kod, edycja, opcje = {}) {
     const p = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod); if (!p) return;
     const biuro = Session.isBiuro();
     const wiersz = (l, v) => v ? `<div class="irow"><span class="mute">${l}</span><span>${v}</span></div>` : '';
@@ -1300,19 +1300,42 @@ const Dialogs = {
         ${edycja ? `
           <label class="fld"><span class="mute">Kierownik HUP-BUD</span><input id="iK" type="text" list="dlK" value="${U.esc(p.kierownik || '')}" autocomplete="off" style="width:100%"><datalist id="dlK">${Object.keys(znani).sort((a, b) => a.localeCompare(b, 'pl')).map(k => `<option value="${U.esc(k)}">`).join('')}</datalist></label>
           <label class="fld"><span class="mute">Telefon kierownika</span><input id="iT" type="text" inputmode="tel" value="${U.esc(p.telKier || '')}" placeholder="np. 502 500 669" style="width:100%"></label>
-          <label class="fld"><span class="mute">Notatka o budowie (dla ekip)</span><textarea id="iU" rows="9" style="width:100%">${U.esc(p.uwagi || '')}</textarea></label>`
+          <label class="fld"><span class="mute">Notatka o budowie (dla ekip)</span><textarea id="iU" rows="9" style="width:100%">${U.esc(p.uwagi || '')}</textarea></label>
+          <div><div class="lbl">Inne kontakty</div><div id="iKL" class="stack" style="gap:8px;margin-top:6px"></div>
+            <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn sm" id="iKA" type="button">${ic('plus')} Wpisz ręcznie</button>${'contacts' in navigator && navigator.contacts && navigator.contacts.select ? `<button class="btn sm" id="iKC" type="button">${ic('kier')} Z kontaktów urządzenia</button>` : ''}</div></div>`
         : `${(a => a && a.nazwa ? `<div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik AKPiA</div><b>${U.esc(a.nazwa)}</b></div>${a.tel ? `<a class="btn sm" href="tel:${U.esc(a.tel.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(a.tel)}</a>` : ''}</div>` : '')(S.boot && S.boot.kierownikAkpia)}
           <div class="card ikier">${ic('kier')}<div class="grow"><div class="mute">Kierownik HUP-BUD</div><b>${U.esc(p.kierownik || '— nie przypisano')}</b></div>${tel}</div>
           <div><div class="lbl">Notatka o budowie</div><p style="white-space:pre-wrap;line-height:1.55;margin:6px 0 0">${U.esc(p.uwagi || '— brak')}</p></div>
+          <div><div class="row" style="align-items:center"><div class="lbl grow">Inne kontakty</div>${biuro ? `<button class="btn sm" id="iKon">${ic('plus')} Dodaj kontakt</button>` : ''}</div>
+            <div class="ikont">${(p.kontakty || []).map(k => `<div class="ikrow"><div class="grow"><div class="mute">${U.esc(k.rola || 'kontakt')}</div><b>${U.esc(k.nazwa || '—')}</b></div>${k.tel ? `<a class="btn sm" href="tel:${U.esc(k.tel.replace(/[^\d+]/g, ''))}">${ic('tel')} ${U.esc(k.tel)}</a>` : ''}</div>`).join('') || '<span class="mute">Brak – biuro dodaje kontakty w trakcie budowy (np. elektryk, kierownik GW, dostawca).</span>'}</div></div>
           <div class="ilist">${wiersz('Adres', U.esc(p.adres))}${wiersz('Kontakt na budowie', U.esc(p.kontakt))}${wiersz('Zakres prac', U.esc((p.zakres || []).join(', ')))}${wiersz('Etapy budowy', etapy)}${wiersz('Inwestor', U.esc(p.inwestor))}${wiersz('Zamawiający', U.esc(p.zamawiajacy))}${wiersz('Obiekt wojskowy', p.wojskowy === 'tak' ? 'tak – tylko osoby z uprawnieniem M' : '')}</div>`}
       </div>
       <div class="sfoot">${edycja ? '<button class="btn" id="iX">Anuluj</button><button class="btn pri" id="iS">Zapisz</button>' : '<button class="btn" id="iX">Zamknij</button>'}</div></div></div>`;
     $('#iX').onclick = () => edycja ? Dialogs.infoBudowy(kod) : UI.close();
+    // inne kontakty (od 1.45.0): rola, imię i nazwisko / firma, telefon – edycja w trybie „Edytuj” (biuro)
+    const wierszK = (k = {}) => { const d = document.createElement('div'); d.className = 'ikedit';
+      d.innerHTML = `<input class="kR" type="text" placeholder="Rola, np. Elektryk" value="${U.esc(k.rola || '')}" list="dlRol"><input class="kN" type="text" placeholder="Imię i nazwisko / firma" value="${U.esc(k.nazwa || '')}"><input class="kT" type="text" inputmode="tel" placeholder="Telefon" value="${U.esc(k.tel || '')}"><button class="btn sm bad" type="button" aria-label="Usuń kontakt">✕</button>`;
+      d.querySelector('button').onclick = () => d.remove(); $('#iKL').appendChild(d); return d; };
+    if ($('#iKL')) { (p.kontakty || []).forEach(k => wierszK(k)); if (opcje.dodaj || !(p.kontakty || []).length) wierszK().querySelector('.kR').focus();
+      $('#iKL').insertAdjacentHTML('afterend', `<datalist id="dlRol">${['Elektryk', 'Kierownik budowy GW', 'Kierownik robót GW', 'Inspektor nadzoru', 'Projektant', 'Dostawca', 'Serwis', 'Inwestor'].map(r => `<option value="${r}">`).join('')}</datalist>`);
+      $('#iKA').onclick = () => wierszK().querySelector('.kR').focus();
+      // od 1.45.0: wybór z książki kontaktów tabletu / telefonu (Chrome na Androidzie – Contact Picker API); rolę wpisuje się ręcznie
+      if ($('#iKC')) $('#iKC').onclick = async () => {
+        try {
+          const wyb = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+          [...modal.querySelectorAll('.ikedit')].filter(r => !r.querySelector('.kN').value && !r.querySelector('.kT').value && !r.querySelector('.kR').value).forEach(r => r.remove());
+          let ost = null; (wyb || []).forEach(c => { ost = wierszK({ nazwa: (c.name || [])[0] || '', tel: (c.tel || [])[0] || '' }); });
+          if (ost) { ost.querySelector('.kR').focus(); UI.toast('Dodano z kontaktów – wpisz rolę (np. Elektryk)'); }
+        } catch (e) { UI.toast('Nie udało się otworzyć kontaktów urządzenia – wpisz ręcznie.'); }
+      }; }
+    if ($('#iKon')) $('#iKon').onclick = () => Dialogs.infoBudowy(kod, true, { dodaj: true });
     if ($('#iEd')) $('#iEd').onclick = () => Dialogs.infoBudowy(kod, true);
     if ($('#iK')) $('#iK').oninput = () => { const t = znani[$('#iK').value.trim()]; if (t) $('#iT').value = t; };   // wybór znanego kierownika podstawia jego telefon
     if ($('#iS')) $('#iS').onclick = async () => {
       const nowe = { kierownik: $('#iK').value.trim(), telKier: $('#iT').value.trim(), uwagi: $('#iU').value.replace(/\s+$/, '') }, d = {};
       Object.keys(nowe).forEach(k => { if (nowe[k] !== (p[k] || '')) d[k] = nowe[k]; });
+      const kon = [...modal.querySelectorAll('.ikedit')].map(r => ({ rola: r.querySelector('.kR').value.trim(), nazwa: r.querySelector('.kN').value.trim(), tel: r.querySelector('.kT').value.trim() })).filter(k => k.nazwa || k.tel);
+      if (JSON.stringify(kon) !== JSON.stringify(p.kontakty || [])) d.kontakty = kon;
       if (!Object.keys(d).length) return Dialogs.infoBudowy(kod);
       await addEvent('projekt_edyc', '', d);
       Object.assign(p, d); await DB.set('boot', S.boot);   // widoczne od razu na tym tablecie; inne – po synchronizacji

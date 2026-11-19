@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.44.0';
+const SCRIPT_VERSION = '1.45.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -174,7 +174,8 @@ function aktywneBaza_() {
       etapy: etapy_(r[12]), listaCU: txt_(r[9]),
       inwestor: txt_(r[13]), zamawiajacy: txt_(r[14]),   // schemat 1.5 – do protokołów
       kierownik: txt_(r[15]),                              // schemat 1.10 – kierownik HUP-BUD opiekujący się budową
-      telKier: txt_(r[16])                                 // schemat 1.13 – telefon kierownika (skill kopiuje z ekipy-i-pracownicy.md)
+      telKier: txt_(r[16]),                                // schemat 1.13 – telefon kierownika (skill kopiuje z ekipy-i-pracownicy.md)
+      kontakty: kontaktyZ_(r[17])                          // schemat 1.14 – Inne kontakty: „Rola: Nazwa, telefon”, jeden w wierszu
     }));
 }
 /** „A: Budynek A; B: Budynek B” → [{id:'A', opis:'Budynek A'}, …]; puste → [] (budowa bez podziału). */
@@ -469,6 +470,22 @@ function pinezka_(kod, e, biuro) {
   return false;
 }
 
+/* Inne kontakty (od 1.45.0, kolumna R Projekty): wiersz „Rola: Imię Nazwisko / firma, telefon” – czytelny i edytowalny w arkuszu */
+function kontaktyZ_(v) {
+  return txt_(v).split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 30).map(l => {
+    const m = l.match(/^([^:]{1,60}):\s*(.*)$/), rola = m ? m[1].trim() : '', reszta = m ? m[2] : l;
+    const t = reszta.match(/,\s*([+\d][\d\s\-()]{5,})\s*$/);
+    return { rola, nazwa: (t ? reszta.slice(0, t.index) : reszta).trim(), tel: t ? t[1].trim() : '' };
+  });
+}
+function kontaktyDo_(lista) {
+  return lista.slice(0, 30).map(k => {
+    const c = x => txt_(x).replace(/[\r\n:]/g, ' ').trim();
+    const rola = c(k.rola).slice(0, 60), nazwa = c(k.nazwa).replace(/,/g, ' ').slice(0, 120), tel = c(k.tel).slice(0, 40);
+    return (rola ? rola + ': ' : '') + nazwa + (tel ? ', ' + tel : '');
+  }).filter(Boolean).join('\n').slice(0, 5000);
+}
+
 /* Informacja o budowie z tabletu (od 1.44.0, rola biuro): Uwagi dla ekip (H), Kierownik (P), Telefon kierownika (Q) w Projekty */
 function projektEdyc_(kod, e) {
   const d = e.d || {}, sh = baza_().getSheetByName('Projekty'), v = sh.getRange(1, 1, sh.getLastRow(), 1).getDisplayValues();
@@ -476,6 +493,7 @@ function projektEdyc_(kod, e) {
     if (d.uwagi != null) sh.getRange(i + 1, 8).setNumberFormat(TEXT).setValue(txt_(d.uwagi).slice(0, 5000));
     if (d.kierownik != null) sh.getRange(i + 1, 16).setNumberFormat(TEXT).setValue(txt_(d.kierownik).slice(0, 80));
     if (d.telKier != null) sh.getRange(i + 1, 17).setNumberFormat(TEXT).setValue(txt_(d.telKier).slice(0, 40));
+    if (Array.isArray(d.kontakty)) sh.getRange(i + 1, 18).setNumberFormat(TEXT).setValue(kontaktyDo_(d.kontakty));
     CACHE.remove('aktywne');
     return true;
   }

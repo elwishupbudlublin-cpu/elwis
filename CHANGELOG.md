@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.45.0 – 2026-11-19 (aplikacja i serwer, schemat 1.14)
+- Okno „i” budowy: sekcja „Inne kontakty” (rola, imię i nazwisko / firma, telefon do dotknięcia); rola biuro dodaje i usuwa kontakty w trakcie budowy („+ Dodaj kontakt” lub „Edytuj”).
+- Dodawanie: „Wpisz ręcznie” albo „Z kontaktów urządzenia” (książka kontaktów tabletu / telefonu – Chrome na Androidzie, Contact Picker API; można wybrać kilka osób, rolę dopisuje się ręcznie). Gdzie przeglądarka nie obsługuje wyboru kontaktów, przycisk jest ukryty.
+- Serwer: nowa kolumna R „Inne kontakty” w Projekty (jeden kontakt w wierszu: „Rola: Nazwa, telefon”), zapis przez `projekt_edyc`, odczyt w bootstrap; można edytować także w arkuszu.
+
 ## 1.44.0 – 2026-11-19 (aplikacja i serwer, schemat 1.13)
 - Nagłówek budowy: Kierownik AKPiA (pierwszy, na każdej budowie – Konfiguracja → `kierownik_akpia`) i Kierownik HUP-BUD budowy (Projekty → P, telefon z nowej kolumny Q „Telefon kierownika”), telefony do dotknięcia (dzwonienie); notatka o budowie skrócona do 2 linii.
 - Przycisk „i”: pełna informacja o budowie – kierownicy z telefonami, cała notatka, adres, kontakt, zakres prac, etapy, inwestor, zamawiający, obiekt wojskowy.
