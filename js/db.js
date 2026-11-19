@@ -36,6 +36,7 @@ const DB = (() => {
     get: (k) => tx('kv', 'readonly', s => req(s.get(k))),
     set: (k, v) => tx('kv', 'readwrite', s => { s.put(v, k); }),
     del: (k) => tx('kv', 'readwrite', s => { s.delete(k); }),
+    keys: () => tx('kv', 'readonly', s => req(s.getAllKeys())),   // od 1.48.0 (porządki zdjęć zakupów)
     putEvent: (e) => tx('events', 'readwrite', s => { s.put(e); }),
     putEvents: (arr) => tx('events', 'readwrite', s => { arr.forEach(e => s.put(e)); }),
     eventsFor: (kod) => tx('events', 'readonly', s => req(s.index('kod').getAll(kod))),

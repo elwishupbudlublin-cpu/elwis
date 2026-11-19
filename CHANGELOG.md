@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.48.0 – 2026-11-19 (aplikacja i serwer, schemat 1.15)
+- Zapotrzebowanie: nowy ekran w dolnym pasku (za Dokumentami technicznymi) i przycisk „Zapotrzebowanie” pod „Zgłoś brak” na kafelku Braki (ikona koszyka). Zgłoszenie na budowę (wpisana automatycznie) albo zakupy ogólne (AKPiA); pozycje dodawane w małym oknie (nazwa z podpowiedziami, ilość, jednostka, uwaga i zdjęcie pozycji), uwagi do całego zgłoszenia; działa offline.
+- Statusy pozycji: nowe → w realizacji → dostarczone; odrzucone (z powodem) – zmienia tylko rola biuro (zaznaczenie pozycji w oknie zgłoszenia); pracownicy widzą statusy. Na tablecie: wszystkie zgłoszenia w toku + 20 ostatnich zakończonych.
+- Serwer: operacja `zakupy` – arkusz „Zapotrzebowania” w folderze Zakupy (Pozycje: wiersz na pozycję; Zdarzenia: historia), numer Z-00012-<kod budowy|AKPiA>-<rrmm> nadawany przy synchronizacji, zdjęcia w Zakupy/Zdjęcia/<rok>/<nr>/; arkusz w cotygodniowej kopii. Konfiguracja: folder_zakupy_id, zakupy_arkusz_id, zakupy_zdjecia_id.
+
 ## 1.47.0 – 2026-11-19 (aplikacja)
 - Lista urządzeń – zbiorcze zaznaczanie (tylko rola biuro): przycisk „Zaznaczanie”, pola wyboru przy wierszach, „Zaznacz widoczne” (wg filtra), „Odznacz wszystko”, pasek z licznikiem i „Dalej: kroki / nr”.
 - Okno zbiorcze: zaznacz / odznacz kroki (jeden typ – wybór kroków, kilka typów – wszystkie kroki), wariant kroku, wspólny nr seryjny tylko tam, gdzie brak numeru, ostrzeżenie o brakujących numerach, potwierdzenie z liczbą urządzeń i kroków.

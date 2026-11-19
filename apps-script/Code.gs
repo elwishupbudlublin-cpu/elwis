@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.45.0';
+const SCRIPT_VERSION = '1.48.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -54,7 +54,7 @@ function handle_(p, body) {
     if (dost.wygasl) return out_({ ok: false, error: 'Dostęp wygasł ' + dost.wazny + ' – skontaktuj się z HUP-BUD' });
     const akcja = body ? body.action : p.action;
     if (dost.budowy) {
-      if (['plan', 'zadania', 'docx', 'priorytety'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
+      if (['plan', 'zadania', 'docx', 'priorytety', 'zakupy'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
       const kod = String((body && body.kod) || p.kod || '');
       if (['project', 'events', 'foto', 'push'].indexOf(akcja) >= 0 && dost.budowy.indexOf(kod) < 0) return out_({ ok: false, error: 'Brak dostępu do tej budowy' });
     }
@@ -68,6 +68,7 @@ function handle_(p, body) {
       case 'foto': return out_(foto_(String(p.kod || ''), String(p.fid || '')));
       case 'push': return out_(push_(body, tablet, dost));
       case 'zadania': return out_(zadania_(body || {}, tablet));
+      case 'zakupy': return out_(zakupy_(body || {}, tablet));   // od 1.48.0: zapotrzebowania (folder Zakupy)
       case 'docx': return out_(docx_(body || {}));
       case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
       default: return out_({ ok: false, error: 'Nieznana operacja' });
@@ -484,6 +485,98 @@ function kontaktyDo_(lista) {
     const rola = c(k.rola).slice(0, 60), nazwa = c(k.nazwa).replace(/,/g, ' ').slice(0, 120), tel = c(k.tel).slice(0, 40);
     return (rola ? rola + ': ' : '') + nazwa + (tel ? ', ' + tel : '');
   }).filter(Boolean).join('\n').slice(0, 5000);
+}
+
+/* ===== Zapotrzebowania (od 1.48.0, schemat 1.15) =====
+   Folder „Zakupy” (górny poziom Dysku ELWIS): arkusz „Zapotrzebowania” (Konfiguracja → zakupy_arkusz_id) z zakładkami
+   Pozycje (jeden wiersz na pozycję) i Zdarzenia (historia, nie edytować) oraz folder Zdjęcia (zakupy_zdjecia_id) → rok → nr zgłoszenia.
+   Nr zgłoszenia: Z-00012-<kod budowy albo AKPiA>-<rrmm>, kolejny numer wspólny dla wszystkich (bez zerowania).
+   Statusy pozycji: nowe → w realizacji → dostarczone; odrzucone. Status zmienia tylko rola biuro. Operacja `zakupy`:
+   body.zdarzenia (zap / zap_stat), body.zdjecie {fid, zid, b64} (pojedynczo), body.foto {fid, zid} (podgląd) – zawsze zwraca listę. */
+const ZAK_ST = { nowe: 'nowe', realizacja: 'w realizacji', dostarczone: 'dostarczone', odrzucone: 'odrzucone' };
+function zakArk_() { const id = konfig_().zakupy_arkusz_id; if (!id) throw new Error('Brak arkusza zakupów (Konfiguracja → zakupy_arkusz_id)'); return SpreadsheetApp.openById(id); }
+function zakupy_(b, tablet) {
+  const ss = zakArk_(), poz = ss.getSheetByName('Pozycje'), zd = ss.getSheetByName('Zdarzenia');
+  if (b.foto) return zakFoto_(b.foto);
+  const odp = { ok: true, accepted: [], nr: {} };
+  const lock = LockService.getScriptLock(); lock.waitLock(25000);
+  try {
+    const evs = (b.zdarzenia || []).filter(e => e && e.id && (e.typ === 'zap' || e.typ === 'zap_stat')).slice(0, 100);
+    const konta = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (tak_(r[4]) && txt_(r[2]) !== 'podwykonawca') konta[txt_(r[0])] = txt_(r[2]) || 'pracownik'; });
+    const zv = zd.getLastRow() > 1 ? zd.getRange(2, 1, zd.getLastRow() - 1, 6).getDisplayValues() : [];
+    const have = {}, mapa = {};   // id zdarzenia → true; id zgłoszenia (tymczasowe) → nr
+    zv.forEach(r => { have[txt_(r[0])] = true; if (txt_(r[5]) === 'zap') mapa[txt_(r[0])] = txt_(r[4]); });
+    const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', "yyyy-MM-dd'T'HH:mm:ss"), c = x => txt_(x).replace(/^[=+@-]/, "'$&");
+    let nast = null;
+    evs.sort((x, y) => (txt_(x.ts) < txt_(y.ts) ? -1 : 1)).forEach(e => {
+      if (have[e.id]) { odp.accepted.push(e.id); if (e.typ === 'zap') odp.nr[e.id] = mapa[e.id]; return; }
+      const rola = konta[txt_(e.kto)]; if (!rola) { odp.accepted.push(e.id); return; }   // nieznane / nieaktywne konto – pomijamy
+      const d = e.d || {};
+      if (e.typ === 'zap') {
+        const pozycje = (d.poz || []).filter(x => x && txt_(x.n)).slice(0, 50); if (!pozycje.length) { odp.accepted.push(e.id); return; }
+        const kod = txt_(d.kod) && aktywne_().some(p => p.kod === txt_(d.kod)) ? txt_(d.kod) : '';
+        if (nast === null) nast = zakNastepny_(poz);
+        const rrmm = Utilities.formatDate(new Date(txt_(e.ts) || Date.now()), 'Europe/Warsaw', 'yyMM');
+        const nr = 'Z-' + ('0000' + nast++).slice(-5) + '-' + (kod || 'AKPiA') + '-' + rrmm;
+        const kiedy = Utilities.formatDate(new Date(txt_(e.ts) || Date.now()), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm');
+        const rows = pozycje.map((x, i) => [nr, i + 1, kod || 'AKPiA', kiedy, c(e.kto), c(x.n).slice(0, 200), c(x.il).slice(0, 20), c(x.j).slice(0, 10), [c(x.uw), i === 0 && txt_(d.uwagi) ? 'całe zgłoszenie: ' + c(d.uwagi) : ''].filter(String).join(' · ').slice(0, 1000), ZAK_ST.nowe, '']);
+        poz.getRange(poz.getLastRow() + 1, 1, rows.length, 11).setNumberFormat(TEXT).setValues(rows);
+        mapa[e.id] = nr; odp.nr[e.id] = nr;
+      } else {
+        if (rola !== 'biuro' || !ZAK_ST[txt_(d.st)]) { odp.accepted.push(e.id); return; }
+        const nr = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(nr)) return;   // zgłoszenie jeszcze bez numeru – tablet ponowi
+        zakStatus_(poz, nr, d, txt_(e.kto));
+      }
+      zd.getRange(zd.getLastRow() + 1, 1, 1, 8).setNumberFormat(TEXT).setValues([[e.id, txt_(e.ts), c(e.kto).slice(0, 80), tablet, e.typ === 'zap' ? mapa[e.id] : (mapa[txt_(d.zid)] || txt_(d.zid)), e.typ, JSON.stringify(d).slice(0, 45000), now]]);
+      have[e.id] = true; odp.accepted.push(e.id);
+    });
+    if (b.zdjecie && b.zdjecie.b64) odp.zdjecie = zakZdjecie_(b.zdjecie, mapa);
+  } finally { lock.releaseLock(); }
+  odp.lista = zakLista_(poz, zd);
+  return odp;
+}
+function zakNastepny_(poz) {
+  let m = 0; if (poz.getLastRow() > 1) poz.getRange(2, 1, poz.getLastRow() - 1, 1).getDisplayValues().forEach(r => { const x = txt_(r[0]).match(/^Z-(\d{5})-/); if (x) m = Math.max(m, Number(x[1])); });
+  return m + 1;
+}
+function zakStatus_(poz, nr, d, kto) {
+  if (poz.getLastRow() < 2) return;
+  const v = poz.getRange(2, 1, poz.getLastRow() - 1, 11).getDisplayValues(), lp = Array.isArray(d.lp) && d.lp.length ? d.lp.map(Number) : null;
+  const kiedy = kto + ' ' + Utilities.formatDate(new Date(), 'Europe/Warsaw', 'dd.MM HH:mm');
+  v.forEach((r, i) => {
+    if (txt_(r[0]) !== nr || (lp && lp.indexOf(Number(r[1])) < 0)) return;
+    poz.getRange(i + 2, 10, 1, 2).setNumberFormat(TEXT).setValues([[ZAK_ST[d.st], kiedy]]);
+    if (d.st === 'odrzucone' && txt_(d.powod)) poz.getRange(i + 2, 9).setNumberFormat(TEXT).setValue((txt_(r[8]) ? txt_(r[8]) + ' · ' : '') + 'odrzucono: ' + txt_(d.powod).replace(/^[=+@-]/, "'$&").slice(0, 300));
+  });
+}
+function zakFolder_(nr, utworz) {
+  const k = konfig_(); if (!k.zakupy_zdjecia_id) throw new Error('Brak folderu zdjęć zakupów (Konfiguracja → zakupy_zdjecia_id)');
+  const m = nr.match(/-(\d{2})\d{2}$/), rok = m ? '20' + m[1] : String(new Date().getFullYear());
+  const r = sub_(DriveApp.getFolderById(k.zakupy_zdjecia_id), rok, utworz); return r ? sub_(r, nr, utworz) : null;
+}
+function zakZdjecie_(z, mapa) {
+  const nr = mapa[txt_(z.zid)] || txt_(z.zid); if (!/^Z-\d{5}-/.test(nr)) return { ok: false };
+  const name = txt_(z.fid).replace(/[^\w-]/g, '_').slice(0, 60) + '.jpg', f = zakFolder_(nr, true);
+  if (!f.getFilesByName(name).hasNext()) f.createFile(Utilities.newBlob(Utilities.base64Decode(z.b64), 'image/jpeg', name));
+  return { ok: true, fid: txt_(z.fid) };
+}
+function zakFoto_(o) {
+  const f = zakFolder_(txt_(o.zid), false), it = f && f.getFilesByName(txt_(o.fid).replace(/[^\w-]/g, '_').slice(0, 60) + '.jpg');
+  if (!it || !it.hasNext()) throw new Error('Zdjęcie nie jest jeszcze na Dysku.');
+  const bl = it.next().getBlob(); return { ok: true, mime: 'image/jpeg', b64: Utilities.base64Encode(bl.getBytes()) };
+}
+/* lista dla tabletów: wszystkie trwające + 20 ostatnich zakończonych (wszystkie pozycje dostarczone / odrzucone) */
+function zakLista_(poz, zd) {
+  const m = {}, kl = {}; Object.keys(ZAK_ST).forEach(k => { kl[ZAK_ST[k]] = k; });
+  if (poz.getLastRow() > 1) poz.getRange(2, 1, poz.getLastRow() - 1, 11).getDisplayValues().forEach(r => {
+    const nr = txt_(r[0]); if (!nr) return;
+    const z = m[nr] = m[nr] || { nr, kod: txt_(r[2]) === 'AKPiA' ? '' : txt_(r[2]), ts: txt_(r[3]).replace(' ', 'T'), kto: txt_(r[4]), uwagi: '', poz: [], foto: [] };
+    z.poz.push({ lp: Number(r[1]), n: txt_(r[5]), il: txt_(r[6]), j: txt_(r[7]), st: kl[txt_(r[9])] || 'nowe', zm: txt_(r[10]), uw: txt_(r[8]).replace(/(^| · )całe zgłoszenie: .*$/, '') });
+  });
+  if (zd.getLastRow() > 1) zd.getRange(2, 1, zd.getLastRow() - 1, 7).getDisplayValues().forEach(r => { if (txt_(r[5]) === 'zap' && m[txt_(r[4])]) { const d = safeJson_(r[6]); const z = m[txt_(r[4])]; z.foto = (d.foto || []).slice(0, 30); z.id = txt_(r[0]); z.uwagi = txt_(d.uwagi); (d.poz || []).forEach((x, i) => { const q = z.poz.find(y => y.lp === i + 1); if (q) q.foto = (x && x.foto) || []; }); } });
+  const all = Object.keys(m).map(k => m[k]).sort((a, b) => (a.nr < b.nr ? 1 : -1));
+  const zamk = z => z.poz.every(x => x.st === 'dostarczone' || x.st === 'odrzucone');
+  return all.filter(z => !zamk(z)).concat(all.filter(zamk).slice(0, 20));
 }
 
 /* Informacja o budowie z tabletu (od 1.44.0, rola biuro): Uwagi dla ekip (H), Kierownik (P), Telefon kierownika (Q) w Projekty */
@@ -1051,6 +1144,7 @@ function archiwizuj() {
   const kopia = id => { const f = DriveApp.getFileById(id); f.makeCopy(day + ' ' + f.getName(), arch); };
   kopia(P.getProperty('BAZA_ID'));
   rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
+  if (k.zakupy_arkusz_id) try { kopia(k.zakupy_arkusz_id); } catch (e) { Logger.log(e); }   // od 1.48.0: arkusz zapotrzebowań
   try { const w = wolneMiejsce_(); porzadkiArchiwum_(arch, w != null && w < ARCH_PROG_WOLNE); } catch (e) { Logger.log('porządki: ' + e); }
   P.setProperty('ARCH_FOLD_START', String(Date.now()));   // początek nowej kopii folderów
   archiwizujFoldery();

@@ -157,7 +157,46 @@ async function addEvent(typ, urz, d) {
 }
 
 /* liczba rzeczy czekających na wysłanie: zdarzenia, zdjęcia, statusy zadań (od 1.12.0) */
-async function liczOczekujace() { S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length + ((await DB.get('zadKolejka')) || []).length; UI.net(); return S.pending; }
+async function liczOczekujace() { S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length + ((await DB.get('zadKolejka')) || []).length + ((await DB.get('zakKolejka')) || []).length + ((await DB.get('zakFotoKolejka')) || []).length; UI.net(); return S.pending; }
+
+/* Zapotrzebowania (od 1.48.0): lista z serwera w DB 'zakupy', kolejka wpisów 'zakKolejka', zdjęcia 'zakFoto:<fid>' + 'zakFotoKolejka' */
+const ZAK_ST = { nowe: 'Nowe', realizacja: 'W realizacji', dostarczone: 'Dostarczone', odrzucone: 'Odrzucone' };
+const Zakupy = {
+  async dodaj(typ, d) {
+    const e = { id: U.uid('z'), ts: U.now(), kto: S.user.name, typ, d };
+    const k = (await DB.get('zakKolejka')) || []; k.push(e); await DB.set('zakKolejka', k);
+    await liczOczekujace(); Sync.soon(); return e;
+  },
+  async sync() {
+    const kol = (await DB.get('zakKolejka')) || [];
+    let r = await API.zakupy({ zdarzenia: kol.slice(0, 100) });
+    if (r.ok === false) throw new Error(r.error || 'zakupy');
+    const ok = new Set(r.accepted || []), nr = Object.assign({}, (await DB.get('zakNr')) || {}, r.nr || {});
+    await DB.set('zakNr', nr);
+    await DB.set('zakKolejka', ((await DB.get('zakKolejka')) || []).filter(e => !ok.has(e.id)));
+    // zdjęcia – tylko do zgłoszeń, które mają już numer
+    for (const fid of ((await DB.get('zakFotoKolejka')) || []).slice()) {
+      const f = await DB.get('zakFoto:' + fid); if (!f) { await this.zdejmij(fid); continue; }
+      const zid = nr[f.zid] || f.zid; if (!/^Z-\d{5}-/.test(zid)) continue;
+      r = await API.zakupy({ zdjecie: { fid, zid, b64: await U.blobToB64(f.blob) } });
+      if (r.zdjecie && r.zdjecie.ok) await this.zdejmij(fid);
+    }
+    await DB.set('zakupy', { lista: r.lista || [], ts: Date.now() });
+    // porządki: zdjęcia lokalne zgłoszeń, których nie ma już na liście ani w kolejce
+    const zost = new Set([...(r.lista || []).flatMap(z => z.foto || []), ...((await DB.get('zakFotoKolejka')) || [])]);
+    for (const k of await DB.keys().catch(() => [])) if (String(k).startsWith('zakFoto:') && !zost.has(String(k).slice(8))) await DB.del(k);
+    await liczOczekujace();
+  },
+  async zdejmij(fid) { await DB.set('zakFotoKolejka', ((await DB.get('zakFotoKolejka')) || []).filter(x => x !== fid)); },
+  /* lista do widoku: serwer + niewysłane zgłoszenia + niewysłane zmiany statusów */
+  async lista() {
+    const srv = ((await DB.get('zakupy')) || {}).lista || [], kol = (await DB.get('zakKolejka')) || [], nr = (await DB.get('zakNr')) || {};
+    const L = srv.map(z => Object.assign({}, z, { poz: z.poz.map(x => Object.assign({}, x)) }));
+    kol.filter(e => e.typ === 'zap').forEach(e => { if (!L.some(z => z.id === e.id)) L.unshift({ id: e.id, nr: nr[e.id] || '', kod: e.d.kod || '', ts: e.ts, kto: e.kto, uwagi: e.d.uwagi || '', foto: e.d.foto || [], czeka: 1, poz: (e.d.poz || []).map((x, i) => Object.assign({ lp: i + 1, st: 'nowe', zm: '' }, x)) }); });
+    kol.filter(e => e.typ === 'zap_stat').forEach(e => { const z = L.find(x => x.nr === e.d.zid || x.id === e.d.zid || (nr[e.d.zid] && x.nr === nr[e.d.zid])); if (!z) return; z.poz.forEach(x => { if (!e.d.lp || e.d.lp.includes(x.lp)) { x.st = e.d.st; x.zm = e.kto + ' · czeka na wysłanie'; } }); });
+    return L;
+  }
+};
 
 /* Synchronizacja */
 const Sync = {
@@ -211,6 +250,8 @@ const Sync = {
           await DB.putEvents(marked);
         }
       }
+      // 3a. zapotrzebowania (od 1.48.0): kolejka zgłoszeń i statusów, potem zdjęcia pojedynczo; zawsze pobranie listy
+      if (!(S.boot && S.boot.dostep)) { this.prog(0.25, 'Zapotrzebowania'); try { await Zakupy.sync(); } catch (e) { console.warn('zakupy', e); } }
       // 3b. statusy zadań z kalendarza → ClickUp (od 1.12.0)
       const kol = (await DB.get('zadKolejka')) || [];
       if (kol.length) {

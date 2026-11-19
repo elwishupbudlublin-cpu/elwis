@@ -8,7 +8,7 @@ const IKONY = { tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 
   note: '<path d="M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5"></path>', chart: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"></path>',
   folder: '<path d="M3 6h6l2 2h10v11H3z"></path>', book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11"></path>',
   nav: '<path d="M3 11l18-8-8 18-2-8z"></path>', kier: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"></path><path d="M9 4.5h6"></path>', front: '<path d="M13 12v.01M3 21h18M5 21V5a2 2 0 0 1 2-2h7.5M17 13.5V21M14 7h7M18 4l3 3-3 3"></path>', offline: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path>', offline0: '<path d="M19 18a3.5 3.5 0 0 0 0-7h-1a5 4.5 0 0 0-11-2 4.6 4.4 0 0 0-2.1 8.4"></path><path d="M12 13v9M9 19l3 3 3-3"></path><path d="M3 3l18 18"></path>', cel: '<circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle><path d="M12 2v2M12 20v2M20 12h2M2 12h2"></path>', pin: '<path d="M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>',
-  chev: '<path d="M9 5l7 7-7 7"></path>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
+  chev: '<path d="M9 5l7 7-7 7"></path>', box: '<path d="M3 4h2.5l2.2 10.5a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.3"></path><circle cx="10" cy="19.5" r="1.5"></circle><circle cx="17" cy="19.5" r="1.5"></circle>', check: '<path d="M5 12l5 5 9-10"></path>', pause: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 9v6M14 9v6"></path>',
   x: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6"></path>', bud: '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-5h4v5"></path>',
   plus: '<path d="M12 5v14M5 12h14"></path>', proto: '<path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12l2 2 4-4"></path>' };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IKONY[n] || ''}</svg>`;
@@ -89,7 +89,9 @@ const UI = {
     $('#nPrio').classList.toggle('on', prio);
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
     $('#nDok').classList.toggle('on', dok);
-    $('#nBud').classList.toggle('on', this.cur !== 'plan' && !dok && !prio);
+    $('#nZak').hidden = podw(); $('#nZak').classList.toggle('on', this.cur === 'zakupy');   // od 1.48.0
+    b.classList.toggle('n5', Session.isBiuro() && !podw()); b.classList.toggle('n4', !Session.isBiuro() && !podw());   // pracownik: Plan · Budowy · Dok. · Zapotrzebowanie
+    $('#nBud').classList.toggle('on', this.cur !== 'plan' && !dok && !prio && this.cur !== 'zakupy');
     const n = $('#nPend'); n.hidden = !S.pending; n.textContent = S.pending || '';
   }
 };
@@ -533,7 +535,7 @@ const Views = {
           <span class="bst"><span class="sv">${protOk} / ${protWym} <small>wykonanych</small></span>${pasek(protWym ? Math.round(protOk / protWym * 100) : 0)}</span>${rob ? `<span class="chip warn">${rob} ${odm(rob, 'roboczy', 'robocze', 'roboczych')}</span>` : PUSTY}</button>
         <div class="big" id="tBraki" role="button" tabindex="0"><span class="bi">${ic('warn')}</span><span class="bt"><b>${Session.isBiuro() ? 'Braki i tematy' : 'Braki'}</b><span>Lista i zamykanie</span></span>
           <span class="bst"><span class="sv">${openB.length} <small>${odm(openB.length, 'otwarty', 'otwarte', 'otwartych')}</small></span></span>
-          <span class="brow">${pilne ? `<span class="chip bad">${pilne} ${odm(pilne, 'blokuje', 'blokują', 'blokuje')} pracę</span>` : '<span></span>'}<button class="inb bad" id="bBrak">${ic('plus')}Zgłoś brak</button></span></div>
+          <span class="brow">${pilne ? `<span class="chip bad">${pilne} ${odm(pilne, 'blokuje', 'blokują', 'blokuje')} pracę</span>` : '<span></span>'}<span class="inbs"><button class="inb bad" id="bBrak">${ic('plus')}Zgłoś brak</button><button class="inb" id="bZak" title="Zgłoś zapotrzebowanie na tę budowę">${ic('box')}Zapotrzebowanie</button></span></span></div>
         <button class="big" id="tFoto"><span class="bi">${ic('cam')}</span><span class="bt"><b>Zdjęcia</b><span>Wszystkie z budowy</span></span>
           <span class="bst"><span class="sv">${fotki} <small>${odm(fotki, 'zdjęcie', 'zdjęcia', 'zdjęć')}</small></span></span>${fotDzis ? `<span class="chip gr">+${fotDzis} dziś</span>` : PUSTY}</button>
         <div class="big" id="tNot" role="button" tabindex="0"><span class="bi">${ic('note')}</span><span class="bt"><b>Notatki</b><span>Ustalenia z budowy</span></span>
@@ -557,6 +559,7 @@ const Views = {
     $('#mDokT').onclick = () => UI.go('dokumenty', { typ: 'tech' });
     $('#mPost').onclick = () => UI.go('postep');
     $('#bBrak').onclick = () => Dialogs.brak('');
+    $('#bZak').onclick = () => Dialogs.zakNowe(S.kod);   // od 1.48.0: budowa wpisana automatycznie
     $('#bNote').onclick = () => Dialogs.notatka('');
     $('#bInfo').onclick = () => Dialogs.infoBudowy(p.kod);
     if ($('#bUw')) $('#bUw').onclick = () => Dialogs.infoBudowy(p.kod);
@@ -689,6 +692,25 @@ const Views = {
       ${grupy.map(([g, arr]) => `${g || grupy.length > 1 ? `<h2>${U.esc(g || 'Ogólne')}</h2>` : ''}<div class="list">${arr.map(f => `<button class="li" data-f="${U.esc(f.id)}">${ic(tech ? 'book' : 'doc')}<span class="grow">${U.esc(f.name)}</span><span class="mute" data-fs="${U.esc(f.id)}">${mb(f.size)}</span></button>`).join('')}</div>`).join('') || '<p class="mute">Brak plików.</p>'}`;
     view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => openFile(b.dataset.f));
     pliki.forEach(async f => { const el = view.querySelector(`[data-fs="${CSS.escape(f.id)}"]`); if (el && await DB.hasFile(f.id)) el.textContent = mb(f.size) + ' ✓'; });
+  },
+
+  /* Zapotrzebowanie (od 1.48.0): zgłoszenia na budowę lub ogólne (AKPiA); na tablecie trwające + 20 ostatnich zakończonych */
+  async zakupy(par) {
+    UI.header('zapotrzebowanie', () => UI.wstecz('plan'));
+    const L = await Zakupy.lista(), f = par.f || 'tok', bud = par.bud || '';
+    const zamk = z => z.poz.every(x => x.st === 'dostarczone' || x.st === 'odrzucone');
+    const wid = L.filter(z => (f === 'tok' ? !zamk(z) : zamk(z)) && (!bud || (bud === '-' ? !z.kod : z.kod === bud)));
+    const kody = [...new Set(L.map(z => z.kod).filter(Boolean))].sort();
+    const ts = ((await DB.get('zakupy')) || {}).ts;
+    view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Zapotrzebowanie</h1><button class="btn sm pri" id="zkNew" style="background:#fff;color:#0E1A2B">${ic('plus')} Zgłoś</button></div>
+        <div class="mute" style="color:#dbe7ff">${L.filter(z => !zamk(z)).length} w toku · ${ts ? 'lista z ' + U.fmt(new Date(ts).toISOString()) : 'połącz się z siecią, aby pobrać listę'}</div></section>
+      <div class="row" style="margin:10px 0;gap:8px;flex-wrap:wrap"><div class="tabs grow" style="margin:0"><button class="tab ${f === 'tok' ? 'on' : ''}" data-zf="tok">W toku</button><button class="tab ${f === 'kon' ? 'on' : ''}" data-zf="kon">Zakończone</button></div>
+        <label class="tsel ${bud ? 'on' : ''}"><span hidden>Budowa</span><select id="zkBud"><option value="">Wszystkie</option><option value="-" ${bud === '-' ? 'selected' : ''}>Zakupy ogólne (AKPiA)</option>${kody.map(k => `<option ${k === bud ? 'selected' : ''}>${U.esc(k)}</option>`).join('')}</select></label></div>
+      <div class="stack">${wid.map(zakKarta).join('') || `<div class="card mute">${f === 'tok' ? 'Brak zgłoszeń w toku.' : 'Brak zakończonych zgłoszeń (tablet trzyma 20 ostatnich).'}</div>`}</div>`;
+    view.querySelectorAll('[data-zf]').forEach(b => b.onclick = () => UI.go('zakupy', { ...par, f: b.dataset.zf }, { zastap: true }));
+    $('#zkBud').onchange = e => UI.go('zakupy', { ...par, bud: e.target.value }, { zastap: true });
+    $('#zkNew').onclick = () => Dialogs.zakNowe('');
+    view.querySelectorAll('[data-zk]').forEach(b => b.onclick = () => Dialogs.zakOkno(wid.find(z => (z.nr || z.id) === b.dataset.zk)));
   },
 
   /* Notatki z budowy (od 1.12.0) */
@@ -926,6 +948,41 @@ function dopasujListeBudow() {
   el.style.maxHeight = Math.max(280, window.innerHeight - top - dol) + 'px';
 }
 window.addEventListener('resize', () => { if (UI.cur === 'home') dopasujListeBudow(); });
+/* Zapotrzebowanie – pomocnicze (od 1.48.0) */
+const ZAK_KL = { nowe: 'warn', realizacja: '', dostarczone: 'ok', odrzucone: 'bad' };
+function zakBud(kod) { if (!kod) return 'Zakupy ogólne (AKPiA)'; const p = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod); return p ? (p.nazwa && p.nazwa.indexOf(kod) === 0 ? p.nazwa : kod + ' ' + (p.nazwa || '')) : kod; }
+function zakChip(z) {   // stan zgłoszenia ze statusów pozycji
+  const n = z.poz.length, c = k => z.poz.filter(x => x.st === k).length;
+  if (c('nowe') === n) return '<span class="chip warn">Nowe</span>';
+  if (c('dostarczone') === n) return '<span class="chip ok">Dostarczone</span>';
+  if (c('odrzucone') === n) return '<span class="chip bad">Odrzucone</span>';
+  if (c('dostarczone') + c('odrzucone') === n) return `<span class="chip ok">Zakończone</span>`;
+  return `<span class="chip">W realizacji${c('dostarczone') ? ` · ${c('dostarczone')}/${n} dostarcz.` : ''}</span>`;
+}
+function zakKarta(z) {
+  return `<button class="card zkarta" data-zk="${U.esc(z.nr || z.id)}">
+    <span class="row">${zakChip(z)}<b class="m zknr">${z.nr ? U.esc(z.nr) : '<span class="mute">czeka na wysłanie</span>'}</b><span class="grow"></span><span class="mute">${U.esc(z.kto)} · ${U.fmt(z.ts)}</span></span>
+    <span class="zkbud">${U.esc(zakBud(z.kod))}</span>
+    <span class="zpozl">${z.poz.slice(0, 5).map(x => `<span class="row" style="gap:8px"><span class="zst ${x.st}" title="${ZAK_ST[x.st]}"></span><b>${U.esc(x.n)}</b> <span class="m">${U.esc(String(x.il).replace('.', ','))} ${U.esc(x.j || '')}</span></span>`).join('')}${z.poz.length > 5 ? `<span class="mute">+ ${z.poz.length - 5} poz.</span>` : ''}</span>
+    ${z.uwagi ? `<span class="mute">${U.esc(z.uwagi)}</span>` : ''}</button>`;
+}
+async function zakMiniatury(el, z) {
+  el.innerHTML = '';
+  for (const fid of z.foto || []) {
+    const lok = await DB.get('zakFoto:' + fid);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip fotochip';
+    if (lok) { b.className = ''; const im = new Image(); im.src = URL.createObjectURL(lok.blob); im.alt = 'zdjęcie'; b.appendChild(im); b.onclick = () => zakPodglad(lok.blob); }
+    else { b.textContent = '📷 zdjęcie'; b.onclick = async () => { if (!z.nr) return UI.toast('Zdjęcie jeszcze niewysłane.'); try { UI.toast('Pobieram zdjęcie…'); const r = await API.zakupy({ foto: { fid, zid: z.nr } }); if (!r.ok) throw new Error(r.error); const bl = U.b64ToBlob(r.b64, r.mime); await DB.set('zakFoto:' + fid, { blob: bl, zid: z.nr }); zakPodglad(bl); } catch (e) { UI.toast(e.message || 'Brak sieci'); } }; }
+    el.appendChild(b);
+  }
+}
+function zakPodglad(blob) {
+  const w = document.createElement('div'); w.className = 'fotoview';
+  w.innerHTML = '<div class="fvbar"><span class="grow">Zapotrzebowanie – zdjęcie</span><button class="btn sm" id="zfvX">✕ Zamknij</button></div><div class="fvimg"></div>';
+  const im = new Image(); im.src = URL.createObjectURL(blob); w.querySelector('.fvimg').appendChild(im);
+  document.body.appendChild(w); w.querySelector('#zfvX').onclick = () => w.remove();
+}
+
 /* Zbiorcze zaznaczanie urządzeń (od 1.47.0, rola biuro): wybór na liście → kroki zaznaczone / odznaczone i opcjonalnie wspólny nr seryjny.
    Tablet zapisuje zwykłe zdarzenia `krok` i `nr` (d.zb = 1 – oznaczenie wpisu zbiorczego), także offline; serwer przelicza status jak zwykle. */
 const ZB = { kod: null, on: false, sel: new Set(), akcja: 'on', kroki: null, war: {}, sn: '' };
@@ -1465,6 +1522,103 @@ const Dialogs = {
     hydrateFotos(modal);
   },
 
+  /* Nowe zapotrzebowanie (od 1.48.0) – każdy z tabletu HUP-BUD, offline; kod – budowa wpisana automatycznie, puste = zakupy ogólne (AKPiA) */
+  async zakNowe(kod) {
+    const pr = ((S.boot && S.boot.projekty) || []).slice().sort((a, b) => natCmp(a.kod, b.kod));
+    const znane = [...new Set((await Zakupy.lista()).flatMap(z => z.poz.map(x => x.n)).filter(Boolean))].sort();
+    const JEDN = ['szt', 'm', 'kpl', 'op', 'kg', 'l'];
+    const poz = [];   // {n, il, j, uw, foto:[{fid, blob}]}
+    const budTxt = p => p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + (p.nazwa || '');
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zapotrzebowanie">
+      <div class="shead"><h3>Zapotrzebowanie</h3><span class="mute">${U.esc(S.user.name)}</span></div>
+      <div class="sbody zapform">
+        <label class="fld"><span class="mute">Budowa</span><select id="zB"><option value="">— zakupy ogólne (AKPiA) —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}</select></label>
+        <div class="row"><div class="lbl grow">Pozycje <span id="zLn"></span></div></div>
+        <div id="zL" class="zlist"></div>
+        <button class="btn pri" id="zA" type="button">${ic('plus')} Dodaj pozycję</button>
+        <label class="fld"><span class="mute">Uwagi do całego zgłoszenia (termin, gdzie dostarczyć)</span><textarea id="zO" rows="2"></textarea></label>
+      </div>
+      <div class="sfoot"><button class="btn" id="zx">Anuluj</button><button class="btn pri" id="zs">Wyślij zapotrzebowanie</button></div></div></div>`;
+    const lista = () => {
+      $('#zLn').textContent = poz.length ? `(${poz.length})` : '';
+      $('#zL').innerHTML = poz.map((x, i) => `<button class="zli" type="button" data-i="${i}"><span class="zlnr">${i + 1}</span><span class="grow"><b>${U.esc(x.n)}</b>${x.uw ? `<span class="mute">${U.esc(x.uw)}</span>` : ''}</span>${x.foto.length ? `<span class="mute">📷 ${x.foto.length}</span>` : ''}<span class="m zlil">${U.esc(String(x.il).replace('.', ','))} ${U.esc(x.j)}</span>${ic('chev')}</button>`).join('') || '<div class="zpusto mute">Brak pozycji – dodaj pierwszą.</div>';
+      $('#zL').querySelectorAll('[data-i]').forEach(b => b.onclick = () => okno(+b.dataset.i));
+    };
+    // małe okno pozycji – nad oknem zgłoszenia
+    const okno = i => {
+      const x = i == null ? { n: '', il: '', j: 'szt', uw: '', foto: [] } : Object.assign({}, poz[i], { foto: poz[i].foto.slice() });
+      const w = document.createElement('div'); w.className = 'ov center zsub'; w.innerHTML = `<div class="dialog" role="dialog" aria-label="Pozycja">
+        <div class="shead"><h3>${i == null ? 'Nowa pozycja' : 'Pozycja ' + (i + 1)}</h3></div>
+        <div class="sbody zapform">
+          <label class="fld"><span class="mute">Co potrzebne</span><input id="pN" type="text" list="dlZn" value="${U.esc(x.n)}" placeholder="np. Kabel YDY 3×1,5" autocomplete="off"><datalist id="dlZn">${znane.map(n => `<option value="${U.esc(n)}">`).join('')}</datalist></label>
+          <div class="row" style="gap:10px"><label class="fld grow"><span class="mute">Ilość</span><input id="pI" type="number" inputmode="decimal" min="0" step="any" value="${U.esc(x.il)}"></label>
+            <div class="fld"><span class="mute">Jednostka</span><div class="zjedn">${JEDN.map(j => `<button type="button" class="${j === x.j ? 'on' : ''}" data-j="${j}">${j}</button>`).join('')}</div></div></div>
+          <label class="fld"><span class="mute">Uwaga do pozycji (opcjonalnie – typ, producent, zamiennik)</span><input id="pU" type="text" value="${U.esc(x.uw)}"></label>
+          <div class="row"><button class="btn" id="pF" type="button">+ Zdjęcie</button><span class="mute" id="pFc">${x.foto.length ? x.foto.length + ' ' + odm(x.foto.length, 'zdjęcie', 'zdjęcia', 'zdjęć') : ''}</span></div>
+        </div>
+        <div class="sfoot">${i == null ? '' : '<button class="btn bad" id="pDel">Usuń</button>'}<button class="btn" id="pX">Anuluj</button><button class="btn pri" id="pOk">${i == null ? 'Dodaj' : 'Zapisz'}</button></div></div>`;
+      modal.appendChild(w);
+      const zamk = () => w.remove();
+      w.querySelectorAll('[data-j]').forEach(b => b.onclick = () => { x.j = b.dataset.j; w.querySelectorAll('[data-j]').forEach(y => y.classList.toggle('on', y === b)); });
+      w.querySelector('#pF').onclick = () => pickFile(async f => {
+        const blob = await U.compress(f, 1600, 0.75, ['Zapotrzebowanie · ' + ($('#zB').value || 'AKPiA'), (w.querySelector('#pN').value || '').slice(0, 60), new Date().toLocaleString('pl-PL') + ' · ' + S.user.name]);
+        x.foto.push({ fid: U.uid('zf'), blob }); w.querySelector('#pFc').textContent = x.foto.length + ' ' + odm(x.foto.length, 'zdjęcie', 'zdjęcia', 'zdjęć');
+      });
+      w.querySelector('#pX').onclick = zamk;
+      if (w.querySelector('#pDel')) w.querySelector('#pDel').onclick = () => { poz.splice(i, 1); zamk(); lista(); };
+      w.querySelector('#pOk').onclick = () => {
+        x.n = w.querySelector('#pN').value.trim(); x.il = w.querySelector('#pI').value.trim(); x.uw = w.querySelector('#pU').value.trim();
+        if (!x.n) { UI.toast('Wpisz, co jest potrzebne.'); return; }
+        if (!x.il) { UI.toast('Podaj ilość.'); return; }
+        if (i == null) poz.push(x); else poz[i] = x;
+        zamk(); lista();
+      };
+      w.querySelector('#pN').focus();
+    };
+    lista();
+    $('#zA').onclick = () => okno(null);
+    $('#zx').onclick = () => { if (poz.length && !confirm('Porzucić zgłoszenie z ' + poz.length + ' ' + odm(poz.length, 'pozycją', 'pozycjami', 'pozycjami') + '?')) return; UI.close(); };
+    $('#zs').onclick = async () => {
+      if (!poz.length) { UI.toast('Dodaj co najmniej jedną pozycję.'); return; }
+      const fot = poz.flatMap(x => x.foto);
+      const e = await Zakupy.dodaj('zap', { kod: $('#zB').value, poz: poz.map(x => ({ n: x.n, il: x.il, j: x.j, uw: x.uw, foto: x.foto.map(f => f.fid) })), uwagi: $('#zO').value.trim(), foto: fot.map(f => f.fid) });
+      for (const f of fot) await DB.set('zakFoto:' + f.fid, { blob: f.blob, zid: e.id });
+      if (fot.length) { await DB.set('zakFotoKolejka', [...((await DB.get('zakFotoKolejka')) || []), ...fot.map(f => f.fid)]); await liczOczekujace(); }
+      UI.toast('Zapotrzebowanie wysłane do biura'); UI.close(); if (UI.cur === 'zakupy') UI.refresh();
+    };
+    okno(null);   // od razu pierwsza pozycja
+  },
+
+  /* Okno zgłoszenia (od 1.48.0): pozycje ze statusami; biuro zaznacza pozycje i zmienia status (W realizacji / Dostarczone / Odrzuć) */
+  zakOkno(z) {
+    if (!z) return;
+    const biuro = Session.isBiuro(), wyb = new Set(z.poz.filter(x => x.st !== 'dostarczone' && x.st !== 'odrzucone').map(x => x.lp));
+    const rys = () => {
+      modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zgłoszenie">
+        <div class="shead"><h3 class="m" style="font-size:17px">${z.nr ? U.esc(z.nr) : 'Nowe zgłoszenie'}</h3>${zakChip(z)}</div>
+        <div class="sbody">
+          <div><b>${U.esc(zakBud(z.kod))}</b><div class="mute">Zgłosił: ${U.esc(z.kto)} · ${U.fmt(z.ts)}${z.czeka ? ' · czeka na wysłanie (numer nada serwer)' : ''}</div></div>
+          <table class="ztab"><thead><tr>${biuro ? '<th></th>' : ''}<th>Pozycja</th><th>Ilość</th><th>Status</th></tr></thead><tbody>${z.poz.map(x => `<tr>${biuro ? `<td><input type="checkbox" data-lp="${x.lp}" ${wyb.has(x.lp) ? 'checked' : ''} style="width:22px;height:22px"></td>` : ''}<td>${U.esc(x.n)}${x.uw ? `<div class="mute" style="font-size:12px">${U.esc(x.uw)}</div>` : ''}</td><td class="m">${U.esc(String(x.il).replace('.', ','))} ${U.esc(x.j || '')}</td><td><span class="chip ${ZAK_KL[x.st]}">${ZAK_ST[x.st]}</span>${x.zm ? `<div class="mute" style="font-size:11px">${U.esc(x.zm)}</div>` : ''}</td></tr>`).join('')}</tbody></table>
+          ${z.uwagi ? `<div><span class="mute">Uwagi:</span> ${U.esc(z.uwagi)}</div>` : ''}
+          ${(z.foto || []).length ? `<div class="thumbs" id="zkFot"></div>` : ''}
+          ${biuro ? '<label class="fld"><span class="mute">Powód (przy „Odrzuć”)</span><input id="zkP" type="text"></label>' : ''}
+        </div>
+        <div class="sfoot"><button class="btn" id="zkX">Zamknij</button>${biuro ? `<button class="btn" data-st="realizacja">W realizacji</button><button class="btn ok" data-st="dostarczone">Dostarczone</button><button class="btn bad" data-st="odrzucone">Odrzuć</button>` : ''}</div></div></div>`;
+      $('#zkX').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
+      if ($('#zkFot')) zakMiniatury($('#zkFot'), z);
+      modal.querySelectorAll('[data-lp]').forEach(c => c.onchange = () => { c.checked ? wyb.add(+c.dataset.lp) : wyb.delete(+c.dataset.lp); });
+      modal.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => {
+        if (!wyb.size) { UI.toast('Zaznacz pozycje.'); return; }
+        const st = b.dataset.st, powod = (($('#zkP') || {}).value || '').trim();
+        if (st === 'odrzucone' && !powod) { UI.toast('Wpisz powód odrzucenia.'); return; }
+        const lp = wyb.size === z.poz.length ? null : [...wyb].sort((a, b2) => a - b2);
+        await Zakupy.dodaj('zap_stat', { zid: z.nr || z.id, lp, st, powod });
+        UI.toast(`${ZAK_ST[st]}: ${wyb.size} ${odm(wyb.size, 'pozycja', 'pozycje', 'pozycji')}`); UI.close(); UI.refresh();
+      });
+    };
+    rys();
+  },
+
   notatka(urz) {
     let photos = [];
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Notatka">
@@ -1979,6 +2133,7 @@ function settings() {
   $('#nBud').onclick = () => { UI.close(); UI.go('home'); };
   $('#nDok').onclick = () => { UI.close(); UI.go('dokumenty', { typ: 'tech' }); };
   $('#nPrio').onclick = () => { UI.close(); UI.go('priorytety'); };
+  $('#nZak').onclick = () => { UI.close(); UI.go('zakupy'); };
   $('#btnUser').onclick = settings;
   window.addEventListener('online', () => { UI.net(); Sync.run(); });
   window.addEventListener('offline', () => UI.net());
