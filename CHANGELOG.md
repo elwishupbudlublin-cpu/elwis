@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.49.0 – 2026-11-19 (aplikacja i serwer)
+- Zapotrzebowanie – edycja zgłoszenia (tylko rola biuro): budowa (numer bez zmian), pozycje (nazwa, ilość, jednostka, uwaga, nowe zdjęcia), dodanie i usunięcie pozycji, uwagi; zdarzenie `zap_edyc` z opisem zmian. Usunięta pozycja zostaje w arkuszu ze statusem „usunięta”.
+- Log zmian w oknie zgłoszenia nad przyciskami (tylko rola biuro): zgłoszenie, statusy (pozycje, powód), edycje; wpisy niewysłane z dopiskiem „czeka na wysłanie”. Przyciski okna w dwóch rzędach.
+
 ## 1.48.0 – 2026-11-19 (aplikacja i serwer, schemat 1.15)
 - Zapotrzebowanie: nowy ekran w dolnym pasku (za Dokumentami technicznymi) i przycisk „Zapotrzebowanie” pod „Zgłoś brak” na kafelku Braki (ikona koszyka). Zgłoszenie na budowę (wpisana automatycznie) albo zakupy ogólne (AKPiA); pozycje dodawane w małym oknie (nazwa z podpowiedziami, ilość, jednostka, uwaga i zdjęcie pozycji), uwagi do całego zgłoszenia; działa offline.
 - Statusy pozycji: nowe → w realizacji → dostarczone; odrzucone (z powodem) – zmienia tylko rola biuro (zaznaczenie pozycji w oknie zgłoszenia); pracownicy widzą statusy. Na tablecie: wszystkie zgłoszenia w toku + 20 ostatnich zakończonych.

@@ -1523,22 +1523,25 @@ const Dialogs = {
   },
 
   /* Nowe zapotrzebowanie (od 1.48.0) – każdy z tabletu HUP-BUD, offline; kod – budowa wpisana automatycznie, puste = zakupy ogólne (AKPiA) */
-  async zakNowe(kod) {
+  async zakNowe(kod, ed) {   // ed – zgłoszenie do edycji (od 1.49.0, tylko rola biuro)
+    if (ed && !Session.isBiuro()) return;
     const pr = ((S.boot && S.boot.projekty) || []).slice().sort((a, b) => natCmp(a.kod, b.kod));
     const znane = [...new Set((await Zakupy.lista()).flatMap(z => z.poz.map(x => x.n)).filter(Boolean))].sort();
     const JEDN = ['szt', 'm', 'kpl', 'op', 'kg', 'l'];
-    const poz = [];   // {n, il, j, uw, foto:[{fid, blob}]}
+    const poz = ed ? ed.poz.map(x => ({ lp: x.lp, n: x.n, il: String(x.il), j: x.j || 'szt', uw: x.uw || '', foto: [], st: x.st })) : [];   // {lp?, n, il, j, uw, foto:[{fid, blob}]} – lp = pozycja już zapisana
+    const usun = [];   // edycja: Lp usuniętych pozycji
     const budTxt = p => p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + (p.nazwa || '');
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zapotrzebowanie">
-      <div class="shead"><h3>Zapotrzebowanie</h3><span class="mute">${U.esc(S.user.name)}</span></div>
+      <div class="shead"><h3>${ed ? 'Edycja ' + U.esc(ed.nr || 'zgłoszenia') : 'Zapotrzebowanie'}</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody zapform">
-        <label class="fld"><span class="mute">Budowa</span><select id="zB"><option value="">— zakupy ogólne (AKPiA) —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}</select></label>
+        <label class="fld"><span class="mute">Budowa${ed ? ' (numer zgłoszenia się nie zmienia)' : ''}</span><select id="zB"><option value="">— zakupy ogólne (AKPiA) —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}</select></label>
         <div class="row"><div class="lbl grow">Pozycje <span id="zLn"></span></div></div>
         <div id="zL" class="zlist"></div>
         <button class="btn pri" id="zA" type="button">${ic('plus')} Dodaj pozycję</button>
-        <label class="fld"><span class="mute">Uwagi do całego zgłoszenia (termin, gdzie dostarczyć)</span><textarea id="zO" rows="2"></textarea></label>
+        <label class="fld"><span class="mute">Uwagi do całego zgłoszenia (termin, gdzie dostarczyć)</span><textarea id="zO" rows="2">${ed ? U.esc(ed.uwagi || '') : ''}</textarea></label>
       </div>
-      <div class="sfoot"><button class="btn" id="zx">Anuluj</button><button class="btn pri" id="zs">Wyślij zapotrzebowanie</button></div></div></div>`;
+      <div class="sfoot"><button class="btn" id="zx">Anuluj</button><button class="btn pri" id="zs">${ed ? 'Zapisz zmiany' : 'Wyślij zapotrzebowanie'}</button></div></div></div>`;
+    if (ed) $('#zB').value = ed.kod || '';
     const lista = () => {
       $('#zLn').textContent = poz.length ? `(${poz.length})` : '';
       $('#zL').innerHTML = poz.map((x, i) => `<button class="zli" type="button" data-i="${i}"><span class="zlnr">${i + 1}</span><span class="grow"><b>${U.esc(x.n)}</b>${x.uw ? `<span class="mute">${U.esc(x.uw)}</span>` : ''}</span>${x.foto.length ? `<span class="mute">📷 ${x.foto.length}</span>` : ''}<span class="m zlil">${U.esc(String(x.il).replace('.', ','))} ${U.esc(x.j)}</span>${ic('chev')}</button>`).join('') || '<div class="zpusto mute">Brak pozycji – dodaj pierwszą.</div>';
@@ -1565,7 +1568,7 @@ const Dialogs = {
         x.foto.push({ fid: U.uid('zf'), blob }); w.querySelector('#pFc').textContent = x.foto.length + ' ' + odm(x.foto.length, 'zdjęcie', 'zdjęcia', 'zdjęć');
       });
       w.querySelector('#pX').onclick = zamk;
-      if (w.querySelector('#pDel')) w.querySelector('#pDel').onclick = () => { poz.splice(i, 1); zamk(); lista(); };
+      if (w.querySelector('#pDel')) w.querySelector('#pDel').onclick = () => { if (poz[i].lp) usun.push(poz[i].lp); poz.splice(i, 1); zamk(); lista(); };
       w.querySelector('#pOk').onclick = () => {
         x.n = w.querySelector('#pN').value.trim(); x.il = w.querySelector('#pI').value.trim(); x.uw = w.querySelector('#pU').value.trim();
         if (!x.n) { UI.toast('Wpisz, co jest potrzebne.'); return; }
@@ -1577,16 +1580,33 @@ const Dialogs = {
     };
     lista();
     $('#zA').onclick = () => okno(null);
-    $('#zx').onclick = () => { if (poz.length && !confirm('Porzucić zgłoszenie z ' + poz.length + ' ' + odm(poz.length, 'pozycją', 'pozycjami', 'pozycjami') + '?')) return; UI.close(); };
+    $('#zx').onclick = () => { if (ed) return Dialogs.zakOkno(ed); if (poz.length && !confirm('Porzucić zgłoszenie z ' + poz.length + ' ' + odm(poz.length, 'pozycją', 'pozycjami', 'pozycjami') + '?')) return; UI.close(); };
     $('#zs').onclick = async () => {
       if (!poz.length) { UI.toast('Dodaj co najmniej jedną pozycję.'); return; }
       const fot = poz.flatMap(x => x.foto);
+      if (ed) {   // zdarzenie zap_edyc: pełna nowa lista pozycji (lp = istniejąca), usunięte Lp, uwagi, budowa + opis zmian do logu
+        const kodN = $('#zB').value, uw = $('#zO').value.trim(), il = x => String(x.il).replace('.', ',') + ' ' + (x.j || ''), zm = [];
+        if ((ed.kod || '') !== kodN) zm.push('budowa: ' + (ed.kod || 'AKPiA') + ' → ' + (kodN || 'AKPiA'));
+        poz.filter(x => x.lp).forEach(x => { const o = ed.poz.find(y => y.lp === x.lp); if (!o) return; const r = [];
+          if (o.n !== x.n) r.push('„' + o.n + '” → „' + x.n + '”'); if (il(o) !== il(x)) r.push(il(o) + ' → ' + il(x)); if ((o.uw || '') !== x.uw) r.push('uwaga: ' + (x.uw || '—')); if (x.foto.length) r.push('+' + x.foto.length + ' zdj.');
+          if (r.length) zm.push(x.n + ': ' + r.join(', ')); });
+        poz.filter(x => !x.lp).forEach(x => zm.push('dodano: ' + x.n + ' (' + il(x) + ')'));
+        usun.forEach(lp => { const o = ed.poz.find(y => y.lp === lp); if (o) zm.push('usunięto: ' + o.n); });
+        if ((ed.uwagi || '') !== uw) zm.push('uwagi zgłoszenia zmienione');
+        if (!zm.length) { UI.toast('Bez zmian.'); return; }
+        const zid = ed.nr || ed.id;
+        await Zakupy.dodaj('zap_edyc', { zid, kod: kodN, poz: poz.map(x => ({ lp: x.lp || 0, n: x.n, il: x.il, j: x.j, uw: x.uw, foto: x.foto.map(f => f.fid) })), usun, uwagi: uw, opis: zm.join('; ').slice(0, 900) });
+        for (const f of fot) await DB.set('zakFoto:' + f.fid, { blob: f.blob, zid });
+        if (fot.length) { await DB.set('zakFotoKolejka', [...((await DB.get('zakFotoKolejka')) || []), ...fot.map(f => f.fid)]); await liczOczekujace(); }
+        UI.toast('Zmiany zapisane'); UI.close(); if (UI.cur === 'zakupy') UI.refresh(); return;
+      }
       const e = await Zakupy.dodaj('zap', { kod: $('#zB').value, poz: poz.map(x => ({ n: x.n, il: x.il, j: x.j, uw: x.uw, foto: x.foto.map(f => f.fid) })), uwagi: $('#zO').value.trim(), foto: fot.map(f => f.fid) });
       for (const f of fot) await DB.set('zakFoto:' + f.fid, { blob: f.blob, zid: e.id });
       if (fot.length) { await DB.set('zakFotoKolejka', [...((await DB.get('zakFotoKolejka')) || []), ...fot.map(f => f.fid)]); await liczOczekujace(); }
       UI.toast('Zapotrzebowanie wysłane do biura'); UI.close(); if (UI.cur === 'zakupy') UI.refresh();
     };
-    okno(null);   // od razu pierwsza pozycja
+    lista();
+    if (!ed) okno(null);   // od razu pierwsza pozycja
   },
 
   /* Okno zgłoszenia (od 1.48.0): pozycje ze statusami; biuro zaznacza pozycje i zmienia status (W realizacji / Dostarczone / Odrzuć) */
@@ -1602,9 +1622,11 @@ const Dialogs = {
           ${z.uwagi ? `<div><span class="mute">Uwagi:</span> ${U.esc(z.uwagi)}</div>` : ''}
           ${(z.foto || []).length ? `<div class="thumbs" id="zkFot"></div>` : ''}
           ${biuro ? '<label class="fld"><span class="mute">Powód (przy „Odrzuć”)</span><input id="zkP" type="text"></label>' : ''}
+          ${biuro ? `<div class="zlog"><div class="lbl">Log zmian</div>${(z.log || []).length ? z.log.slice().reverse().map(l => `<div class="zlogw"><span class="m">${U.esc(U.fmt(l.ts))}</span><b>${U.esc(l.kto)}</b><span>${U.esc(l.opis)}</span></div>`).join('') : '<div class="mute">Brak wpisów.</div>'}</div>` : ''}
         </div>
-        <div class="sfoot"><button class="btn" id="zkX">Zamknij</button>${biuro ? `<button class="btn" data-st="realizacja">W realizacji</button><button class="btn ok" data-st="dostarczone">Dostarczone</button><button class="btn bad" data-st="odrzucone">Odrzuć</button>` : ''}</div></div></div>`;
+        <div class="sfoot zfoot">${biuro ? `<div class="zfr"><button class="btn" data-st="realizacja">W realizacji</button><button class="btn ok" data-st="dostarczone">Dostarczone</button><button class="btn bad" data-st="odrzucone">Odrzuć</button></div>` : ''}<div class="zfr"><button class="btn" id="zkX">Zamknij</button>${biuro ? `<button class="btn" id="zkE">${ic('edit')} Edytuj</button>` : ''}</div></div></div></div>`;
       $('#zkX').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
+      if ($('#zkE')) $('#zkE').onclick = () => Dialogs.zakNowe(z.kod, z);
       if ($('#zkFot')) zakMiniatury($('#zkFot'), z);
       modal.querySelectorAll('[data-lp]').forEach(c => c.onchange = () => { c.checked ? wyb.add(+c.dataset.lp) : wyb.delete(+c.dataset.lp); });
       modal.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => {

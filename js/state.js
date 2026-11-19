@@ -193,7 +193,17 @@ const Zakupy = {
     const srv = ((await DB.get('zakupy')) || {}).lista || [], kol = (await DB.get('zakKolejka')) || [], nr = (await DB.get('zakNr')) || {};
     const L = srv.map(z => Object.assign({}, z, { poz: z.poz.map(x => Object.assign({}, x)) }));
     kol.filter(e => e.typ === 'zap').forEach(e => { if (!L.some(z => z.id === e.id)) L.unshift({ id: e.id, nr: nr[e.id] || '', kod: e.d.kod || '', ts: e.ts, kto: e.kto, uwagi: e.d.uwagi || '', foto: e.d.foto || [], czeka: 1, poz: (e.d.poz || []).map((x, i) => Object.assign({ lp: i + 1, st: 'nowe', zm: '' }, x)) }); });
-    kol.filter(e => e.typ === 'zap_stat').forEach(e => { const z = L.find(x => x.nr === e.d.zid || x.id === e.d.zid || (nr[e.d.zid] && x.nr === nr[e.d.zid])); if (!z) return; z.poz.forEach(x => { if (!e.d.lp || e.d.lp.includes(x.lp)) { x.st = e.d.st; x.zm = e.kto + ' · czeka na wysłanie'; } }); });
+    const znajdz = zid => L.find(x => x.nr === zid || x.id === zid || (nr[zid] && x.nr === nr[zid]));
+    kol.filter(e => e.typ === 'zap_stat' || e.typ === 'zap_edyc').forEach(e => {
+      const z = znajdz(e.d.zid); if (!z) return; z.log = (z.log || []).slice();
+      if (e.typ === 'zap_stat') { z.poz.forEach(x => { if (!e.d.lp || e.d.lp.includes(x.lp)) { x.st = e.d.st; x.zm = e.kto + ' · czeka na wysłanie'; } }); z.log.push({ ts: e.ts, kto: e.kto, opis: 'Status: ' + ZAK_ST[e.d.st] + ' (czeka na wysłanie)' }); return; }
+      // edycja (od 1.49.0): nowa lista pozycji, usunięte Lp, uwagi, budowa
+      let max = Math.max(0, ...z.poz.map(x => x.lp));
+      const nowe = []; (e.d.poz || []).forEach(x => { const o = x.lp && z.poz.find(y => y.lp === x.lp); nowe.push(o ? Object.assign({}, o, { n: x.n, il: x.il, j: x.j, uw: x.uw }) : { lp: ++max, n: x.n, il: x.il, j: x.j, uw: x.uw, st: 'nowe', zm: e.kto + ' · czeka na wysłanie' }); });
+      z.poz = nowe.filter(x => !(e.d.usun || []).includes(x.lp)); z.kod = e.d.kod || ''; z.uwagi = e.d.uwagi || '';
+      z.foto = [...(z.foto || []), ...(e.d.poz || []).flatMap(x => x.foto || [])];
+      z.log.push({ ts: e.ts, kto: e.kto, opis: 'Edycja: ' + e.d.opis + ' (czeka na wysłanie)' });
+    });
     return L;
   }
 };

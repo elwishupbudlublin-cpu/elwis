@@ -613,3 +613,8 @@ main{padding:16px 16px 100px}
 .zpusto{padding:14px;text-align:center}
 .zapform input#pN,.zapform input#pI,.zapform input#pU{height:44px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:16px;width:100%}
 .zjedn{display:flex;flex-wrap:wrap;gap:6px}.zjedn button{height:40px;min-width:46px;border:1px solid var(--line);border-radius:10px;background:#fff;font:inherit;font-weight:600}.zjedn button.on{background:#0E1A2B;color:#fff;border-color:#0E1A2B}
+
+/* 1.49.0: log zmian zgłoszenia (biuro) */
+.zlog{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
+.zlogw{display:grid;grid-template-columns:auto auto 1fr;gap:8px;font-size:13px;align-items:baseline}.zlogw .m{color:#64748b;white-space:nowrap}.zlogw b{white-space:nowrap}
+.sfoot.zfoot{flex-direction:column;align-items:stretch;gap:8px}.zfoot .zfr{display:flex;gap:8px}.zfoot .zfr .btn{flex:1 1 0;min-width:0;white-space:nowrap}
