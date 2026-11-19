@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.47.0 – 2026-11-19 (aplikacja)
+- Lista urządzeń – zbiorcze zaznaczanie (tylko rola biuro): przycisk „Zaznaczanie”, pola wyboru przy wierszach, „Zaznacz widoczne” (wg filtra), „Odznacz wszystko”, pasek z licznikiem i „Dalej: kroki / nr”.
+- Okno zbiorcze: zaznacz / odznacz kroki (jeden typ – wybór kroków, kilka typów – wszystkie kroki), wariant kroku, wspólny nr seryjny tylko tam, gdzie brak numeru, ostrzeżenie o brakujących numerach, potwierdzenie z liczbą urządzeń i kroków.
+- Zapis jako zwykłe zdarzenia `krok` / `nr` (pole `zb: 1`), także offline; cofnięcie = zdarzenie odznaczające. Serwer i schemat bez zmian.
+- Poprawka: kolor niebieskich etykiet i telefonów w oknie „i” (brakująca zmienna koloru).
+
 ## 1.46.0 – 2026-11-19 (aplikacja)
 - Lista budów: przycisk „Zwolnij” pod znaczkiem „offline” (tylko rola biuro) – usuwa dane budowy z tabletu (rzuty, dokumenty, wysłane zdarzenia i zdjęcia) i wyłącza ją z synchronizacji do czasu ponownego otwarcia; budowy z niewysłanymi wpisami nie zwalnia. Liczniki na liście zostają (liczy je serwer).
 - Budowa niepobrana na tablet: szary znaczek „offline” z przekreśloną ikoną.

@@ -752,6 +752,9 @@ const Views = {
     const mode = par.mode || 'rzut';
     const ark = sheets.includes(par.ark) ? par.ark : mode === 'lista' ? '' : sheets[0] || '';
     const biuro = Session.isBiuro();
+    // zbiorcze zaznaczanie (od 1.47.0, rola biuro, widok listy): wybór urządzeń → kroki / nr seryjny dla wszystkich naraz
+    if (ZB.kod !== S.kod) { ZB.kod = S.kod; ZB.on = false; ZB.sel.clear(); }
+    const zb = biuro && mode === 'lista' && ZB.on;
     const arkBtn = (a, on) => `<button class="tab tpoz ${on ? 'on' : ''}" data-a="${U.esc(a)}">${U.esc(poziomTxt(kondArkusza(a, urz)))}<span class="tsub">${U.esc(a)}</span></button>`;
     const filt = par.f || 'all';
     const sOf = u => devStatus(u, F);
@@ -790,7 +793,9 @@ const Views = {
       ${mode === 'lista' ? `<div class="row">
         <label class="search grow" style="margin:0"><span hidden>Szukaj urządzenia</span><input type="search" id="uq" value="${U.esc(par.q || '')}" placeholder="ID, oznaczenie z projektu, typ, nr seryjny" autocomplete="off"></label>
         <div class="seg2" role="group" aria-label="Sortowanie"><span class="mute">Sortuj:</span><button class="tab ${sortUrz === 'id' ? 'on' : ''}" data-s="id">ID ELWIS</button><button class="tab ${sortUrz === 'oz' ? 'on' : ''}" data-s="oz" ${maOz ? '' : 'disabled title="Lista nie ma oznaczeń z projektu"'}>Oznaczenie proj.</button></div>
-      </div>` : ''}
+        ${biuro ? `<button class="tab ${zb ? 'on' : ''}" id="uZb" title="Zaznaczanie wielu urządzeń naraz (rola biuro)">${ic('check')} Zaznaczanie</button>` : ''}
+      </div>
+      ${zb ? `<div class="zbhead row"><button class="btn sm" id="zbAll">Zaznacz widoczne (${vis.length})</button><button class="btn sm" id="zbNone" ${ZB.sel.size ? '' : 'disabled'}>Odznacz wszystko</button><span class="mute grow" style="text-align:right">dotknij wiersz, aby zaznaczyć</span></div>` : ''}` : ''}
       </div>
       ${mode === 'rzut' ? `
         <div class="tabs">${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>
@@ -799,8 +804,9 @@ const Views = {
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
         : `<div class="list" id="wyn" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
-            <button class="li" data-u="${U.esc(u.id)}"><span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}${u.x === '' || u.x == null ? `<span class="btn sm bezpoz" role="button" tabindex="0" data-poz="${U.esc(u.id)}" title="Urządzenie nie ma pozycji na rzucie">${ic('pin')} Ustaw na rzucie</span>` : ''}${uIkony(u.id)}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
-      ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}`, '#wyn');
+            <button class="li${zb && ZB.sel.has(u.id) ? ' zbon' : ''}" data-u="${U.esc(u.id)}">${zb ? `<span class="zbchk">${ZB.sel.has(u.id) ? ic('check') : ''}</span>` : ''}<span class="st ${ST[sOf(u)]}"></span><span class="uid">${sortUrz === 'oz' && u.oz ? `<b>${U.esc(u.oz)}</b><span class="mute m">${U.esc(u.id)}</span>` : `<b>${U.esc(u.id)}</b>${u.oz ? `<span class="oz">${U.esc(u.oz)}</span>` : ''}`}</span><span class="grow">${U.esc(u.typ)}<br><span class="mute">${U.esc(u.grupa)}${u.uwagi ? ' · ' + U.esc(u.uwagi) : ''}</span></span>${(z => z.k ? `<span class="pmark ${z.k}">${U.esc(z.t)}</span>` : '')(protZnacznik(u.id, F))}${u.x === '' || u.x == null ? `<span class="btn sm bezpoz" role="button" tabindex="0" data-poz="${U.esc(u.id)}" title="Urządzenie nie ma pozycji na rzucie">${ic('pin')} Ustaw na rzucie</span>` : ''}${uIkony(u.id)}<span class="mute m">${progress(u, F)}</span></button>`).join('')).join('') || '<div class="li mute">Brak urządzeń dla filtra.</div>'}</div>`}
+      ${mode === 'rzut' && !sheets.length ? '<p class="mute">Brak urządzeń w tym etapie.</p>' : ''}
+      ${zb ? zbPasek(urz) : ''}`, '#wyn');
     bindEtap();
     view.querySelectorAll('[data-m]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, mode: b.dataset.m }));
     $('#uFil').onchange = e => UI.go('rzut', { ...par, f: e.target.value });
@@ -814,7 +820,16 @@ const Views = {
     // dodanie urządzenia – rola biuro (od 1.15.0): na rzucie najpierw wskazanie miejsca, na liście od razu formularz
     if ($('#uAdd')) $('#uAdd').onclick = () => mode === 'rzut' && ark ? UI.go('rzut', { ...par, wskaz: { ark } }) : Dialogs.noweUrz({ ark });
     if ($('#wAnul')) $('#wAnul').onclick = () => UI.go('rzut', { ...par, wskaz: null });
-    view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u));
+    view.querySelectorAll('[data-u]').forEach(b => b.onclick = () => {
+      if (!zb) return Dialogs.device(b.dataset.u);
+      const id = b.dataset.u, on = !ZB.sel.has(id); on ? ZB.sel.add(id) : ZB.sel.delete(id);   // bez przerysowania listy – zostaje miejsce przewinięcia
+      b.classList.toggle('zbon', on); b.querySelector('.zbchk').innerHTML = on ? ic('check') : ''; zbOdswiezPasek(urz);
+    });
+    if ($('#uZb')) $('#uZb').onclick = () => { ZB.on = !ZB.on; if (!ZB.on) ZB.sel.clear(); Views.rzut(UI.par); };
+    const zbZnaki = () => { view.querySelectorAll('.li[data-u]').forEach(r => { const on = ZB.sel.has(r.dataset.u); r.classList.toggle('zbon', on); const c = r.querySelector('.zbchk'); if (c) c.innerHTML = on ? ic('check') : ''; }); zbOdswiezPasek(urz); };
+    if ($('#zbAll')) $('#zbAll').onclick = () => { vis.forEach(u => ZB.sel.add(u.id)); zbZnaki(); };
+    if ($('#zbNone')) $('#zbNone').onclick = () => { ZB.sel.clear(); zbZnaki(); };
+    if (zb) zbPodepnij(urz);
     if (mode === 'rzut' && ark) {
       const fid = (pd.rzuty || {})[ark];
       const f = fid && await DB.getFile(fid);
@@ -911,6 +926,74 @@ function dopasujListeBudow() {
   el.style.maxHeight = Math.max(280, window.innerHeight - top - dol) + 'px';
 }
 window.addEventListener('resize', () => { if (UI.cur === 'home') dopasujListeBudow(); });
+/* Zbiorcze zaznaczanie urządzeń (od 1.47.0, rola biuro): wybór na liście → kroki zaznaczone / odznaczone i opcjonalnie wspólny nr seryjny.
+   Tablet zapisuje zwykłe zdarzenia `krok` i `nr` (d.zb = 1 – oznaczenie wpisu zbiorczego), także offline; serwer przelicza status jak zwykle. */
+const ZB = { kod: null, on: false, sel: new Set(), akcja: 'on', kroki: null, war: {}, sn: '' };
+function zbWybrane(urz) { return urz.filter(u => ZB.sel.has(u.id)); }
+function zbTypy(wyb) { return [...new Set(wyb.map(u => U.prefix(u.id)))]; }
+function zbPasek(urz) {   // zwarty pasek na dole listy; opcje w oknie „Dalej”
+  const n = zbWybrane(urz).length;
+  return `<div class="zbbar" id="zbBar"><b class="grow">${n ? `Zaznaczono: ${n} ${odm(n, 'urządzenie', 'urządzenia', 'urządzeń')}` : '<span class="mute">Dotknij urządzenia na liście</span>'}</b>${n ? '<button class="btn sm" id="zbClr">Wyczyść</button>' : ''}<button class="btn pri" id="zbGo" ${n ? '' : 'disabled'}>Dalej: kroki / nr ›</button></div>`;
+}
+function zbPodepnij(urz) {
+  const bar = $('#zbBar'); if (!bar) return;
+  if ($('#zbClr')) $('#zbClr').onclick = () => { ZB.sel.clear(); view.querySelectorAll('.li.zbon').forEach(r => { r.classList.remove('zbon'); r.querySelector('.zbchk').innerHTML = ''; }); zbOdswiezPasek(urz); };
+  $('#zbGo').onclick = () => zbOkno(urz);
+}
+function zbOdswiezPasek(urz) { const b = $('#zbBar'); if (!b) return; b.outerHTML = zbPasek(urz); zbPodepnij(urz); const z = $('#zbNone'); if (z) z.disabled = !ZB.sel.size; }
+/* okno zbiorczej zmiany: akcja, kroki (jeden typ), warianty, wspólny nr seryjny, ostrzeżenia, Zastosuj z potwierdzeniem */
+function zbOkno(urz) {
+  const F = fold(S.ev), wyb = zbWybrane(urz), typy = zbTypy(wyb), jeden = typy.length === 1 ? typOf(typy[0] + '1') : null;
+  if (jeden && (!ZB.kroki || ZB.kroki.typ !== typy[0])) ZB.kroki = { typ: typy[0], i: new Set(jeden.kroki.map((_, i) => i)) };
+  const idxTypu = t => jeden ? [...ZB.kroki.i].sort((a, b) => a - b) : t.kroki.map((_, i) => i);
+  const on = ZB.akcja === 'on';
+  const warianty = on ? typy.flatMap(pre => { const t = typOf(pre + '1'); return idxTypu(t).map(i => ({ pre, i, kr: U.krok(t.kroki[i]), t })).filter(x => x.kr.op.length); }) : [];
+  const bezSn = on && !ZB.sn.trim() ? wyb.filter(u => typOf(u.id).sn && !((F.dev[u.id] && F.dev[u.id].sn) || u.sn)).length : 0;
+  modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zbiorcza zmiana">
+    <div class="shead"><h3>Zbiorczo: ${wyb.length} ${odm(wyb.length, 'urządzenie', 'urządzenia', 'urządzeń')}</h3><button class="btn sm" id="zx">✕</button></div>
+    <div class="sbody stack zbokno">
+      <div class="mute" style="font-size:13px">${U.esc(wyb.slice(0, 30).map(u => idOz(u.id)).join(', '))}${wyb.length > 30 ? ' …' : ''}</div>
+      <div class="tabs" style="margin:0"><button class="tab ${on ? 'on' : ''}" data-ak="on">Zaznacz kroki</button><button class="tab ${!on ? 'on' : ''}" data-ak="off">Odznacz kroki</button></div>
+      ${jeden ? `<div><div class="lbl">Kroki – ${U.esc(jeden.nazwa)}</div><div class="zbkroki">${jeden.kroki.map((k, i) => `<button class="chip ${ZB.kroki.i.has(i) ? 'ok' : 'gr'} chipic" data-zk="${i}">${ZB.kroki.i.has(i) ? ic('check') : ''}${U.esc(U.krok(k).n)}</button>`).join('')}</div></div>`
+        : `<div class="mute" style="font-size:13px">Różne typy (${typy.length}) – ${on ? 'zaznaczone' : 'odznaczone'} zostaną wszystkie kroki każdego typu. Pojedyncze kroki – gdy wybierzesz urządzenia jednego typu (np. filtr typu na liście).</div>`}
+      ${warianty.map(x => `<label class="fld"><span class="mute">${U.esc(x.t.nazwa)} – ${U.esc(x.kr.n)}</span><select data-zw2="${x.pre}:${x.i}"><option value="">— wybierz wariant —</option>${x.kr.op.map(o => `<option ${ZB.war[x.pre + ':' + x.i] === o ? 'selected' : ''}>${U.esc(o)}</option>`).join('')}</select></label>`).join('')}
+      ${on ? `<label class="fld"><span class="mute">Nr seryjny wspólny (opcjonalnie – tylko tam, gdzie brak numeru)</span><input id="zbSn" type="text" value="${U.esc(ZB.sn)}" placeholder="np. poza dost. HB" autocomplete="off"></label>` : ''}
+      ${bezSn ? `<div class="warnbox">${bezSn} ${odm(bezSn, 'urządzenie wymaga', 'urządzenia wymagają', 'urządzeń wymaga')} nr seryjnego i go nie ma – kroki się zaznaczą, numer można dopisać później.</div>` : ''}
+    </div>
+    <div class="sfoot"><button class="btn" id="zx2">Anuluj</button><button class="btn pri" id="zbOk">Zastosuj</button></div></div></div>`;
+  const zamknij = () => UI.close();
+  $('#zx').onclick = zamknij; $('#zx2').onclick = zamknij; $('#ov').onclick = e => { if (e.target.id === 'ov') zamknij(); };
+  const snNow = () => { if ($('#zbSn')) ZB.sn = $('#zbSn').value; };
+  modal.querySelectorAll('[data-ak]').forEach(b => b.onclick = () => { snNow(); ZB.akcja = b.dataset.ak; zbOkno(urz); });
+  modal.querySelectorAll('[data-zk]').forEach(b => b.onclick = () => { snNow(); const i = +b.dataset.zk; ZB.kroki.i.has(i) ? ZB.kroki.i.delete(i) : ZB.kroki.i.add(i); zbOkno(urz); });
+  modal.querySelectorAll('[data-zw2]').forEach(sel => sel.onchange = () => { ZB.war[sel.dataset.zw2] = sel.value; });
+  if ($('#zbSn')) $('#zbSn').oninput = () => { snNow(); const w = modal.querySelector('.zbokno .warnbox'); if (w) w.hidden = !!ZB.sn.trim(); };   // bez przerysowania okna (pole traci fokus)
+  $('#zbOk').onclick = async () => {
+    snNow();
+    const F = fold(S.ev), sn = on ? ZB.sn.trim() : '';
+    const plan = []; let brakWar = '';
+    for (const u of wyb) {
+      const t = typOf(u.id), pre = U.prefix(u.id), st = F.dev[u.id] || { kroki: {} };
+      for (const i of idxTypu(t)) {
+        const kr = U.krok(t.kroki[i]), s = (st.kroki || {})[i];
+        if (!on) { if (s && s.val) plan.push([u.id, 'krok', { krok: i, nazwa: kr.n, wart: false, zb: 1 }]); continue; }
+        if (kr.op.length) {
+          const w = ZB.war[pre + ':' + i]; if (!w) { brakWar = t.nazwa + ' – ' + kr.n; continue; }
+          if (!(s && s.val && s.war === w)) plan.push([u.id, 'krok', { krok: i, nazwa: kr.n + ' – ' + w, wart: w, zb: 1 }]);
+        } else if (!(s && s.val)) plan.push([u.id, 'krok', { krok: i, nazwa: t.kroki[i], wart: true, zb: 1 }]);
+      }
+      if (sn && !(st.sn || u.sn)) plan.push([u.id, 'nr', { sn, zb: 1 }]);   // wspólny numer tylko tam, gdzie go nie ma – nie nadpisuje prawdziwych numerów
+    }
+    if (brakWar) return UI.toast('Wybierz wariant: ' + brakWar);
+    if (!plan.length) return UI.toast(on ? 'Nic do zmiany – wybrane kroki są już zaznaczone.' : 'Nic do zmiany – wybrane kroki nie są zaznaczone.');
+    const nU = new Set(plan.map(x => x[0])).size, nK = plan.filter(x => x[1] === 'krok').length, nN = plan.filter(x => x[1] === 'nr').length;
+    if (!confirm(`${on ? 'Zaznaczyć' : 'Odznaczyć'} kroki w ${nU} ${odm(nU, 'urządzeniu', 'urządzeniach', 'urządzeniach')}?\n${nK} ${odm(nK, 'krok', 'kroki', 'kroków')}${nN ? `, nr seryjny „${sn}” w ${nN} ${odm(nN, 'urządzeniu', 'urządzeniach', 'urządzeniach')}` : ''}.\nWpis zbiorczy: ${S.user.name}. Zmiany zostaną w historii (cofnięcie = odznaczenie).`)) return;
+    UI.close(); UI.toast('Zapisuję…');
+    for (const [id, typ, d] of plan) await addEvent(typ, id, d);
+    ZB.sel.clear(); UI.toast(`Zapisano: ${nK} ${odm(nK, 'krok', 'kroki', 'kroków')}${nN ? ` i ${nN} nr seryjnych` : ''} w ${nU} ${odm(nU, 'urządzeniu', 'urządzeniach', 'urządzeniach')}`);
+    const y = window.scrollY; await Views.rzut(UI.par); window.scrollTo(0, y);
+  };
+}
 /* Liczniki budów z danych na tablecie (od 1.25.1): każda budowa zapisana na tablecie (proj:+kod i jej zdarzenia) – nie tylko otwarta.
    Wynik łączony z licz z serwera; czas/autor ostatniej zmiany – nowszy z dwóch. Pamięć 15 s, żeby wyszukiwanie nie liczyło przy każdej literze. */
 const LICZ_PAM = {};

@@ -573,8 +573,8 @@ main{padding:16px 16px 100px}
 .ikont .ikrow{padding:6px 0;gap:10px;flex-wrap:wrap}
 .ikont .ikrola{flex:0 0 92px;font-size:12.5px;color:var(--mute,#64748b);line-height:1.25}
 .ikont .ikrow b{font-size:15px;min-width:0}
-.ikont .ikrow.kier .ikrola{color:var(--blue);font-weight:600}
-.ikont .iktel{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-weight:600;font-size:14px;color:var(--blue);text-decoration:none;white-space:nowrap}
+.ikont .ikrow.kier .ikrola{color:#1D4ED8;font-weight:600}
+.ikont .iktel{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-weight:600;font-size:14px;color:#1D4ED8;text-decoration:none;white-space:nowrap}
 .ikont .iktel .ic{width:15px;height:15px}
 
 /* 1.46.0: „Zwolnij” pod znaczkiem offline (rola biuro), ten sam rozmiar co znaczek; budowa niepobrana – przekreślona ikona */
@@ -583,3 +583,13 @@ main{padding:16px 16px 100px}
 .chip.zwolnij{background:#fff;color:#334155;box-shadow:inset 0 0 0 1px var(--line);cursor:pointer}
 .chip.zwolnij:active{background:#EEF1F5}
 .chip.offno{color:#94A3B8;background:#F1F5F9}
+
+/* 1.47.0: zbiorcze zaznaczanie urządzeń (rola biuro) */
+.zbhead{margin-top:8px;gap:8px;align-items:center}
+.li .zbchk{flex:none;width:24px;height:24px;border:2px solid #94A3B8;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;background:#fff;margin-right:2px}
+.li.zbon{background:#EFF6FF}.li.zbon .zbchk{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
+.li .zbchk .ic{width:16px;height:16px}
+.zbbar{position:sticky;bottom:84px;z-index:20;margin-top:12px;display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid #1D4ED8;border-radius:14px;padding:10px 12px;box-shadow:0 -6px 24px rgba(15,23,42,.18)}
+.zbokno .zbkroki{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.zbokno .zbkroki .chip{cursor:pointer;border:0;height:34px}
+.zbokno select,.zbokno input{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:15px}
+.zbokno .warnbox{background:#FEF3C7;color:#78350F;border-radius:10px;padding:8px 10px;font-size:13px}
