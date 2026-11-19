@@ -1258,9 +1258,10 @@ const Dialogs = {
     if ($('#eRys')) $('#eRys').onclick = async () => { const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz); if (!u) return;
       if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: u.id, sys: '', f: 'all' }); };
     $('#eS').onclick = async () => {
-      const opis = $('#eo').value.trim(), blok = $('#eb').checked; if (!opis) { UI.toast('Opis nie może być pusty.'); return; }
+      // opis wymagany tylko bez kategorii albo przy „Inne” (jak przy zgłaszaniu, od 1.30.0; w oknie braku od 1.43.1)
+      const opis = $('#eo').value.trim(), blok = $('#eb').checked; if (!opis && (!kat || kat === 'Inne')) { UI.toast(kat === 'Inne' ? 'Przy „Inne” opisz brak.' : 'Wybierz rodzaj braku albo wpisz opis.'); return; }
       const d = { bid };
-      if (kat !== b.kat) d.kat = kat; if (opis !== b.opis) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
+      if (kat !== b.kat) d.kat = kat; if (opis && opis !== (b.opis || '')) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
       if (Object.keys(d).length === 1) { wroc(); return; }
       await addEvent('brak_edyc', b.urz, d); UI.toast('Zmiany zapisane'); wroc();
     };
