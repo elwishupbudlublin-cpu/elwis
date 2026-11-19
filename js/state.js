@@ -50,7 +50,7 @@ function fold(events) {
       case 'krok': D(e.urz).front = false; D(e.urz).kroki[d.krok] = { val: !!d.wart, war: typeof d.wart === 'string' ? d.wart : '', kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).front = false; D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
-      case 'brak': if (e.urz) D(e.urz).front = false; braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: d.foto || [], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
+      case 'brak': if (e.urz) D(e.urz).front = false; braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: [...(d.foto || [])], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
       // otworzył się front (od 1.33.0): zamknięty brak urządzenia → flaga; kasuje ją każda czynność (krok, nr seryjny) i nowy brak
       case 'brak_zamk': if (braki[d.bid]) { braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; if (braki[d.bid].urz) { D(braki[d.bid].urz).front = true; D(braki[d.bid].urz).frontTs = e.ts; } } break;
       case 'brak_edyc': {   // edycja / usunięcie / ponowne otwarcie braku (od 1.9.0)
@@ -287,6 +287,7 @@ const Sync = {
     await Pamiec.zmierz(kod, ids);
   },
   async pullPlan() {
+    if (S.boot && S.boot.dostep) return;   // dostęp podwykonawcy – bez planu dnia (od 1.43.0)
     const od = U.day(new Date(Date.now() - 7 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));
     try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }

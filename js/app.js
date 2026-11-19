@@ -85,6 +85,7 @@ const UI = {
     const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
     const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc' || this.cur === 'zmiany';
     $('#nPrio').hidden = !Session.isBiuro(); b.classList.toggle('n4', Session.isBiuro());
+    $('#nPlan').hidden = podw(); b.classList.toggle('n2', podw());   // od 1.43.0: dostęp podwykonawcy – bez planu dnia
     $('#nPrio').classList.toggle('on', prio);
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
     $('#nDok').classList.toggle('on', dok);
@@ -198,6 +199,11 @@ const Views = {
 
   /* Mój plan – zadania z ClickUp na dzień (pierwszy ekran po zalogowaniu; wygląd od 1.10.0) */
   async plan(par) {
+    if (podw()) {   // dostęp podwykonawcy (od 1.43.0): zamiast planu – jego budowa (jedna) albo lista jego budów
+      const pr = (S.boot.projekty || []);
+      if (pr.length === 1) return openProject(pr[0].kod);
+      return UI.go('home');
+    }
     UI.header('mój plan', null);
     const pl = (await DB.get('plan')) || null;
     const dzis = U.day(new Date());
@@ -1236,9 +1242,17 @@ const Dialogs = {
         <button class="btn" id="eX">Anuluj</button><button class="btn pri" id="eS">Zapisz zmiany</button></div></div></div>`;
     hydrateFotos(modal);
     modal.querySelectorAll('.cats button').forEach(x => x.onclick = () => { kat = x.dataset.k; modal.querySelectorAll('.cats button').forEach(y => y.classList.toggle('on', y === x)); });
-    $('#ef').onclick = () => pickFile(async f => { nowe.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#efc').textContent = '+' + nowe.length + ' zdjęć'; });
+    // od 1.43.0: nowe zdjęcia widać od razu w oknie i są zapisywane także przy „Zamknij brak”, komentarzu i „Otwórz ponownie”
+    $('#ef').onclick = () => pickFile(async f => { nowe.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#efc').textContent = '+' + nowe.length + ' ' + odm(nowe.length, 'zdjęcie', 'zdjęcia', 'zdjęć') + ' – niezapisane'; const t = modal.querySelector('.thumbs[data-fotos]'); if (t) thumbs(t, [...b.foto, ...nowe]); });
+    const zmiany = () => { const d = { bid }, opis = $('#eo').value.trim(), blok = $('#eb').checked;
+      if (kat !== b.kat) d.kat = kat; if (opis && opis !== b.opis) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
+      return Object.keys(d).length > 1 ? d : null; };
+    const zapiszZmiany = async () => { const d = zmiany(); if (d) { await addEvent('brak_edyc', b.urz, d); nowe = []; } return !!d; };
     $('#ekf').onclick = () => pickFile(async f => { komFoto.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#ekc').textContent = komFoto.length + ' zdjęć'; });
-    $('#eX').onclick = wroc;
+    $('#eX').onclick = async () => {
+      if (zmiany()) { if (confirm(nowe.length ? 'Dodane zdjęcia nie są zapisane. Zapisać je przy braku?' : 'Zapisać zmiany w braku?')) { await zapiszZmiany(); UI.toast('Zmiany zapisane'); } else if (nowe.length) await Promise.all(nowe.map(fid => DB.delPhoto ? DB.delPhoto(fid) : null)); }
+      wroc();
+    };
     if ($('#eUrz')) $('#eUrz').onclick = () => Dialogs.device(b.urz);
     // od 1.31.0: rzut z urządzeniem braku – przybliżenie i pulsująca kropka
     if ($('#eRys')) $('#eRys').onclick = async () => { const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz); if (!u) return;
@@ -1252,13 +1266,13 @@ const Dialogs = {
     };
     $('#eks').onclick = async () => {
       const t = $('#ek').value.trim(); if (!t && !komFoto.length) { UI.toast('Wpisz komentarz.'); return; }
-      await addEvent('brak_kom', b.urz, { bid, tekst: t, foto: komFoto }); UI.toast('Komentarz dodany'); Dialogs.brakOkno(bid, after);
+      await zapiszZmiany(); await addEvent('brak_kom', b.urz, { bid, tekst: t, foto: komFoto }); UI.toast('Komentarz dodany'); Dialogs.brakOkno(bid, after);
     };
     if ($('#eClose')) $('#eClose').onclick = async () => {
       const opis = prompt('Jak usunięto brak? (opcjonalnie)'); if (opis === null) return;
-      await addEvent('brak_zamk', b.urz, { bid, opis: opis.trim() }); UI.toast('Brak zamknięty'); wroc();
+      await zapiszZmiany(); await addEvent('brak_zamk', b.urz, { bid, opis: opis.trim() }); UI.toast('Brak zamknięty'); wroc();
     };
-    if ($('#eOpen')) $('#eOpen').onclick = async () => { await addEvent('brak_edyc', b.urz, { bid, otworz: true }); UI.toast('Brak otwarty ponownie'); wroc(); };
+    if ($('#eOpen')) $('#eOpen').onclick = async () => { await zapiszZmiany(); await addEvent('brak_edyc', b.urz, { bid, otworz: true }); UI.toast('Brak otwarty ponownie'); wroc(); };
     if ($('#eDel')) $('#eDel').onclick = async () => {
       if (!confirm('Usunąć ten brak? Zniknie z list (historia zostaje).')) return;
       await addEvent('brak_edyc', b.urz, { bid, usun: true }); UI.toast('Brak usunięty'); wroc();
@@ -1708,6 +1722,8 @@ async function przywrocEkran() {
   UI.cur = o.v; UI.par = o.par || {}; UI.pv = null; UI.refresh();
   return true;
 }
+/* Dostęp podwykonawcy (od 1.43.0): klucz z ograniczeniem do wybranych budów – serwer odsyła `dostep` w bootstrap */
+function podw() { return !!(S.boot && S.boot.dostep); }
 async function openProject(kod) {
   const pp = ((S.boot && S.boot.projekty) || []).find(x => x.kod === kod);
   if (!dostepDoBudowy(pp)) return brakDostepu(pp);
@@ -1773,6 +1789,21 @@ function settings() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
   await API.load();
+  // link podwykonawcy (od 1.43.0): …/elwis/#cfg=<adres serwera i klucz> – zapis konfiguracji i usunięcie z paska adresu
+  try {
+    const m = location.hash.match(/#cfg=([\w\-=]+)/);
+    if (m) {
+      history.replaceState(null, '', location.pathname + location.search);
+      const c = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const stary = API.cfg();
+      if (c && /^https:\/\/script\.google\.com\//.test(c.s) && c.k && (!stary || stary.key !== c.k)) {
+        if (stary && (await DB.unsynced()).length) { if (!confirm('Na tym urządzeniu są niewysłane wpisy innego dostępu. Zastąpić konfigurację?')) throw 0; }
+        if (stary) await DB.clearAll();
+        await API.setCfg({ url: c.s, key: c.k, tablet: 'Dostęp przez link' });
+        const b = await API.test(c.s, c.k); await DB.set('boot', b);
+      }
+    }
+  } catch (e) { if (e) console.warn('link', e); }
   S.boot = await DB.get('boot'); S.lastSync = await DB.get('lastSync');
   S.pogoda = await DB.get('pogoda');
   S.pinezki = (await DB.get('pinezki')) || {};

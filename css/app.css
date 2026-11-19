@@ -548,3 +548,4 @@ main{padding:16px 16px 100px}
 .kol .kc b{min-width:0}
 .bst2.kol .tbar3,.bst2.kol .tbar{width:100%;align-self:stretch}
 @media (max-width:760px){.blist .lstat .lgrp.kol{gap:12px;flex-wrap:wrap}.blist .kol .kolg{column-gap:8px}}
+.bnav.n2{grid-template-columns:repeat(2,1fr)}

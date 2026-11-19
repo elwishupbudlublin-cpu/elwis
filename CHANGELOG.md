@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.43.0 – 2026-11-19 (aplikacja i serwer, schemat 1.12)
+- Dostęp podwykonawcy przez link: klucz w Tablety z kolumnami G „Budowy (dostęp)” i H „Ważny do”; serwer wpuszcza tylko do wybranych budów, bez planu dnia, Priorytetów, Word i statusów ClickUp; logowanie kontem Pracownicy z rolą „podwykonawca” i Ekipą = „Przypisany do”; wpisy biura (urządzenia, pozycje, pinezka) od podwykonawcy pomijane. Link z funkcji `linkPodwykonawcy(firma, budowy, waznyDo)`; aplikacja czyta konfigurację z `#cfg=` i usuwa ją z paska adresu. Konta podwykonawców nie pojawiają się na tabletach HUP-BUD.
+- Okno braku: zdjęcia dodane przez „+ Zdjęcie” zapisują się także przy „Zamknij brak”, komentarzu i „Otwórz ponownie”; „Anuluj” pyta o niezapisane zmiany; nowe zdjęcia widać od razu (wcześniej ginęły, gdy nie kliknięto „Zapisz zmiany”). Edycja braku nie zmienia danych pierwotnego zgłoszenia w pamięci tabletu.
+
 ## 1.42.0 – 2026-11-18 (aplikacja i serwer)
 - Notatki: „Edytuj” dla każdego pracownika (wcześniej tylko biuro); „Usuń” (kosz) i „Przywróć” nadal tylko rola biuro. Serwer przyjmuje edycję tekstu od każdego, kosz / przywrócenie tylko od biura.
 

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.42.0';
+const SCRIPT_VERSION = '1.43.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -50,15 +50,23 @@ function handle_(p, body) {
   try {
     const tablet = auth_(p.key);
     if (!tablet) return out_({ ok: false, error: 'Nieznany lub wyłączony klucz tabletu' });
-    switch (body ? body.action : p.action) {
-      case 'bootstrap': if (p.pamiec) stanPamieci_(p.key, p.pamiec); return out_(bootstrap_(tablet));
+    const dost = dostep_(p.key);   // od 1.43.0: klucz podwykonawcy – tylko wybrane budowy, z datą ważności
+    if (dost.wygasl) return out_({ ok: false, error: 'Dostęp wygasł ' + dost.wazny + ' – skontaktuj się z HUP-BUD' });
+    const akcja = body ? body.action : p.action;
+    if (dost.budowy) {
+      if (['plan', 'zadania', 'docx', 'priorytety'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
+      const kod = String((body && body.kod) || p.kod || '');
+      if (['project', 'events', 'foto', 'push'].indexOf(akcja) >= 0 && dost.budowy.indexOf(kod) < 0) return out_({ ok: false, error: 'Brak dostępu do tej budowy' });
+    }
+    switch (akcja) {
+      case 'bootstrap': if (p.pamiec) stanPamieci_(p.key, p.pamiec); return out_(bootstrap_(tablet, dost));
       case 'project': return out_(project_(String(p.kod || '')));
-      case 'file': return out_(file_(String(p.id || ''), p.part));
+      case 'file': return out_(file_(String(p.id || ''), p.part, dost));
       case 'techniczne': return out_(techniczne_());
       case 'plan': return out_(planDla_(plan_(String(p.od || ''), String(p.do || '')), String(p.kto || '')));
       case 'events': return out_(events_(String(p.kod || ''), Number(p.since || 0)));
       case 'foto': return out_(foto_(String(p.kod || ''), String(p.fid || '')));
-      case 'push': return out_(push_(body, tablet));
+      case 'push': return out_(push_(body, tablet, dost));
       case 'zadania': return out_(zadania_(body || {}, tablet));
       case 'docx': return out_(docx_(body || {}));
       case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
@@ -107,6 +115,35 @@ function auth_(key) {
   const r = t.find(x => x[0] === String(key));
   return r ? r[1] : null;
 }
+
+/* Dostęp podwykonawcy (od 1.43.0, schemat 1.12): Tablety → G „Budowy (dostęp)” (kody przez średnik; puste = wszystkie aktywne,
+   zwykły tablet HUP-BUD), H „Ważny do” (rrrr-mm-dd; puste = bez daty). Klucz z budowami: tylko te budowy, bez planu dnia,
+   Priorytetów, Word i statusów ClickUp; logują się tylko konta Pracownicy z rolą „podwykonawca” i Ekipą = „Przypisany do” (C). */
+function dostep_(key) {
+  const t = zCache_('dostep', 60, () => rowsT_(baza_().getSheetByName('Tablety')).filter(x => tak_(x[3]))
+    .map(x => [txt_(x[1]), txt_(x[2]), txt_(x[6]), txt_(x[7])]));
+  const r = t.find(x => x[0] === String(key)) || ['', '', '', ''];
+  const budowy = r[2] ? r[2].split(/[;,]/).map(s => s.trim()).filter(String) : null;
+  const dzis = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd');
+  return { budowy: budowy && budowy.length ? budowy : null, ekipa: r[1], wazny: r[3], wygasl: !!(r[3] && /^\d{4}-\d{2}-\d{2}$/.test(r[3]) && r[3] < dzis) };
+}
+/** Link dla podwykonawcy (od 1.43.0) – uruchom w edytorze Apps Script: dodaje klucz w Tablety i zapisuje link w Logach.
+ *  Przykład: linkPodwykonawcy('Firma X', 'RR_NNN', '2026-12-31')  – kilka budów: 'RR_NNN; RR_MMM'.
+ *  Konto logowania: Pracownicy → wiersz z rolą „podwykonawca”, Ekipa = nazwa firmy (jak tu), PIN, Aktywny = tak. */
+function linkPodwykonawcy(firma, budowy, waznyDo) {
+  if (!firma || !budowy) throw new Error('Podaj firmę i kody budów, np. linkPodwykonawcy("Firma X", "RR_NNN", "2026-12-31")');
+  const sh = baza_().getSheetByName('Tablety');
+  if (!txt_(sh.getRange(1, 7).getValue())) sh.getRange(1, 7, 1, 2).setValues([['Budowy (dostęp)', 'Ważny do']]);
+  const key = 'P-' + Utilities.getUuid().replace(/-/g, '').slice(0, 24);
+  const n = sh.getLastRow() + 1;
+  sh.getRange(n, 1, 1, 8).setNumberFormat('@').setValues([['Podwykonawca – ' + firma, key, firma, 'tak', 'link ' + Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd'), '', budowy, waznyDo || '']]);
+  CACHE.remove('tablety'); CACHE.remove('dostep');
+  const cfg = Utilities.base64EncodeWebSafe(JSON.stringify({ s: ScriptApp.getService().getUrl(), k: key }));
+  const link = APP_URL + '#cfg=' + cfg;
+  Logger.log('Link dla ' + firma + ' (budowy: ' + budowy + (waznyDo ? ', ważny do ' + waznyDo : '') + '):\n' + link);
+  return link;
+}
+const APP_URL = 'https://elwishupbudlublin-cpu.github.io/elwis/';
 
 /** Stan pamięci zgłoszony przez tablet (od 1.7.0) → Tablety, kolumna F „Stan pamięci” (schemat 1.6). */
 function stanPamieci_(key, v) {
@@ -165,21 +202,24 @@ function slowniki_() {
 
 /* ===================== Operacje ===================== */
 
-function bootstrap_(tablet) {
+function bootstrap_(tablet, dost) {
   const k = konfig_();
   const salt = P.getProperty('SALT');
+  const pod = !!(dost && dost.budowy);   // dostęp podwykonawcy: tylko jego konta; tablety HUP-BUD: bez kont podwykonawców
   const pr = rowsT_(baza_().getSheetByName('Pracownicy'))
     .filter(r => txt_(r[0]) && tak_(r[4]) && txt_(r[3]))
+    .filter(r => pod ? (txt_(r[2]) === 'podwykonawca' && txt_(r[1]) === dost.ekipa) : txt_(r[2]) !== 'podwykonawca')
     .map(r => ({ name: txt_(r[0]), ekipa: txt_(r[1]), rola: txt_(r[2]) || 'pracownik', hash: sha_(salt + ':' + txt_(r[3])),
       cu: txt_(r[5]), m: tak_(r[7]) || txt_(r[2]) === 'biuro' }));
   const postep = safeJson_(P.getProperty('POSTEP') || '{}');
   const licz = safeJson_(P.getProperty('LICZ') || '{}');   // od 1.23.0
   const liczniki = safeJson_(P.getProperty('ZDARZENIA') || '{}');   // liczba zdarzeń budowy (od 1.16.0) – tablet pomija pytanie o nowe wpisy, gdy nic nie przybyło
-  const projekty = aktywne_().map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; if (licz[p.kod]) o.licz = licz[p.kod]; if (liczniki[p.kod] != null) o.zd = liczniki[p.kod]; return o; });
+  const projekty = aktywne_().filter(p => !pod || dost.budowy.indexOf(p.kod) >= 0).map(p => { const o = Object.assign({}, p); delete o.folder; delete o.lista; if (postep[p.kod]) o.postep = postep[p.kod]; if (licz[p.kod]) o.licz = licz[p.kod]; if (liczniki[p.kod] != null) o.zd = liczniki[p.kod]; return o; });
   return {
     ok: true, server: SCRIPT_VERSION, schema: k.wersja_schematu, minApp: k.min_wersja_aplikacji || '1.0.0',
     sesjaGodziny: Number(k.sesja_godziny || 12), tablet: tablet, salt: salt,
-    pracownicy: pr, projekty: projekty, slowniki: slowniki_(), protokoly: protokolyAktywne_()
+    pracownicy: pr, projekty: projekty, slowniki: slowniki_(), protokoly: protokolyAktywne_(),
+    dostep: pod ? { budowy: dost.budowy, wazny: dost.wazny || '' } : null
   };
 }
 
@@ -222,12 +262,12 @@ function project_(kod) {
 const PART_BYTES = 6 * 1024 * 1024;   // część pliku w jednej odpowiedzi
 const MAX_FILE = 60e6;                // największy plik dla tabletu
 
-function file_(id, part) {
+function file_(id, part, dost) {
   if (!id) throw new Error('Brak pliku');
   const f = DriveApp.getFileById(id);
-  // tylko pliki z folderu „Do wglądu” aktywnej budowy
+  // tylko pliki z folderu „Do wglądu” aktywnej budowy (dostęp podwykonawcy – tylko jego budów)
   const allowed = {};
-  aktywne_().forEach(p => { if (p.folder) allowed[p.folder] = true; });
+  aktywne_().forEach(p => { if (p.folder && (!dost || !dost.budowy || dost.budowy.indexOf(p.kod) >= 0)) allowed[p.folder] = true; });
   let ok = false;
   const par = f.getParents();
   while (par.hasNext()) {
@@ -496,8 +536,12 @@ function mapaTmp_(sh) {
   return m;
 }
 
-function push_(b, tablet) {
+function push_(b, tablet, dost) {
   const p = projekt_(String(b.kod || ''));
+  if (dost && dost.budowy) {   // podwykonawca: wpisy tylko jako konto podwykonawcy tej firmy, bez zmian biura
+    const konta = {}; rowsT_(baza_().getSheetByName('Pracownicy')).forEach(r => { if (txt_(r[2]) === 'podwykonawca' && txt_(r[1]) === dost.ekipa && tak_(r[4])) konta[txt_(r[0])] = true; });
+    (b.events || []).forEach(e => { if (e && (!konta[txt_(e.kto)] || ['urz_nowe', 'urz_poz', 'urz_sys', 'urz_usun', 'urz_edyc', 'pinezka'].indexOf(e.typ) >= 0)) { e.pomin = true; } });
+  }
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   let numery = {}, nowe = {};
   try {
@@ -528,7 +572,7 @@ function push_(b, tablet) {
       const maTmp = evs.some(e => /~/.test(txt_(e.urz)) || e.typ === 'urz_nowe');
       if (maTmp) {
         mapa = mapaTmp_(sh);
-        evs.filter(e => e.typ === 'urz_nowe' && !have[e.id]).forEach(e => {
+        evs.filter(e => e.typ === 'urz_nowe' && !have[e.id] && !e.pomin).forEach(e => {
           if (biuro === null) biuro = rolaBiuro_();
           const tmp = txt_(e.d && e.d.tmp), id = urzNowe_(p, e, biuro);
           if (id) { mapa[tmp] = id; e.urz = id; } else e.odrzuc = true;
@@ -545,7 +589,7 @@ function push_(b, tablet) {
       evs.forEach(e => {
         if (e.odrzuc) return;   // nowe urządzenie od osoby spoza roli biuro / z nieznanym typem
         accepted.push(e.id);
-        if (have[e.id]) return;
+        if (have[e.id] || e.pomin) return;   // pomin: wpis spoza uprawnień podwykonawcy – przyjęty (tablet go nie ponawia), niezapisany
         if (e.typ === 'protokol' && e.d && e.d.stan === 'usuniety') {
           // pracownik usuwa tylko szkic bez numeru; protokół z numerem – tylko rola biuro (od 1.6.1)
           if (biuro === null) biuro = rolaBiuro_();
