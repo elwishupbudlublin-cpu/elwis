@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.55.0';
+const APP_VERSION = '1.56.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -40,6 +40,8 @@ const API = (() => {
     project: (kod) => get('project', { kod }),
     techniczne: () => get('techniczne'),
     plan: (od, d) => get('plan', { od, do: d, kto: S.user ? S.user.name : '' }),
+    powiad: (since) => get('powiad', { since: String(since || 0), kto: S.user ? S.user.name : '' }),
+    zadNowe: (d) => post(Object.assign({ action: 'zadNowe', kto: S.user ? S.user.name : '' }, d)),   // od 1.56.0: warianty terminu / zaplanowanie zadania
     priorytety: (odswiez) => get('priorytety', Object.assign({ kto: S.user ? S.user.name : '' }, odswiez ? { odswiez: '1' } : {})),
     zadania: (zmiany) => post({ action: 'zadania', zmiany }),
     zakupy: (o) => post(Object.assign({ action: 'zakupy' }, o || {})),   // od 1.48.0: zapotrzebowania

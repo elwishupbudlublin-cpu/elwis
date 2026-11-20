@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.55.0';
+const SCRIPT_VERSION = '1.56.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -55,7 +55,7 @@ function handle_(p, body) {
     if (dost.wygasl) return out_({ ok: false, error: 'Dostęp wygasł ' + dost.wazny + ' – skontaktuj się z HUP-BUD' });
     const akcja = body ? body.action : p.action;
     if (dost.budowy) {
-      if (['plan', 'zadania', 'docx', 'priorytety', 'zakupy'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
+      if (['plan', 'zadania', 'docx', 'priorytety', 'zakupy', 'zadNowe', 'powiad'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
       const kod = String((body && body.kod) || p.kod || '');
       if (['project', 'events', 'foto', 'push'].indexOf(akcja) >= 0 && dost.budowy.indexOf(kod) < 0) return out_({ ok: false, error: 'Brak dostępu do tej budowy' });
     }
@@ -72,6 +72,8 @@ function handle_(p, body) {
       case 'zakupy': return out_(zakupy_(body || {}, tablet));   // od 1.48.0: zapotrzebowania (folder Zakupy)
       case 'docx': return out_(docx_(body || {}));
       case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
+      case 'zadNowe': return out_(zadNowe_(body || {}));   // od 1.56.0: warianty terminu, zaplanowanie, nowy projekt
+      case 'powiad': return out_(powiad_(String(p.kto || ''), p.since));   // od 1.56.0: powiadomienia (rola biuro)
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
   } catch (err) {
@@ -524,6 +526,7 @@ function zakupy_(b, tablet) {
         const rows = pozycje.map((x, i) => [nr, i + 1, kod || 'AKPiA', kiedy, c(e.kto), c(x.n).slice(0, 200), c(x.il).slice(0, 20), c(x.j).slice(0, 10), [c(x.uw), i === 0 && txt_(d.uwagi) ? 'całe zgłoszenie: ' + c(d.uwagi) : ''].filter(String).join(' · ').slice(0, 1000), ZAK_ST.nowe, '']);
         poz.getRange(poz.getLastRow() + 1, 1, rows.length, 11).setNumberFormat(TEXT).setValues(rows);
         mapa[e.id] = nr; odp.nr[e.id] = nr;
+        powDodaj_([{ t: 'zap', kod: kod || 'AKPiA', tyt: 'Nowe zapotrzebowanie ' + nr + ' (' + pozycje.length + ' poz.)', opis: pozycje.map(x => txt_(x.n)).join(' · ').slice(0, 300), kto: txt_(e.kto) }]);
       } else if (e.typ === 'zap_przen') {   // zmiana budowy (od 1.50.0, tylko biuro): stare zgłoszenie → odrzucone, nowe z tymi samymi pozycjami i zgłaszającym
         if (rola !== 'biuro') { odp.accepted.push(e.id); return; }
         const stary = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(stary)) return;
@@ -550,6 +553,7 @@ function zakupy_(b, tablet) {
         if (rola !== 'biuro' || !ZAK_ST[txt_(d.st)] || d.st === 'usuniete') { odp.accepted.push(e.id); return; }
         const nr = mapa[txt_(d.zid)] || txt_(d.zid); if (!/^Z-\d{5}-/.test(nr)) return;   // zgłoszenie jeszcze bez numeru – tablet ponowi
         zakStatus_(poz, nr, d, txt_(e.kto));
+        if (d.st === 'dostarczone' || d.st === 'odrzucone') powDodaj_([{ t: 'zap', kod: (nr.match(/^Z-\d{5}-(.+)-\d{4}$/) || ['', ''])[1], tyt: 'Zapotrzebowanie ' + nr + ': ' + ZAK_ST[d.st] + (Array.isArray(d.lp) && d.lp.length ? ' (poz. ' + d.lp.join(', ') + ')' : ''), opis: d.st === 'odrzucone' ? txt_(d.powod).slice(0, 200) : '', kto: txt_(e.kto) }]);
       }
       zd.getRange(zd.getLastRow() + 1, 1, 1, 8).setNumberFormat(TEXT).setValues([[e.id, txt_(e.ts), c(e.kto).slice(0, 80), tablet, e.typ === 'zap' ? mapa[e.id] : e.typ === 'zap_przen' ? (mapa[txt_(d.zid)] || txt_(d.zid)) : (mapa[txt_(d.zid)] || txt_(d.zid)), e.typ, JSON.stringify(d).slice(0, 45000), now]]);
       have[e.id] = true; odp.accepted.push(e.id);
@@ -743,7 +747,7 @@ function push_(b, tablet, dost) {
       const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', "yyyy-MM-dd'T'HH:mm:ss");
       const rows = [], touched = {};
       numery = numeruj_(sh, evs.filter(e => e.typ === 'protokol' && !have[e.id]));
-      const usuniete = [], zdjeciaDoKosza = [];
+      const usuniete = [], zdjeciaDoKosza = [], zapisane = [];
       let biuro = null, autorzy = null, autorzyBrakow = null;
       // nowe urządzenia (od 1.15.0): najpierw nadanie ID, potem zamiana ID tymczasowych w pozostałych zdarzeniach
       let mapa = null;
@@ -808,6 +812,7 @@ function push_(b, tablet, dost) {
           zdjeciaDoKosza.push(fid);
         }
         have[e.id] = true;
+        zapisane.push(e);
         rows.push([e.id, txt_(e.ts), txt_(e.kto).slice(0, 80), tablet, txt_(e.urz).slice(0, 20), e.typ, JSON.stringify(e.d || {}).slice(0, 45000), now]);
         if (e.urz) touched[e.urz] = true;
       });
@@ -816,6 +821,7 @@ function push_(b, tablet, dost) {
       przelicz_(p, Object.keys(touched), rows.length);
       if (usuniete.length) koszWord_(p, usuniete);
       if (zdjeciaDoKosza.length) zdjeciaDoKosza.forEach(fid => { const f = plikZdjecia_(p, fid); if (f) f.setTrashed(true); });
+      if (zapisane.length) powZPush_(p, zapisane, numery);   // od 1.56.0: powiadomienia dla biura
     }
     return { ok: true, accepted: accepted, numery: numery, nowe: nowe };
   } finally { lock.releaseLock(); }
@@ -1283,6 +1289,8 @@ function migracjaWyzwalaczy_(wymus) {
 function codziennie() {
   try { uzupelnijLicz_(50); } catch (e) { Logger.log('liczniki: ' + e); }
   try { kontrolaMiejsca_(); } catch (e) { Logger.log('miejsce: ' + e); }
+  try { obciazenieZapisz_(); } catch (e) { Logger.log('obciążenie: ' + e); }   // od 1.56.0
+  try { powPorzadki_(); } catch (e) { Logger.log('powiadomienia: ' + e); }
 }
 const DZIEN = 864e5;
 function dzien_(t) { return Utilities.formatDate(new Date(t), 'Europe/Warsaw', 'yyyy-MM-dd'); }
@@ -1526,4 +1534,282 @@ function priorytety_(kto, odswiez) {
   r.projekty.forEach(p => { if (kom[p.kod]) p.kom = kom[p.kod]; });
   r.komentarz = kom._ || '';
   return Object.assign({ ok: true }, r);
+}
+
+/* ===================== Zadania z harmonogramu, Obciążenie, Powiadomienia (od 1.56.0) =====================
+   Zasady: fundamenty pkt 2.8–2.9 i 6. Zapis w ClickUp tylko po „Zaplanuj” w aplikacji (rola biuro) – akceptacja zasady 1. */
+const FAZY_PROJ = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
+const ZASIEG_DOM = { 1: 2000, 2: 200, 3: 120 };   // km od Lublina w linii prostej – zasięg jednodniowy (Konfiguracja → zasieg_km)
+const LUBLIN = { lat: 51.2465, lon: 22.5684 };
+const TZ = 'Europe/Warsaw';
+function cuH_() { const token = P.getProperty('CLICKUP_TOKEN'); if (!token) throw new Error('Brak klucza ClickUp na serwerze'); return { headers: { Authorization: token, 'Content-Type': 'application/json' }, muteHttpExceptions: true }; }
+function cu_(metoda, sciezka, dane) {
+  const o = Object.assign({ method: metoda }, cuH_()); if (dane) o.payload = JSON.stringify(dane);
+  for (let i = 0; i < 3; i++) {
+    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/' + sciezka, o), k = r.getResponseCode();
+    if (k === 429) { Utilities.sleep(15000); continue; }
+    if (k >= 300) throw new Error('ClickUp ' + k + ': ' + r.getContentText().slice(0, 200));
+    return JSON.parse(r.getContentText() || '{}');
+  }
+  throw new Error('ClickUp: limit zapytań – spróbuj za chwilę');
+}
+function cuTeam_() { let t = P.getProperty('CLICKUP_TEAM'); if (!t) { t = String(cu_('get', 'team').teams[0].id); P.setProperty('CLICKUP_TEAM', t); } return t; }
+function msDnia_(dzien, hm) { const [h, m] = String(hm).split(':'); return Utilities.parseDate(dzien + ' ' + ('0' + h).slice(-2) + ':' + ('0' + (m || '0')).slice(-2), TZ, 'yyyy-MM-dd HH:mm').getTime(); }
+function dzienTz_(ms) { return Utilities.formatDate(new Date(ms), TZ, 'yyyy-MM-dd'); }
+function minTz_(ms) { const s = Utilities.formatDate(new Date(ms), TZ, 'HH:mm'); return Number(s.slice(0, 2)) * 60 + Number(s.slice(3)); }
+function hhmm_(m) { return Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2); }
+function robTz_(dzien) { const w = new Date(dzien + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6; }
+function dodajDni_(dzien, n) { return new Date(new Date(dzien + 'T12:00:00Z').getTime() + n * DZIEN).toISOString().slice(0, 10); }
+function dniRobocze_(od, ile) { const o = []; let d = od; while (o.length < ile) { if (robTz_(d)) o.push(d); d = dodajDni_(d, 1); } return o; }
+const DNI_TYG = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+function dzTxt_(dzien) { const d = new Date(dzien + 'T12:00:00Z'); return DNI_TYG[d.getUTCDay()] + ' ' + d.getUTCDate() + '.' + (d.getUTCMonth() + 1); }
+
+/** Ludzie z Pracowników z ID ClickUp: ekipa ('1','2','3','Pomocnik','Biuro'), M, okno pracy (min od północy). */
+function ludzie_() {
+  return rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => tak_(r[4]) && txt_(r[5]) && txt_(r[2]) !== 'podwykonawca').map(r => {
+    const m = txt_(r[1]).match(/ekipa\s*(\d+)/i), ek = m ? m[1] : txt_(r[1]).split(' ')[0] || '';
+    return { name: txt_(r[0]), id: txt_(r[5]), ek: ek, lider: /lider/i.test(txt_(r[1])), rola: txt_(r[2]), m: tak_(r[7]), okno: ek === '1' ? [480, 960] : [420, 900] };
+  });
+}
+/** Zadania osób: otwarte z terminem od dziś do końca horyzontu + zaległe (termin przed dziś). */
+function zadaniaOsob_(ids, doMs) {
+  const team = cuTeam_(), dzis0 = msDnia_(dzienTz_(Date.now()), '00:00'), out = {}, zbierz = extra => {
+    for (let pg = 0; pg < 30; pg++) {
+      const q = ['page=' + pg, 'include_closed=false', 'subtasks=true', extra].concat(ids.map(i => 'assignees[]=' + encodeURIComponent(i))).join('&');
+      const d = cu_('get', 'team/' + team + '/task?' + q);
+      (d.tasks || []).forEach(t => { out[t.id] = t; });
+      if (d.last_page || !(d.tasks || []).length) break;
+    }
+  };
+  zbierz('due_date_gt=' + (dzis0 - 1) + '&due_date_lt=' + (doMs + 1));
+  zbierz('due_date_lt=' + dzis0);
+  return Object.keys(out).map(k => out[k]);
+}
+function pomijaj_(t) { const n = txt_(t.name); return /^status$/i.test(n) || /^ELWIS –/.test(n) || FAZY_PROJ.some(f => f.toLowerCase() === n.toLowerCase()); }
+function nieob_(t) { return /urlop|nieobecn|zwolnienie|\bL4\b/i.test(txt_(t.name)); }
+function kodZListy_(n) { const m = txt_(n).match(/^(\d{2}[_p]\d{3})/); return m ? m[1] : ''; }
+
+/** Obciążenie: dla każdej osoby i dnia roboczego – przedziały zajęte (min), godziny „pływające”, nieobecność, „?”. */
+function obciazenie_() {
+  const k = konfig_(), dni = Number(k.obciazenie_dni) || 15, tyg = Number(k.obciazenie_tygodnie) || 10;
+  const dzis = dzienTz_(Date.now()), koniec = dodajDni_(dzis, tyg * 7), doMs = msDnia_(koniec, '23:59');
+  const L = ludzie_(), poId = {}; L.forEach(o => { poId[o.id] = o; });
+  const zad = zadaniaOsob_(L.map(o => o.id), doMs).filter(t => !pomijaj_(t));
+  const dzienne = {}; L.forEach(o => { dzienne[o.id] = {}; });
+  const kom = (id, dz) => (dzienne[id][dz] = dzienne[id][dz] || { prz: [], plyw: 0, nieob: '', pyt: false });
+  const zaleg = {}, lista = [];
+  zad.forEach(t => {
+    const osoby = (t.assignees || []).map(a => String(a.id)).filter(i => poId[i]); if (!osoby.length) return;
+    const due = t.due_date ? Number(t.due_date) : null, st = t.start_date ? Number(t.start_date) : null, est = Number(t.time_estimate || 0) / 6e4;
+    const dz0 = dzienTz_(st || due), dz1 = dzienTz_(due);
+    if (dz1 < dzis) { osoby.forEach(i => { zaleg[i] = (zaleg[i] || 0) + (est ? est / 60 : 8); }); lista.push({ t, osoby, zal: true }); return; }
+    lista.push({ t, osoby });
+    const robocze = []; let d = dz0 < dzis ? dzis : dz0; while (d <= dz1) { if (robTz_(d)) robocze.push(d); d = dodajDni_(d, 1); }
+    if (!robocze.length) return;
+    const czasy = !!(t.start_date_time && t.due_date_time && st);
+    osoby.forEach(i => {
+      const o = poId[i];
+      robocze.forEach((dz, j) => {
+        const c = kom(i, dz);
+        if (nieob_(t)) { c.nieob = /zwolnienie|L4/i.test(t.name) ? 'L4' : 'U'; return; }
+        if (czasy) { const a = dz === dzienTz_(st) ? minTz_(st) : o.okno[0], b = dz === dz1 ? minTz_(due) : o.okno[1]; if (b > a) c.prz.push([a, b]); }
+        else if (t.due_date_time && !st && est) { const b = minTz_(due); c.prz.push([Math.max(o.okno[0], b - est), b]); }
+        else if (est) c.plyw += est / robocze.length;
+        else { c.plyw += o.okno[1] - o.okno[0]; c.pyt = true; }
+      });
+    });
+  });
+  return { stan: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), dzis, dni, tyg, koniec, ludzie: L, dzienne, zaleg, lista, kom };
+}
+/** Wolne przedziały osoby w dniu (min), po odjęciu zajętych i godzin pływających (od początku dnia). */
+function wolne_(O, o, dz) {
+  const c = O.dzienne[o.id][dz]; let wol = [[o.okno[0], o.okno[1]]];
+  if (!c) return wol;
+  if (c.nieob) return [];
+  c.prz.slice().sort((a, b) => a[0] - b[0]).forEach(([a, b]) => { const n = []; wol.forEach(([x, y]) => { if (b <= x || a >= y) n.push([x, y]); else { if (a > x) n.push([x, a]); if (b < y) n.push([b, y]); } }); wol = n; });
+  let p = c.plyw; const n = []; wol.forEach(([x, y]) => { if (p >= y - x) { p -= y - x; return; } n.push([x + p, y]); p = 0; }); return n;
+}
+function zajete_(O, o, dz) { const c = O.dzienne[o.id][dz]; if (c && c.nieob) return c.nieob; const w = wolne_(O, o, dz).reduce((s, [a, b]) => s + b - a, 0); const h = Math.round(((o.okno[1] - o.okno[0]) - w) / 30) / 2; return String(h).replace('.', ',') + (c && c.pyt ? '?' : ''); }
+function przetnij_(A, B) { const o = []; A.forEach(([a, b]) => B.forEach(([c, d]) => { const x = Math.max(a, c), y = Math.min(b, d); if (y > x) o.push([x, y]); })); return o.sort((p, q) => p[0] - q[0]); }
+
+/** Zakładka „Obciążenie” w Bazie – mapa godzin (dni + tygodnie) i lista zadań; nadpisywana w całości. */
+function obciazenieZapisz_(O) {
+  O = O || obciazenie_();
+  const ss = baza_(); let sh = ss.getSheetByName('Obciążenie'); if (!sh) sh = ss.insertSheet('Obciążenie');
+  const dniL = dniRobocze_(O.dzis, O.dni), pozaDni = [], start = dodajDni_(dniL[dniL.length - 1], 1);
+  for (let d = start; d <= O.koniec; d = dodajDni_(d, 1)) if (robTz_(d)) pozaDni.push(d);
+  const tygodnie = {}; pozaDni.forEach(d => { const k = poniedzialek_(d); (tygodnie[k] = tygodnie[k] || []).push(d); });
+  const tk = Object.keys(tygodnie).sort();
+  const nagl = ['Osoba', 'Ekipa', 'Godz. pracy'].concat(dniL.map(dzTxt_), tk.map(k => 'tydz. ' + dzTxt_(k).split(' ')[1]), ['Zaległe (h)']);
+  const ws = O.ludzie.slice().sort((a, b) => (a.ek + a.name < b.ek + b.name ? -1 : 1)).map(o => [o.name, o.ek, hhmm_(o.okno[0]) + '–' + hhmm_(o.okno[1])]
+    .concat(dniL.map(d => zajete_(O, o, d)), tk.map(k => { let h = 0, u = 0; tygodnie[k].forEach(d => { const z = zajete_(O, o, d); if (/^[A-Z]/.test(z)) u++; else h += Number(String(z).replace('?', '').replace(',', '.')); }); return h + '/' + tygodnie[k].length * 8 + (u ? ' · U:' + u : ''); }),
+      [O.zaleg[o.id] ? String(Math.round(O.zaleg[o.id] * 2) / 2).replace('.', ',') : '']));
+  const imie = {}; O.ludzie.forEach(o => { imie[o.id] = o.name; });
+  const zl = O.lista.sort((a, b) => Number(a.t.due_date) - Number(b.t.due_date)).map(x => [kodZListy_(x.t.list && x.t.list.name), txt_(x.t.name).slice(0, 60), x.osoby.map(i => imie[i]).join(', '),
+    x.t.start_date ? Utilities.formatDate(new Date(Number(x.t.start_date)), TZ, x.t.start_date_time ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd') : '', Utilities.formatDate(new Date(Number(x.t.due_date)), TZ, x.t.due_date_time ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd'),
+    x.t.time_estimate ? String(Math.round(Number(x.t.time_estimate) / 18e5) / 2).replace('.', ',') : '', (x.zal ? 'ZALEGŁE · ' : '') + txt_(x.t.status && x.t.status.status), txt_(x.t.url)]);
+  const szer = Math.max(nagl.length, 8), pad = r => r.concat(Array(szer - r.length).fill(''));
+  const wiersze = [pad(['Stan na', O.stan, 'Zajęte godziny z dnia pracy (8 h); U – urlop / nieobecność, L4 – zwolnienie, ? – zadanie bez szacowanego czasu (liczone jako cały dzień). Arkusz liczy serwer ELWIS – nie edytować.']), pad([]), pad(nagl)]
+    .concat(ws.map(pad), [pad([]), pad(['Kod', 'Zadanie', 'Osoby', 'Start', 'Termin', 'Szac. h', 'Status', 'Link'])], zl.map(pad));
+  sh.clear(); sh.getRange(1, 1, wiersze.length, szer).setNumberFormat(TEXT).setValues(wiersze.map(r => r.map(v => String(v).replace(/^[=+@-]/, "'$&"))));
+  sh.setFrozenRows(3); sh.getRange(3, 1, 1, szer).setFontWeight('bold'); sh.getRange(4 + ws.length + 1, 1, 1, 8).setFontWeight('bold');
+  return O;
+}
+
+/* --- projekt: dane z Bazy, odległość od Lublina --- */
+function projektyBaza_() {
+  return rowsT_(baza_().getSheetByName('Projekty')).filter(r => txt_(r[0])).map(r => ({ kod: txt_(r[0]), nazwa: txt_(r[1]), adres: txt_(r[2]), pin: txt_(r[3]), aktywna: tak_(r[5]), cu: txt_(r[9]), wojsk: tak_(r[11]) }));
+}
+function km_(a, b) { const R = 6371, r = x => x * Math.PI / 180, dl = r(b.lat - a.lat), dn = r(b.lon - a.lon); const h = Math.sin(dl / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dn / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); }
+function wsp_(pin, adres) {
+  const m = txt_(pin).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/); if (m) return { lat: Number(m[1]), lon: Number(m[2]) };
+  if (!txt_(adres)) return null;
+  const kl = 'geo:' + txt_(adres).toLowerCase().slice(0, 200), c = CACHE.get(kl); if (c) return c === '-' ? null : JSON.parse(c);
+  try { const g = Maps.newGeocoder().setRegion('pl').setLanguage('pl').geocode(txt_(adres) + ', Polska'); const l = g.results && g.results[0] && g.results[0].geometry.location; const w = l ? { lat: l.lat, lon: l.lng } : null; CACHE.put(kl, w ? JSON.stringify(w) : '-', 21600); return w; } catch (e) { return null; }
+}
+
+/** Warianty terminu: pierwszy wolny termin każdej pasującej ekipy (pary), z podziałem na części. */
+function warianty_(z, O) {
+  O = O || obciazenie_();
+  const k = konfig_(), zas = pary_(k.zasieg_km, ZASIEG_DOM), pr = z.nowy ? { kod: txt_(z.nowy.kod), adres: txt_(z.nowy.miejsc), wojsk: false } : projektyBaza_().find(p => p.kod === txt_(z.kod));
+  if (!pr) throw new Error('Nie ma projektu ' + z.kod + ' w Bazie');
+  const gdzie = wsp_(pr.pin, pr.adres), odl = gdzie ? km_(LUBLIN, gdzie) : null;
+  const ekipy = {}; O.ludzie.forEach(o => { if (/^\d+$/.test(o.ek)) (ekipy[o.ek] = ekipy[o.ek] || []).push(o); });
+  const dar = O.ludzie.find(o => /pomocnik/i.test(o.ek));
+  const wybrane = /^\d+$/.test(txt_(z.ekipa)) ? [txt_(z.ekipa)] : Object.keys(ekipy).sort();
+  let prow = {}; if (pr.cu) { try { (cu_('get', 'list/' + pr.cu + '/task?include_closed=true&subtasks=true').tasks || []).forEach(t => (t.assignees || []).forEach(a => { const o = O.ludzie.find(x => x.id === String(a.id)); if (o && /^\d+$/.test(o.ek)) prow[o.ek] = (prow[o.ek] || 0) + 1; })); } catch (e) { } }
+  const prowEk = Object.keys(prow).sort((a, b) => prow[b] - prow[a])[0];
+  const potrzeba = Math.round(Number(z.h) * 60), teraz = Date.now(), dzis = O.dzis;
+  const startD = txt_(z.od) && txt_(z.od) > dzis ? txt_(z.od) : dzis;
+  const dniH = []; for (let d = startD; d <= O.koniec; d = dodajDni_(d, 1)) if (robTz_(d)) dniH.push(d);
+  return Object.keys(ekipy).filter(e => wybrane.indexOf(e) >= 0).map(e => {
+    const os = ekipy[e], czesci = []; let reszta = potrzeba;
+    for (const d of dniH) {
+      if (reszta <= 0) break;
+      let wol = wolne_(O, os[0], d); os.slice(1).forEach(o => { wol = przetnij_(wol, wolne_(O, o, d)); });
+      if (d === dzis) { const m = Math.ceil((minTz_(teraz) + 60) / 30) * 30; wol = wol.map(([a, b]) => [Math.max(a, m), b]).filter(([a, b]) => b > a); }
+      wol.forEach(([a, b]) => { a = Math.ceil(a / 30) * 30; if (reszta <= 0 || b - a < 30) return; const kon = Math.min(b, a + reszta); czesci.push({ dzien: d, dz: dzTxt_(d), od: hhmm_(a), do: hhmm_(kon), h: Math.round((kon - a) / 30) / 2 }); reszta -= kon - a; });
+    }
+    const uwagi = []; let ok = reszta <= 0, blad = ok ? '' : 'brak wolnych godzin do ' + dzTxt_(O.koniec);
+    if (ok && txt_(z.do) && czesci[czesci.length - 1].dzien > txt_(z.do)) { ok = false; blad = 'po terminie'; }
+    if (pr.wojsk && os.some(o => !o.m)) { ok = false; blad = 'obiekt wojskowy – brak uprawnienia M'; }
+    if (odl == null) uwagi.push('Zasięg nieznany – brak pinezki / adresu budowy');
+    else if (odl > (zas[e] || 9999)) uwagi.push('Budowa ok. ' + odl + ' km od Lublina – poza zasięgiem jednodniowym ekipy ' + e + ' (' + zas[e] + ' km) – wymaga uzgodnienia');
+    os.forEach(o => { if (O.zaleg[o.id]) uwagi.push(o.name + ': zaległe zadania ok. ' + Math.round(O.zaleg[o.id]) + ' h'); });
+    if (z.dariusz && dar) czesci.forEach(c => { const w = przetnij_(wolne_(O, dar, c.dzien), [[minOf_(c.od), minOf_(c.do)]]).reduce((s, [a, b]) => s + b - a, 0); if (w < (minOf_(c.do) - minOf_(c.od)) && uwagi.indexOf('Dariusz zajęty w części terminu') < 0) uwagi.push('Dariusz zajęty w części terminu'); });
+    return { ek: e, ekipa: 'Ekipa ' + e + ' (' + os.map(o => o.name).join(', ') + ')', osoby: os.map(o => o.id), ok, blad, prow: e === prowEk, czesci, uwagi };
+  }).sort((a, b) => (b.ok - a.ok) || ((a.czesci[a.czesci.length - 1] || { dzien: 'z' }).dzien < (b.czesci[b.czesci.length - 1] || { dzien: 'z' }).dzien ? -1 : 1));
+}
+function minOf_(s) { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); }
+
+/** Nowy projekt z formularza: lista w ClickUp (szablon z Konfiguracji → clickup_szablon_listy) + wiersz w Bazie (Aktywna = nie). */
+function nowyProjekt_(n, kto) {
+  const kod = txt_(n.kod), nazwa = txt_(n.nazwa).replace(/^[=+@-]/, '');
+  if (!/^\d{2}[_p]\d{3}$/.test(kod)) throw new Error('Kod projektu w formacie RR_NNN lub RRpNNN');
+  if (!nazwa) throw new Error('Podaj nazwę projektu');
+  if (projektyBaza_().some(p => p.kod === kod)) throw new Error('Projekt ' + kod + ' jest już w Bazie – wybierz go z listy');
+  const team = cuTeam_(), sp = (cu_('get', 'team/' + team + '/space?archived=false').spaces || []);
+  const rok = '20' + kod.slice(0, 2), s = sp.find(x => new RegExp('^\\s*PROJ\\s*' + rok).test(x.name));
+  if (!s) throw new Error('Brak przestrzeni „PROJ ' + rok + '” w ClickUp');
+  const istnieje = [];
+  sp.filter(x => /^\s*PROJ/i.test(x.name)).forEach(x => {
+    (cu_('get', 'space/' + x.id + '/list?archived=false').lists || []).forEach(l => { if (kodZListy_(l.name) === kod) istnieje.push(l.name); });
+    (cu_('get', 'space/' + x.id + '/folder?archived=false').folders || []).forEach(f => (f.lists || []).forEach(l => { if (kodZListy_(l.name) === kod) istnieje.push(l.name); }));
+  });
+  if (istnieje.length) throw new Error('W ClickUp jest już lista „' + istnieje[0] + '” – dopisz ją do Bazy albo wybierz inny kod');
+  const pelna = kod + ' ' + nazwa, szablon = txt_(konfig_().clickup_szablon_listy);
+  let lid = '';
+  if (szablon) { const r = cu_('post', 'space/' + s.id + '/list_template/' + encodeURIComponent(szablon), { name: pelna, options: { return_immediately: false } }); lid = String(r.id || (r.list && r.list.id) || ''); }
+  if (!lid) { lid = String(cu_('post', 'space/' + s.id + '/list', { name: pelna }).id); FAZY_PROJ.forEach(f => cu_('post', 'list/' + lid + '/task', { name: f })); }
+  const sh = baza_().getSheetByName('Projekty');
+  sh.getRange(sh.getLastRow() + 1, 1, 1, 12).setNumberFormat(TEXT).setValues([[kod, pelna, txt_(n.miejsc).replace(/^[=+@-]/, ''), '', '', 'nie', '', 'Założone z ELWIS ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') + ' (' + kto + ') – do uzupełnienia skillem nowa-budowa', '', lid, '', '']]);
+  CACHE.remove('aktywne');
+  return { kod, cu: lid, nazwa: pelna };
+}
+function faza_(lid, nazwa) {
+  for (let i = 0; i < 6; i++) {
+    const t = (cu_('get', 'list/' + lid + '/task?include_closed=true').tasks || []).find(x => !x.parent && txt_(x.name).toLowerCase() === nazwa.toLowerCase());
+    if (t) return t.id;
+    if (i < 5) Utilities.sleep(3000);   // lista z szablonu może się jeszcze tworzyć
+  }
+  return cu_('post', 'list/' + lid + '/task', { name: nazwa }).id;
+}
+
+/** Operacja `zadNowe` (od 1.56.0) – tylko rola biuro: projekty | warianty | zaplanuj */
+function zadNowe_(b) {
+  const kto = txt_(b.kto); if (!rolaBiuro_()[kto]) throw new Error('Nowe zadania – tylko rola biuro');
+  if (b.op === 'projekty') return { ok: true, projekty: projektyBaza_().filter(p => p.cu || p.aktywna).map(p => ({ kod: p.kod, nazwa: p.nazwa, aktywna: p.aktywna })) };
+  const z = b.zgl || {}; if (!(Number(z.h) > 0)) throw new Error('Brak czasu pracy');
+  if (!FAZY_PROJ.includes(txt_(z.faza))) z.faza = 'Montaż i Wykonawstwo';
+  const lock = LockService.getScriptLock(); lock.waitLock(25000);
+  try {
+    const O = obciazenie_();
+    if (b.op === 'warianty') { obciazenieZapisz_(O); return { ok: true, stan: O.stan, warianty: warianty_(z, O) }; }
+    if (b.op !== 'zaplanuj') throw new Error('Nieznana operacja');
+    const w = b.wyb || {}, L = O.ludzie.filter(o => (w.osoby || []).indexOf(o.id) >= 0);
+    if (!L.length || !(w.czesci || []).length) throw new Error('Brak wybranego wariantu');
+    // kontrola kolizji na aktualnym obciążeniu
+    const kol = [];
+    w.czesci.forEach(c => L.forEach(o => { const a = minOf_(c.od), bb = minOf_(c.do), wol = przetnij_(wolne_(O, o, c.dzien), [[a, bb]]).reduce((s, [x, y]) => s + y - x, 0); if (wol < bb - a) kol.push(o.name + ' – ' + dzTxt_(c.dzien) + ' ' + c.od + '–' + c.do + ' (zajęte ' + zajete_(O, o, c.dzien) + ' h z 8)'); }));
+    if (kol.length) {
+      powDodaj_([{ t: 'kol', kod: txt_(z.nowy ? z.nowy.kod : z.kod), tyt: 'Kolizja: ' + kol[0], opis: '„' + txt_(z.nazwa).slice(0, 80) + '” – termin zajęty od czasu wyszukania; wybierz nowy wariant', kto: 'serwer' }]);
+      obciazenieZapisz_(O);
+      return { ok: true, kolizja: kol, stan: O.stan, warianty: warianty_(z, O) };
+    }
+    let pr = z.nowy ? nowyProjekt_(z.nowy, kto) : projektyBaza_().find(p => p.kod === txt_(z.kod));
+    if (!pr || !pr.cu) throw new Error('Projekt bez listy ClickUp w Bazie (kolumna „ID listy ClickUp”)');
+    const lid = pr.cu, fid = faza_(lid, z.faza), dar = z.dariusz ? O.ludzie.find(o => /pomocnik/i.test(o.ek)) : null;
+    const osoby = L.map(o => Number(o.id)).concat(dar ? [Number(dar.id)] : []), n = w.czesci.length, urls = [];
+    const opis = ['Zaplanowane w ELWIS: ' + kto + ', ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + ' – ' + txt_(w.ekipa) + (w.nr ? ', wariant ' + w.nr : '') + ' (obciążenie: stan na ' + O.stan + ').',
+      txt_(z.od) ? 'Nie wcześniej niż: ' + z.od : '', txt_(z.do) ? 'Najpóźniej do: ' + z.do : '', txt_(z.uw) ? 'Uwagi: ' + txt_(z.uw).slice(0, 1000) : ''].filter(String).join('\n');
+    w.czesci.forEach((c, i) => {
+      const t = cu_('post', 'list/' + lid + '/task', { name: txt_(z.nazwa).slice(0, 180) + (n > 1 ? ' – część ' + (i + 1) + '/' + n : ''), parent: fid, assignees: osoby, description: opis,
+        start_date: msDnia_(c.dzien, c.od), start_date_time: true, due_date: msDnia_(c.dzien, c.do), due_date_time: true, time_estimate: Math.round((minOf_(c.do) - minOf_(c.od)) * 6e4), notify_all: false });
+      urls.push(t.url);
+    });
+    P.setProperty('PLAN_VER', String(Date.now()));
+    powDodaj_([{ t: 'zad', kod: pr.kod, tyt: 'Zaplanowano: ' + txt_(z.nazwa).slice(0, 80) + ' – ' + txt_(w.ekipa).replace(/\s*\(.*/, '') + ', ' + w.czesci.map(c => dzTxt_(c.dzien) + ' ' + c.od + '–' + c.do).join(' + '), opis: (z.nowy ? 'Nowy projekt założony w ClickUp i Bazie · ' : '') + z.faza, kto }]);
+    try { obciazenieZapisz_(); } catch (e) { Logger.log('obciążenie po zaplanowaniu: ' + e); }
+    return { ok: true, urls, kod: pr.kod, nowy: z.nowy ? pr : null };
+  } finally { lock.releaseLock(); }
+}
+
+/* --- Powiadomienia (zakładka w Bazie, tylko dla roli biuro) --- */
+const POW_NAGL = ['ID', 'Czas (ms)', 'Typ', 'Kod', 'Tytuł', 'Opis', 'Kto'];
+const POW_DNI = 60;
+function powSheet_() { const ss = baza_(); let sh = ss.getSheetByName('Powiadomienia'); if (!sh) { sh = ss.insertSheet('Powiadomienia'); sh.getRange(1, 1, 1, 7).setValues([POW_NAGL]); sh.setFrozenRows(1); } return sh; }
+function powDodaj_(lista) {
+  if (!lista || !lista.length) return;
+  try {
+    const sh = powSheet_(), t0 = Date.now(), c = v => String(v == null ? '' : v).replace(/^[=+@-]/, "'$&");
+    const rows = lista.map((x, i) => ['p' + t0 + '-' + i, String(x.ts || t0), x.t, c(x.kod).slice(0, 20), c(x.tyt).slice(0, 250), c(x.opis).slice(0, 500), c(x.kto).slice(0, 80)]);
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, 7).setNumberFormat(TEXT).setValues(rows);
+  } catch (e) { Logger.log('powiadomienia: ' + e); }
+}
+function powZPush_(p, evs, numery) {
+  const L = [], gdzie = e => (e.urz && e.urz !== 'BUDOWA' ? ' · ' + e.urz : '');
+  evs.forEach(e => {
+    const d = e.d || {}, b = { kod: p.kod, kto: txt_(e.kto), ts: Date.parse(txt_(e.ts)) || Date.now() };
+    if (e.typ === 'brak') L.push(Object.assign({ t: 'brak', tyt: 'Nowy brak: ' + txt_(d.kat) + gdzie(e), opis: [d.odp ? 'Odpowiedzialny: ' + d.odp : '', d.blokuje ? 'blokuje pracę' : '', txt_(d.opis).slice(0, 200)].filter(String).join(' · ') }, b));
+    else if (e.typ === 'brak_zamk') L.push(Object.assign({ t: 'bzam', tyt: 'Zamknięty brak' + gdzie(e), opis: txt_(d.opis).slice(0, 200) }, b));
+    else if (e.typ === 'protokol' && d.stan === 'gotowy') L.push(Object.assign({ t: 'prot', tyt: 'Protokół przesłany' + (numery && numery[d.pid] ? ' – ' + numery[d.pid] : d.nr ? ' – ' + d.nr : ''), opis: txt_(d.def || d.nazwa) }, b));
+    else if (e.typ === 'notatka') L.push(Object.assign({ t: 'nota', tyt: 'Notatka' + gdzie(e), opis: txt_(d.tekst).slice(0, 200) }, b));
+    else if (e.typ === 'urz_nowe' || e.typ === 'urz_edyc') L.push(Object.assign({ t: 'urz', tyt: (e.typ === 'urz_nowe' ? 'Nowe urządzenie ' : 'Zmiana danych urządzenia ') + txt_(e.urz), opis: '' }, b));
+    else if (e.typ === 'foto' && d.rodzaj === 'tabliczka' && d.odp && String(d.odp).split(' > ').length > 1) L.push(Object.assign({ t: 'tab', tyt: 'Tabliczka ' + txt_(e.urz) + ': zachowana po ' + String(d.odp).split(' > ').length + ' podejściach', opis: txt_(d.odp) + (d.obrot ? ' · obrót ' + d.obrot + '°' : '') }, b));
+  });
+  powDodaj_(L);
+}
+/** Operacja `powiad` – tylko rola biuro: wpisy nowsze niż `since` (ms). */
+function powiad_(kto, since) {
+  if (!rolaBiuro_()[txt_(kto)]) throw new Error('Powiadomienia – tylko rola biuro');
+  const sh = powSheet_(); if (sh.getLastRow() < 2) return { ok: true, lista: [] };
+  const s = Number(since) || 0;
+  const lista = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getDisplayValues().filter(r => Number(r[1]) > s).slice(-500).map(r => ({ id: r[0], ts: Number(r[1]), t: r[2], kod: r[3], tyt: r[4], opis: r[5], kto: r[6] }));
+  return { ok: true, lista };
+}
+function powPorzadki_() {
+  const sh = powSheet_(); if (sh.getLastRow() < 2) return;
+  const gr = Date.now() - POW_DNI * DZIEN, v = sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues();
+  let n = 0; while (n < v.length && Number(v[n][0]) < gr) n++;
+  if (n) sh.deleteRows(2, n);
 }

@@ -95,10 +95,11 @@ const UI = {
   bnav() {
     const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
     const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
-    const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc' || this.cur === 'zmiany';
+    const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc' || this.cur === 'zmiany' || this.cur === 'powiad';
     $('#nPrio').hidden = !Session.isBiuro(); b.classList.toggle('n4', Session.isBiuro());
     $('#nPlan').hidden = podw(); b.classList.toggle('n2', podw());   // od 1.43.0: dostęp podwykonawcy – bez planu dnia
     $('#nPrio').classList.toggle('on', prio);
+    powPlakietka(); zakPlakietka();
     $('#nPlan').classList.toggle('on', this.cur === 'plan');
     $('#nDok').classList.toggle('on', dok);
     $('#nZak').hidden = podw(); $('#nZak').classList.toggle('on', this.cur === 'zakupy');   // od 1.48.0
@@ -346,6 +347,7 @@ const Views = {
       <section class="phero">
         <div class="phtop">
           <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
+          ${Session.isBiuro() ? `<button class="btn sm pnz" id="pNZ">${ic('plus')} Nowe zadanie<span class="bn" id="pNZn" hidden></span></button>` : ''}
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
@@ -417,6 +419,7 @@ const Views = {
     })();
     const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
+    if ($('#pNZ')) { $('#pNZ').onclick = async () => { const q = (await DB.get('zadNoweKolejka')) || []; if (q.length) Dialogs.zadKolejka(); else Dialogs.noweZadanie(null, dzien); }; planNZ(); }
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
     { const pp = view.querySelector('.ppeople'); if (pp && ppScroll) pp.scrollLeft = ppScroll; }   // 1.23.2: pasek osób zostaje w miejscu po wyborze osoby
     view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { ppScroll = b.closest('.ppeople').scrollLeft; const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
@@ -601,12 +604,43 @@ const Views = {
         ${l && l.w != null ? `<span class="lstat"><span class="m"><b>${l.u} / ${l.p} / ${l.d} / ${l.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${l.b ? `<span class="usterki">⚠ ${l.b} ${odmUsterki(l.b)}</span>` : ''}${pasek3(l, true)}</span>` : '<span class="lstat mute">brak danych</span>'}
       </button>`;
     view.innerHTML = `<section class="phero"><h1>Ostatnie zmiany</h1><div class="mute" style="color:#dbe7ff">${lista.length} aktywnych budów · od ostatniego wpisu z tabletu</div>
-        <div class="pseg" style="margin-top:10px"><button class="on">Ostatnie zmiany</button><button id="zWyd">Wydajność ekip</button></div></section>
+        <div class="pseg" style="margin-top:10px"><button class="on">Ostatnie zmiany</button><button id="zWyd">Wydajność ekip</button><button id="zPow">Powiadomienia</button></div></section>
       <div class="list" style="margin-top:12px">${lista.map(wiersz).join('') || '<div class="li mute">Brak aktywnych budów.</div>'}</div>`;
     $('#zWyd').onclick = () => UI.go('wydajnosc');
+    $('#zPow').onclick = () => UI.go('powiad');
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
 
+  /* Powiadomienia (od 1.56.0, tylko rola biuro): dziennik zdarzeń ze wszystkich budów, zapotrzebowań i harmonogramu.
+     Źródło: zakładka „Powiadomienia” w Bazie (dopisuje serwer przy push / zakupach / planowaniu); pobierane tylko na tablet biura. */
+  async powiad(par) {
+    if (!Session.isBiuro()) return UI.go('plan');
+    UI.header('powiadomienia', () => UI.wstecz('zmiany'));
+    const TYPY = { kol: ['Kolizje w harmonogramie', '⚠'], zad: ['Zadania zaplanowane / zmienione', '📅'], brak: ['Nowe braki (usterki)', '🔴'], bzam: ['Zamknięte braki', '✅'], zap: ['Zapotrzebowania', '🛒'], prot: ['Protokoły przesłane', '📄'], nota: ['Notatki', '📝'], urz: ['Nowe / zmienione urządzenia', '➕'], tab: ['Tabliczki nieczytelne / powtórzone', '🏷️'] };
+    const ust = (await DB.get('powUst')) || { typy: Object.keys(TYPY).filter(k => k !== 'nota'), moje: false };
+    const lista = (await DB.get('powiad')) || [];
+    const widz = (await DB.get('powWidz')) || 0;
+    if (navigator.onLine && !par.bez) { pullPowiad().then(() => { if (UI.cur === 'powiad') UI.go('powiad', { bez: 1 }, { zastap: true }); }).catch(() => { }); }
+    const L = lista.filter(x => ust.typy.includes(x.t) && (ust.moje || x.kto !== (S.user && S.user.name)));
+    const kiedy = ts => { const d = new Date(ts); return (U.day(d) === U.day(new Date()) ? 'dziś ' : d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' }) + ' ') + hm(d); };
+    view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Powiadomienia</h1><button class="btn sm pri" id="pwUst" style="background:#fff;color:#0E1A2B">Filtr (${ust.typy.length}/${Object.keys(TYPY).length})</button></div>
+        <div class="mute" style="color:#dbe7ff">${L.filter(x => x.ts > widz).length} nowych · tylko na tablecie biura · ostatnie 60 dni</div>
+        <div class="pseg" style="margin-top:10px"><button id="pwZm">Ostatnie zmiany</button><button id="pwWyd">Wydajność ekip</button><button class="on">Powiadomienia</button></div></section>
+      <div class="pwfil card" id="pwFil" hidden>${Object.keys(TYPY).map(k => `<label class="chk"><input type="checkbox" data-t="${k}" ${ust.typy.includes(k) ? 'checked' : ''}> ${TYPY[k][1]} ${TYPY[k][0]}</label>`).join('')}<label class="chk"><input type="checkbox" id="pwMoje" ${ust.moje ? 'checked' : ''}> Pokaż też moje wpisy</label></div>
+      <div class="list pwlist" style="margin-top:12px">${L.map(x => `<button class="li pwli ${x.ts > widz ? 'nowe' : ''} t-${x.t}" data-k="${U.esc(x.kod || '')}"><span class="pwico">${TYPY[x.t][1]}</span>
+          <span class="grow"><span class="pwtyt"><b class="m bkd">${U.esc(x.kod || '')}</b> ${U.esc(x.tyt)}</span><span class="mute">${U.esc(x.opis || '')}</span></span>
+          <span class="pwkiedy"><b>${kiedy(x.ts)}</b><span class="mute">${U.esc(x.kto || '')}</span></span></button>`).join('') || '<div class="li mute">Brak powiadomień wybranych typów.</div>'}</div>`;
+    $('#pwZm').onclick = () => UI.go('zmiany');
+    $('#pwWyd').onclick = () => UI.go('wydajnosc');
+    $('#pwUst').onclick = () => { $('#pwFil').hidden = !$('#pwFil').hidden; };
+    view.querySelectorAll('#pwFil input').forEach(c => c.onchange = async () => {
+      const typy = [...view.querySelectorAll('#pwFil [data-t]')].filter(x => x.checked).map(x => x.dataset.t);
+      await DB.set('powUst', { typy, moje: $('#pwMoje').checked }); UI.refresh(); setTimeout(() => { if ($('#pwFil')) $('#pwFil').hidden = false; }, 50);
+    });
+    view.querySelectorAll('.pwli[data-k]').forEach(b => b.onclick = () => { if (b.dataset.k) openProject(b.dataset.k); });
+    // po obejrzeniu – wszystkie widoczne oznaczone jako przeczytane (plakietka na przycisku znika)
+    const maks = lista.reduce((m, x) => Math.max(m, x.ts), 0); if (maks > widz) { await DB.set('powWidz', maks); powPlakietka(); }
+  },
   /* Wydajność ekip (od 1.18.0) – tylko rola biuro: trend tygodniowy / miesięczny w 4 kategoriach, porównanie ekip */
   async wydajnosc(par) {
     if (!Session.isBiuro()) return UI.go('plan');
@@ -644,7 +678,7 @@ const Views = {
         ${s.typy.length ? `<div class="mute wtyp">${s.typy.sort((a, b) => b.n - a.n).slice(0, 4).map(t => `${U.esc(t.typ)}: ${t.czas} min (norma ${t.norma}, n=${t.n})`).join(' · ')}</div>` : ''}</div>`;
     };
     view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Wydajność ekip</h1><button class="btn sm pri" id="wOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div><div class="mute" style="color:#dbe7ff">${r && r.czas ? 'Stan na ' + new Date(r.czas).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · liczone na żądanie · widok tylko dla biura' : 'Brak danych – naciśnij „Przelicz teraz” (potrzebna sieć).'}</div>
-        <div class="pseg" style="margin-top:10px"><button id="wZm">Ostatnie zmiany</button><button class="on">Wydajność ekip</button></div></section>
+        <div class="pseg" style="margin-top:10px"><button id="wZm">Ostatnie zmiany</button><button class="on">Wydajność ekip</button><button id="wPow">Powiadomienia</button></div></section>
       ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
       <div class="tabs" style="margin:10px 0">${Object.keys(KAT).map(k => `<button class="tab ${k === kat ? 'on' : ''}" data-wk="${k}">${KAT[k][0]}</button>`).join('')}
         <span style="width:12px"></span><button class="tab ${!mies ? 'on' : ''}" data-wo="t">Tygodnie</button><button class="tab ${mies ? 'on' : ''}" data-wo="m">Miesiące</button></div>
@@ -659,6 +693,7 @@ const Views = {
       if (UI.cur === 'wydajnosc') UI.refresh();
     };
     $('#wZm').onclick = () => UI.go('zmiany');
+    $('#wPow').onclick = () => UI.go('powiad');
     view.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, k: b.dataset.wk }, { zastap: true }));
     view.querySelectorAll('[data-wo]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, o: b.dataset.wo }, { zastap: true }));
   },
@@ -678,6 +713,7 @@ const Views = {
 
   /* Zapotrzebowanie (od 1.48.0): zgłoszenia na budowę lub ogólne (AKPiA); na tablecie trwające + 20 ostatnich zakończonych */
   async zakupy(par) {
+    zakWidziane();   // od 1.56.0: po otwarciu – licznik nowych na „Zapotrzebowanie” znika
     UI.header('zapotrzebowanie', () => UI.wstecz('plan'));
     const L = await Zakupy.lista(), f = par.f || 'tok', bud = par.bud || '';
     const zamk = z => z.poz.every(x => x.st === 'dostarczone' || x.st === 'odrzucone');
@@ -1515,6 +1551,112 @@ const Dialogs = {
   },
 
   /* Nowe zapotrzebowanie (od 1.48.0) – każdy z tabletu HUP-BUD, offline; kod – budowa wpisana automatycznie, puste = zakupy ogólne (AKPiA) */
+  /* Nowe zadanie do zaplanowania (od 1.56.0, rola biuro) – tylko podstawowe dane; termin dobiera Claude */
+  async noweZadanie(kod, dzien, zKolejki) {
+    if (!Session.isBiuro()) return;
+    // projekty: aktywne z tabletu + wszystkie z Bazy (z listą ClickUp) – pobierane przy otwarciu, gdy jest sieć (od 1.56.0)
+    let baza = (await DB.get('projektyBaza')) || [];
+    if (navigator.onLine) { try { const r = await API.zadNowe({ op: 'projekty' }); baza = r.projekty || []; await DB.set('projektyBaza', baza); } catch (e) { } }
+    const mapa = new Map(); ((S.boot && S.boot.projekty) || []).forEach(p => mapa.set(p.kod, p)); baza.forEach(p => { if (!mapa.has(p.kod)) mapa.set(p.kod, p); });
+    const pr = [...mapa.values()].sort((a, b) => natCmp(b.kod, a.kod));
+    const budTxt = p => p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + (p.nazwa || '');
+    const FAZY = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
+    const EK = ['Dowolna', 'Ekipa 1', 'Ekipa 2', 'Ekipa 3'];
+    const zk = zKolejki || null;
+    let faza = zk ? zk.faza : 'Montaż i Wykonawstwo', ekipa = zk ? (zk.ekipa === 'Dowolna' ? 'Dowolna' : 'Ekipa ' + zk.ekipa) : 'Dowolna';
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Nowe zadanie">
+      <div class="shead"><h3>Nowe zadanie</h3><span class="mute">${U.esc(S.user.name)}</span></div>
+      <div class="sbody zapform">
+        <label class="fld"><span class="mute">Projekt</span><select id="nzB"><option value="">— wybierz budowę —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}<option value="+">＋ Nowy projekt (brak w ClickUp)…</option></select></label>
+        <div class="nzproj card" id="nzP" hidden><div class="mute" style="margin-bottom:8px">Nowy projekt – ELWIS założy listę w ClickUp z szablonu projektu (fazy i zadania standardowe) w przestrzeni PROJ wg roku z kodu i wiersz w Bazie projektów (Aktywna = nie). Resztę uzupełni później skill „nowa budowa”.</div>
+          <div class="row" style="gap:12px;flex-wrap:wrap"><label class="fld" style="width:150px"><span class="mute">Kod</span><input id="nzPK" type="text" placeholder="26_045 lub 26p045" autocomplete="off"></label>
+          <label class="fld grow"><span class="mute">Nazwa</span><input id="nzPN" type="text" placeholder="np. Osiedle Zielone B2" autocomplete="off"></label>
+          <label class="fld" style="width:220px"><span class="mute">Miejscowość (zasięg ekip)</span><input id="nzPM" type="text" placeholder="np. Kraśnik" autocomplete="off"></label></div></div>
+        <div><div class="mute" style="margin-bottom:6px">Faza</div><div class="cats" id="nzF">${FAZY.map(f => `<button data-f="${U.esc(f)}" class="${f === faza ? 'on' : ''}">${U.esc(f)}</button>`).join('')}</div></div>
+        <label class="fld"><span class="mute">Co trzeba zrobić</span><input id="nzN" type="text" placeholder="np. Podłączenie wentylatorów R1–R7 w garażu" autocomplete="off"></label>
+        <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
+          <div><div class="mute" style="margin-bottom:6px">Ekipa</div><div class="cats" id="nzE">${EK.map(e => `<button data-e="${e}" class="${e === ekipa ? 'on' : ''}">${e}</button>`).join('')}</div></div>
+          <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="nzD"> + Dariusz (pomocnik)</label>
+        </div>
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <label class="fld" style="width:150px"><span class="mute">Czas pracy (h)</span><input id="nzH" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="np. 6"></label>
+          <label class="fld" style="width:190px"><span class="mute">Nie wcześniej niż</span><input id="nzOd" type="date" value="${U.esc(dzien && dzien > U.day(new Date()) ? dzien : '')}"></label>
+          <label class="fld" style="width:190px"><span class="mute">Najpóźniej do</span><input id="nzDo" type="date"></label>
+        </div>
+        <label class="fld"><span class="mute">Uwagi (warunek startu, po czym, kontakt na budowie)</span><textarea id="nzU" rows="2" placeholder="np. po dostawie szafy SZ1; przed tynkami"></textarea></label>
+      </div>
+      <div class="sfoot"><button class="btn" id="nzX">Anuluj</button><span class="grow"></span><button class="btn pri" id="nzS">Znajdź termin →</button></div></div></div>`;
+    $('#nzB').onchange = () => { $('#nzP').hidden = $('#nzB').value !== '+'; };
+    if (zk) { $('#nzB').value = zk.nowy ? '+' : zk.kod; $('#nzP').hidden = !zk.nowy; if (zk.nowy) { $('#nzPK').value = zk.nowy.kod; $('#nzPN').value = zk.nowy.nazwa; $('#nzPM').value = zk.nowy.miejsc || ''; }
+      $('#nzN').value = zk.nazwa; $('#nzH').value = zk.h; $('#nzOd').value = zk.od || ''; $('#nzDo').value = zk.do || ''; $('#nzU').value = zk.uw || ''; $('#nzD').checked = !!zk.dariusz; }
+    modal.querySelectorAll('#nzF [data-f]').forEach(b => b.onclick = () => { faza = b.dataset.f; modal.querySelectorAll('#nzF [data-f]').forEach(x => x.classList.toggle('on', x === b)); });
+    modal.querySelectorAll('#nzE [data-e]').forEach(b => b.onclick = () => { ekipa = b.dataset.e; modal.querySelectorAll('#nzE [data-e]').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#nzX').onclick = UI.close;
+    $('#nzS').onclick = async () => {
+      const k = $('#nzB').value, n = $('#nzN').value.trim(), h = Number(String($('#nzH').value).replace(',', '.'));
+      if (!k) return UI.toast('Wybierz projekt.'); if (!n) return UI.toast('Wpisz, co trzeba zrobić.'); if (!(h > 0)) return UI.toast('Podaj czas pracy w godzinach.');
+      const nowy = k === '+' ? { kod: $('#nzPK').value.trim(), nazwa: $('#nzPN').value.trim(), miejsc: $('#nzPM').value.trim() } : null;
+      if (nowy && !/^\d{2}[_p]\d{3}$/.test(nowy.kod)) return UI.toast('Kod projektu w formacie RR_NNN lub RRpNNN (np. 26_045).');
+      if (nowy && !nowy.nazwa) return UI.toast('Podaj nazwę nowego projektu.');
+      const zgl = { id: (zk && zk.id) || U.uid('zn'), kod: nowy ? nowy.kod : k, nowy, faza, nazwa: n, ekipa: ekipa === 'Dowolna' ? 'Dowolna' : ekipa.replace('Ekipa ', ''), dariusz: $('#nzD').checked, h, od: $('#nzOd').value, do: $('#nzDo').value, uw: $('#nzU').value.trim() };
+      if (!navigator.onLine) {   // bez sieci: zgłoszenie czeka – termin dobierany po połączeniu, na aktualnym obciążeniu
+        const q = ((await DB.get('zadNoweKolejka')) || []).filter(x => x.id !== zgl.id); q.push(zgl); await DB.set('zadNoweKolejka', q);
+        UI.close(); UI.toast('Zapisano bez sieci – termin wybierzesz po połączeniu (Plan → Nowe zadanie)'); if (UI.cur === 'plan') UI.refresh(); return;
+      }
+      $('#nzS').disabled = true; $('#nzS').textContent = 'Szukam terminu…';
+      try { const w = await API.zadNowe({ op: 'warianty', zgl }); this.zadWarianty(zgl, w); }
+      catch (e) { $('#nzS').disabled = false; $('#nzS').textContent = 'Znajdź termin →'; UI.toast('Nie udało się: ' + (e.message || e)); }
+    };
+  },
+  /* Zgłoszenia zapisane bez sieci – czekają na wybór terminu (od 1.56.0) */
+  async zadKolejka() {
+    const q = (await DB.get('zadNoweKolejka')) || [];
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Czekają na termin">
+      <div class="shead"><h3>Czekają na wybór terminu (${q.length})</h3></div>
+      <div class="sbody"><div class="list">${q.map((x, i) => `<div class="li tzli"><span class="grow"><b class="m bkd">${U.esc(x.kod)}</b> <b>${U.esc(x.nazwa)}</b><span class="mute">${U.esc(x.faza)} · ${x.ekipa === 'Dowolna' ? 'dowolna ekipa' : 'Ekipa ' + U.esc(x.ekipa)} · ${String(x.h).replace('.', ',')} h${x.do ? ' · najpóźniej ' + U.esc(x.do) : ''}${x.nowy ? ' · nowy projekt' : ''}</span></span><button class="btn sm pri" data-w="${i}">Wybierz termin</button><button class="btn sm" data-u="${i}">Usuń</button></div>`).join('') || '<div class="li mute">Brak.</div>'}</div></div>
+      <div class="sfoot"><button class="btn" id="kqX">Zamknij</button><span class="grow"></span><button class="btn pri" id="kqN">${ic('plus')} Nowe zadanie</button></div></div></div>`;
+    $('#kqX').onclick = UI.close;
+    $('#kqN').onclick = () => this.noweZadanie();
+    modal.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => { if (!confirm('Usunąć to zgłoszenie?')) return; q.splice(+b.dataset.u, 1); await DB.set('zadNoweKolejka', q); planNZ(); this.zadKolejka(); });
+    modal.querySelectorAll('[data-w]').forEach(b => b.onclick = () => this.noweZadanie(null, null, q[+b.dataset.w]));
+  },
+  /* Warianty terminu (od 1.56.0): pierwszy wolny termin każdej pasującej ekipy, z podziałem na części i ostrzeżeniami; „Zaplanuj” = akceptacja → zapis w ClickUp */
+  zadWarianty(zgl, w, kolizja) {
+    const p = ((S.boot && S.boot.projekty) || []).find(q => q.kod === zgl.kod) || {};
+    let wyb = (w.warianty.findIndex(v => v.ok) + 1 || 1) - 1;
+    const wv = (v, i) => `<button class="wvar ${i === wyb ? 'on' : ''} ${v.ok ? '' : 'zle'}" data-i="${i}">
+        <div class="row"><b class="grow">${U.esc(v.ekipa)}${v.prow ? ' <span class="chip">prowadzi budowę</span>' : ''}</b><span class="chip ${v.ok ? 'ok' : 'bad'}">${v.ok ? '✓ w terminie' : '✗ ' + U.esc(v.blad || 'po terminie')}</span></div>
+        <div class="wczesci">${v.czesci.map((c, j) => `<div><span class="m">${v.czesci.length > 1 ? 'cz. ' + (j + 1) + ' · ' : ''}${U.esc(c.dz)} ${U.esc(c.od)}–${U.esc(c.do)}</span> <span class="mute">${String(c.h).replace('.', ',')} h</span></div>`).join('')}</div>
+        ${v.uwagi.map(u => `<div class="wuw">⚠ ${U.esc(u)}</div>`).join('')}</button>`;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Termin zadania">
+      <div class="shead"><h3>Wybierz termin</h3><span class="mute">obciążenie: stan na ${U.esc(w.stan || '—')}</span></div>
+      <div class="sbody">
+        ${kolizja ? `<div class="card palarm">⚠ Kolizja – termin zajęty od czasu wyszukania: ${U.esc(kolizja.join('; '))}. Wybierz nowy wariant.</div>` : ''}
+        ${!w.warianty.length ? '<div class="card mute">Brak ekip do zaplanowania (sprawdź zakładkę Pracownicy – Ekipa i ID ClickUp).</div>' : ''}
+        <div class="card wzgl"><b class="m bkd">${U.esc(zgl.kod)}</b> <b>${U.esc(zgl.nowy ? zgl.nowy.nazwa + ' (nowy projekt – lista w ClickUp powstanie przy „Zaplanuj”)' : String(p.nazwa || '').replace(zgl.kod, '').trim())}</b><div>${U.esc(zgl.nazwa)}</div>
+          <div class="mute">${U.esc(zgl.faza)} · ${String(zgl.h).replace('.', ',')} h${zgl.dariusz ? ' · + Dariusz' : ''}${zgl.od ? ' · nie wcześniej ' + U.esc(zgl.od) : ''}${zgl.do ? ' · najpóźniej ' + U.esc(zgl.do) : ''}</div></div>
+        <div class="wlista">${w.warianty.map(wv).join('')}</div>
+        <p class="mute" style="margin:0">„Zaplanuj” wpisze zadanie (i jego części) do ClickUp: terminy, godziny, szacowany czas i obie osoby ekipy; ekipa zobaczy je w planie po synchronizacji. Trudny przypadek (przesunięcie innych zadań, dostawy) – zapytaj Claude w czacie.</p>
+      </div>
+      <div class="sfoot"><button class="btn" id="wvW">← Zmień dane</button><span class="grow"></span><button class="btn pri" id="wvZ">Zaplanuj</button></div></div></div>`;
+    modal.querySelectorAll('.wvar').forEach(b => b.onclick = () => { wyb = +b.dataset.i; modal.querySelectorAll('.wvar').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#wvW').onclick = () => this.noweZadanie(null, null, zgl);
+    $('#wvZ').onclick = async () => {
+      const v = w.warianty[wyb]; if (!v || !v.czesci.length) return UI.toast('Ten wariant nie ma terminu.');
+      if (!v.ok && !confirm('Ten wariant ma problem: ' + (v.blad || '') + '. Zaplanować mimo to?')) return;
+      if (zgl.nowy && !confirm('Utworzyć projekt ' + zgl.nowy.kod + ' ' + zgl.nowy.nazwa + ' w ClickUp (lista z szablonu) i w Bazie projektów (Aktywna = nie)?')) return;
+      if (!navigator.onLine) return UI.toast('Brak sieci – zaplanuj po połączeniu.');
+      $('#wvZ').disabled = true; $('#wvZ').textContent = zgl.nowy ? 'Tworzę projekt i zapisuję…' : 'Zapisuję w ClickUp…';
+      try {
+        const r = await API.zadNowe({ op: 'zaplanuj', zgl, wyb: { osoby: v.osoby, czesci: v.czesci, ekipa: v.ekipa, nr: (wyb + 1) + ' z ' + w.warianty.length } });
+        if (r.kolizja) return this.zadWarianty(zgl, r, r.kolizja);
+        const q = ((await DB.get('zadNoweKolejka')) || []).filter(x => x.id !== zgl.id); await DB.set('zadNoweKolejka', q);
+        UI.close(); UI.toast('Zaplanowano w ClickUp: ' + v.ekipa.replace(/\s*\(.*/, '') + ', ' + v.czesci.map(c => c.dz + ' ' + c.od + '–' + c.do).join(' + '));
+        try { await Sync.pullPlan(); await pullPowiad(); } catch (e) { }
+        if (UI.cur === 'plan') UI.refresh(); planNZ();
+      } catch (e) { $('#wvZ').disabled = false; $('#wvZ').textContent = 'Zaplanuj'; UI.toast('Nie udało się: ' + (e.message || e)); }
+    };
+  },
   async zakNowe(kod, ed) {   // ed – zgłoszenie do edycji (od 1.49.0, tylko rola biuro)
     if (ed && !Session.isBiuro()) return;
     const pr = ((S.boot && S.boot.projekty) || []).slice().sort((a, b) => natCmp(a.kod, b.kod));
@@ -2319,3 +2461,40 @@ function settings() {
   if (!(await przywrocEkran().catch(() => false))) UI.go('plan');
   if (navigator.onLine) Sync.run();
 })();
+
+
+/* plakietka liczby nowych powiadomień na przycisku „Zmiany i ekipy” (od 1.56.0, rola biuro) */
+async function powPlakietka() {
+  const b = document.getElementById('nPowN'); if (!b) return;
+  if (!Session.isBiuro()) { b.hidden = true; return; }
+  const ust = (await DB.get('powUst')) || null, widz = (await DB.get('powWidz')) || 0, lista = (await DB.get('powiad')) || [];
+  const n = lista.filter(x => x.ts > widz && (!ust || ust.typy.includes(x.t)) && ((ust && ust.moje) || x.kto !== (S.user && S.user.name))).length;
+  b.textContent = n > 99 ? '99+' : String(n); b.hidden = !n;
+}
+
+/* liczba zgłoszeń czekających na termin – plakietka na „Nowe zadanie” (od 1.56.0) */
+async function planNZ() { const b = document.getElementById('pNZn'); if (!b) return; const n = ((await DB.get('zadNoweKolejka')) || []).length; b.textContent = n; b.hidden = !n; }
+/* powiadomienia – tylko tablet roli biuro; pobierane przyrostowo, trzymane 60 dni (od 1.56.0) */
+async function pullPowiad() {
+  if (!Session.isBiuro()) return;
+  const stare = (await DB.get('powiad')) || [], since = stare.reduce((m, x) => Math.max(m, x.ts), 0);
+  const r = await API.powiad(since); const ids = new Set(stare.map(x => x.id)), gr = Date.now() - 60 * 864e5;
+  const lista = stare.concat((r.lista || []).filter(x => !ids.has(x.id))).filter(x => x.ts > gr).sort((a, b) => b.ts - a.ts);
+  await DB.set('powiad', lista); powPlakietka();
+}
+
+/* licznik nowych na „Zapotrzebowanie” (od 1.56.0): biuro – nowe powiadomienia o zapotrzebowaniach od ostatniego otwarcia ekranu;
+   pozostali – zmiany statusów pozycji w ich zgłoszeniach od ostatniego otwarcia */
+async function zakPlakietka() {
+  const b = document.getElementById('nZakN'); if (!b || !S.user) return;
+  const widz = (await DB.get('zakWidz:' + S.user.name)) || null; let n = 0;
+  if (!widz && !Session.isBiuro()) return zakWidziane();   // pierwszy raz – punkt odniesienia
+  if (Session.isBiuro()) { const t = widz ? widz.ts : Date.now(); n = ((await DB.get('powiad')) || []).filter(x => x.t === 'zap' && x.ts > t && x.kto !== S.user.name).length; }
+  else if (widz) { (await Zakupy.lista()).filter(z => z.kto === S.user.name).forEach(z => z.poz.forEach(x => { const k = (z.nr || z.id) + ':' + x.lp; if (widz.st[k] && widz.st[k] !== x.st) n++; })); }
+  b.textContent = n > 99 ? '99+' : String(n); b.hidden = !n;
+}
+async function zakWidziane() {
+  if (!S.user) return; const st = {};
+  try { (await Zakupy.lista()).forEach(z => z.poz.forEach(x => { st[(z.nr || z.id) + ':' + x.lp] = x.st; })); } catch (e) { }
+  await DB.set('zakWidz:' + S.user.name, { ts: Date.now(), st }); zakPlakietka();
+}

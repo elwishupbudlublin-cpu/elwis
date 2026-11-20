@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.56.0 – 2026-11-21 (aplikacja i serwer, schemat 1.18)
+- Harmonogram (rola biuro): „+ Nowe zadanie” – projekt (aktywne i z Bazy, także „＋ Nowy projekt”), faza, opis, ekipa (+ Dariusz), godziny, „nie wcześniej / najpóźniej”, uwagi → „Znajdź termin”: serwer liczy pierwszy wolny termin każdej pasującej ekipy (dzień 8 h, godziny pracy ekipy, urlopy, zaległe, podział na części) z ostrzeżeniami (zasięg z pinezki / adresu, obiekt wojskowy – M, zaległe, Dariusz) i „prowadzi budowę”. „Zaplanuj” = akceptacja → podzadania wybranej fazy w ClickUp (terminy, godziny, szacowany czas, osoby), przy kolizji – nowe warianty i powiadomienie.
+- Nowy projekt z formularza: lista w ClickUp (szablon z Konfiguracji `clickup_szablon_listy` albo same fazy) w przestrzeni PROJ wg roku z kodu, wiersz w Bazie (Aktywna = nie); kontrola duplikatów kodu w Bazie i ClickUp.
+- Bez sieci: zgłoszenie czeka (plakietka na „Nowe zadanie”), termin wybierany po połączeniu na aktualnym obciążeniu.
+- Zakładka „Obciążenie” w Bazie (serwer, `codziennie` i przy szukaniu / planowaniu): mapa godzin 15 dni roboczych + tygodnie do 10, zaległe, lista zadań.
+- Powiadomienia (rola biuro): zakładka w „Zmiany i ekipy” z filtrem typów, plakietka nowych na ikonie; źródło – zakładka „Powiadomienia” w Bazie (braki, zamknięcia, protokoły, notatki, urządzenia, tabliczki, zapotrzebowania, zaplanowane zadania, kolizje), 60 dni; pobierane tylko na tablet biura.
+- Licznik nowych na ikonie „Zapotrzebowanie” (biuro – nowe zgłoszenia i zmiany; pozostali – zmiany statusów ich pozycji).
+
 ## 1.55.0 – 2026-11-20 (aplikacja i serwer)
 - Ekran „Priorytety” wycofany. W dolnym pasku (rola biuro) „Zmiany i ekipy”: zakładki Ostatnie zmiany i Wydajność ekip; wydajność liczona tylko na żądanie („Przelicz teraz”).
 - Serwer: koniec przeliczania co godzinę (oszczędność dziennego limitu czasu wyzwalaczy); brakujące liczniki budów i kontrola miejsca na Dysku w zadaniu dziennym `codziennie` (ok. 4:00). Wyzwalacze zmieniają się same przy pierwszym zapytaniu po wklejeniu kodu (`migracjaWyzwalaczy_`). Synchronizacja roli biuro nie uruchamia przeliczania.
