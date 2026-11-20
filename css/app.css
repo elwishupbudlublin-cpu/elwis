@@ -623,3 +623,13 @@ main{padding:16px 16px 100px}
 body.mopen{overflow:hidden}
 body.mopen .ov{touch-action:pan-y;overscroll-behavior:contain}
 body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}
+
+/* 1.51.0: typy urządzeń (info w karcie urządzenia) */
+.btn.binfo2{width:36px;padding:0;font-weight:800;font-family:Georgia,serif;font-style:italic;font-size:17px}
+.tyq{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;font-size:15px;margin-bottom:8px}
+.tylist{display:flex;flex-direction:column;gap:6px}
+.tyrow{display:flex;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.tyrow.on{border:2px solid #1D4ED8;background:#EFF6FF}
+.typre{flex:none;min-width:48px;height:28px;padding:0 6px;border-radius:8px;background:#0E1A2B;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.tyopis{font-size:13.5px;margin:2px 0 4px;color:#334155}
+.tykroki{display:flex;flex-wrap:wrap;gap:4px 6px;font-size:13px}.tykroki span{white-space:nowrap}

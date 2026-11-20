@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.51.0 – 2026-11-20 (aplikacja i serwer, schemat 1.16)
+- Karta urządzenia: przycisk „i” (za „Edytuj”, przed ✕) – lista typów urządzeń ze Słowników: prefiks, nazwa, opis (kiedy stosować prefiks), kroki z wariantami, nr seryjny; typ otwartego urządzenia podświetlony, wyszukiwanie.
+- Serwer: Słowniki → kolumna J „Opis typu (kiedy stosować prefiks)” w słowniku typów (`opis`).
+
 ## 1.50.1 – 2026-11-19 (aplikacja)
 - Protokoły: sekcja „Zapisane protokoły poza tym widokiem” – protokoły z urządzeń w innym etapie, o niepasującym typie albo spoza listy urządzeń (wcześniej licznik na kafelku je liczył, a lista ich nie pokazywała).
 - Otwarte okno (modal): tło zablokowane – bez przewijania i powiększania strony pod oknem; w oknie przewijanie w pionie.

@@ -1153,7 +1153,7 @@ const Dialogs = {
     const br = Object.values(F.braki).filter(b => b.urz === id);
     const blocked = br.some(b => !b.zamk && b.blokuje);
     modal.innerHTML = `<div class="ov" id="ov"><div class="sheet" role="dialog" aria-label="Urządzenie ${U.esc(idOz(u))}">
-      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3>${Session.isBiuro() && !czyTmp(id) ? `<button class="btn sm" id="dEd" title="Edytuj dane urządzenia (biuro)">${ic('edit')} Edytuj</button>` : ''}<button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
+      <div class="shead"><span class="st ${ST[status]}"></span><h3>${U.esc(id)}${u.oz ? ` <span class="oz big">${U.esc(u.oz)}</span>` : ''} <span class="mute" style="font-size:15px">${U.esc(t.nazwa)}</span></h3>${Session.isBiuro() && !czyTmp(id) ? `<button class="btn sm" id="dEd" title="Edytuj dane urządzenia (biuro)">${ic('edit')} Edytuj</button>` : ''}<button class="btn sm binfo2" id="dTy" title="Typy urządzeń – prefiksy, kroki, opis" aria-label="Typy urządzeń">i</button><button class="btn sm" id="dx" aria-label="Zamknij">✕</button></div>
       <div class="sbody">
         ${czyTmp(id) ? '<div class="card mute">Nowe urządzenie dodane na tablecie – numer nada serwer przy synchronizacji.</div>' : ''}
         <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
@@ -1212,6 +1212,7 @@ const Dialogs = {
     $('#dPlan').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); const z = UI.cur; UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: id }, { dlg: z !== 'rzut' ? id : null }); };
     if ($('#aSys')) $('#aSys').onclick = () => Dialogs.systemUrz(id);
     if ($('#dEd')) $('#dEd').onclick = () => Dialogs.edytujUrz(id);
+    $('#dTy').onclick = () => Dialogs.typyInfo(U.prefix(id));   // od 1.51.0
     if ($('#aDel')) $('#aDel').onclick = () => Dialogs.usunUrz(id);
     if ($('#aPoz')) $('#aPoz').onclick = async () => { if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, wskaz: { urz: id } }); };
     bindIssue(modal, () => Dialogs.device(id));
@@ -1645,6 +1646,28 @@ const Dialogs = {
       });
     };
     rys();
+  },
+
+  /* Typy urządzeń ze Słowników (od 1.51.0): prefiks, nazwa, kroki, nr seryjny, opis (kiedy stosować) – okno nad kartą urządzenia */
+  typyInfo(pre) {
+    const T = ((S.boot && S.boot.slowniki && S.boot.slowniki.typy) || []);
+    const w = document.createElement('div'); w.className = 'ov center zsub';
+    w.innerHTML = `<div class="dialog" role="dialog" aria-label="Typy urządzeń"><div class="shead"><h3>Typy urządzeń</h3><button class="btn sm" id="tyX" aria-label="Zamknij">✕</button></div>
+      <div class="sbody"><input id="tyQ" type="search" placeholder="Szukaj prefiksu, typu, opisu…" class="tyq"><div id="tyL" class="tylist"></div></div></div>`;
+    modal.appendChild(w);
+    const rys = () => {
+      const q = U.norm(w.querySelector('#tyQ').value || '');
+      const L = T.filter(t => !q || U.norm([t.prefix, t.nazwa, t.opis, (t.kroki || []).join(' ')].join(' ')).includes(q));
+      w.querySelector('#tyL').innerHTML = L.map(t => `<div class="tyrow${t.prefix === pre ? ' on' : ''}"><span class="typre m">${U.esc(t.prefix)}</span><div class="grow"><b>${U.esc(t.nazwa)}</b>${t.prefix === pre ? ' <span class="chip ok">to urządzenie</span>' : ''}
+        ${t.opis ? `<div class="tyopis">${U.esc(t.opis)}</div>` : ''}
+        <div class="tykroki">${(t.kroki || []).map(k => `<span>${U.esc(U.krok(k).n)}${U.krok(k).op.length ? ` <i class="mute">(${U.esc(U.krok(k).op.join(' / '))})</i>` : ''}</span>`).join('<span class="mute">›</span>')}</div>
+        <div class="mute" style="font-size:12px">Nr seryjny: ${t.sn ? 'wymagany' : 'nie'}</div></div></div>`).join('') || '<div class="mute">Brak wyników.</div>';
+    };
+    rys();
+    w.querySelector('#tyQ').oninput = rys;
+    w.querySelector('#tyX').onclick = () => w.remove();
+    w.onclick = e => { if (e.target === w) w.remove(); };
+    const on = w.querySelector('.tyrow.on'); if (on) on.scrollIntoView({ block: 'center' });
   },
 
   notatka(urz) {
