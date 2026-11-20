@@ -50,14 +50,14 @@ function fold(events) {
       case 'krok': D(e.urz).front = false; D(e.urz).kroki[d.krok] = { val: !!d.wart, war: typeof d.wart === 'string' ? d.wart : '', kto: e.kto, ts: e.ts, nazwa: d.nazwa }; break;
       case 'nr': D(e.urz).front = false; D(e.urz).sn = d.sn || ''; D(e.urz).snKto = e.kto; break;
       case 'foto': if (e.urz) D(e.urz).foto.push({ fid: d.fid, rodzaj: d.rodzaj, kto: e.kto, ts: e.ts }); fi(d.fid, e, d.rodzaj); break;
-      case 'brak': if (e.urz) D(e.urz).front = false; braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, opis: d.opis, blokuje: !!d.blokuje, foto: [...(d.foto || [])], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
+      case 'brak': if (e.urz) D(e.urz).front = false; braki[e.id] = { id: e.id, urz: e.urz || '', kat: d.kat, odp: d.odp || '', opis: d.opis, blokuje: !!d.blokuje, foto: [...(d.foto || [])], etap: d.etap || '', kto: e.kto, ts: e.ts, zamk: null, kom: [], zm: [] }; (d.foto || []).forEach(f => fi(f, e, 'brak')); break;
       // otworzył się front (od 1.33.0): zamknięty brak urządzenia → flaga; kasuje ją każda czynność (krok, nr seryjny) i nowy brak
       case 'brak_zamk': if (braki[d.bid]) { braki[d.bid].zamk = { kto: e.kto, ts: e.ts, opis: d.opis || '' }; if (braki[d.bid].urz) { D(braki[d.bid].urz).front = true; D(braki[d.bid].urz).frontTs = e.ts; } } break;
       case 'brak_edyc': {   // edycja / usunięcie / ponowne otwarcie braku (od 1.9.0)
         const b = braki[d.bid]; if (!b) break;
         if (d.usun) { delete braki[d.bid]; break; }
         if (d.otworz) b.zamk = null;
-        ['kat', 'opis'].forEach(k => { if (d[k] != null && d[k] !== '') b[k] = d[k]; });
+        ['kat', 'odp', 'opis'].forEach(k => { if (d[k] != null && d[k] !== '') b[k] = d[k]; });
         if (d.blokuje != null) b.blokuje = !!d.blokuje;
         (d.foto || []).forEach(f => { if (!b.foto.includes(f)) b.foto.push(f); fi(f, e, 'brak'); });
         b.zm.push({ kto: e.kto, ts: e.ts, co: d.usun ? 'usunięcie' : d.otworz ? 'ponowne otwarcie' : 'edycja' });

@@ -633,3 +633,5 @@ body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}
 .typre{flex:none;min-width:48px;height:28px;padding:0 6px;border-radius:8px;background:#0E1A2B;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
 .tyopis{font-size:13.5px;margin:2px 0 4px;color:#334155}
 .tykroki{display:flex;flex-wrap:wrap;gap:4px 6px;font-size:13px}.tykroki span{white-space:nowrap}
+.chip.odp{background:#E8EEF8;color:#1D4ED8;border-color:#C7D4EE}
+.cats.odp button.on{background:#1D4ED8;border-color:#1D4ED8}

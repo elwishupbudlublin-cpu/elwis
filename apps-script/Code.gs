@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.51.0';
+const SCRIPT_VERSION = '1.52.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -198,6 +198,7 @@ function slowniki_() {
   const v = rowsT_(baza_().getSheetByName('Słowniki'));
   return {
     kategorie: v.map(r => txt_(r[0])).filter(String),
+    odpowiedzialni: v.map(r => txt_(r[1])).filter(String),   // kolumna B (schemat 1.17): odpowiedzialny za brak
     typy: v.filter(r => txt_(r[2])).map(r => ({ prefix: txt_(r[2]).toUpperCase(), nazwa: txt_(r[3]), kroki: txt_(r[4]).split(';').map(s => s.trim()).filter(String), sn: tak_(r[5]), opis: txt_(r[9]) })),   // opis – kolumna J (schemat 1.16): kiedy stosować prefiks
     rodzaje: v.filter(r => txt_(r[7])).map(r => ({ id: txt_(r[7]), opis: txt_(r[8]) }))
   };

@@ -874,18 +874,21 @@ const Views = {
     const p = curProj(); if (!p) return UI.go('home');
     UI.header(p.kod + ' · braki', () => UI.wstecz('budowa'));
     const F = fold(S.ev); const showClosed = par.closed;
-    const br = Object.values(F.braki).filter(b => (showClosed ? b.zamk : !b.zamk) && brakWEtapie(b)).sort((a, b) => a.ts < b.ts ? 1 : -1);
+    const fo = par.odp || '';   // filtr odpowiedzialnego (od 1.52.0)
+    const br0 = Object.values(F.braki).filter(b => (showClosed ? b.zamk : !b.zamk) && brakWEtapie(b));
+    const br = br0.filter(b => !fo || (fo === '-' ? !b.odp : b.odp === fo)).sort((a, b) => a.ts < b.ts ? 1 : -1);
     const temE = t => { if (!maEtapy() || !S.etap || !t.urz) return true; const u = ((S.proj || {}).urzadzenia || []).find(x => x.id === t.urz); return !u || u.etap === S.etap; };
     const tem = ((S.proj || {}).tematy || []).filter(t => (showClosed ? t.status === 'zamknięty' : t.status !== 'zamknięty') && temE(t));
     view.innerHTML = etapSwitch() + `
       <div class="row"><div class="tabs grow" style="margin:0"><button class="tab ${!showClosed ? 'on' : ''}" data-c="0">Otwarte</button><button class="tab ${showClosed ? 'on' : ''}" data-c="1">Zamknięte</button></div>
         <button class="btn bad" id="nb">+ Zgłoś brak</button></div>
       <div class="grid2" style="margin-top:12px">
-        <div class="stack"><h2>Braki z budowy (${br.length})</h2>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
+        <div class="stack"><h2>Braki z budowy (${br.length})</h2><label class="tsel ${fo ? 'on' : ''}" style="align-self:flex-start"><span hidden>Odpowiedzialny</span><select id="bOdp" aria-label="Odpowiedzialny">${[['', 'Odpowiedzialny: wszyscy'], ...odpLista().map(k => [k, k]), ...(br0.some(b => !b.odp) ? [['-', 'Bez odpowiedzialnego']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === fo ? 'selected' : ''}>${U.esc(l)} (${br0.filter(b => !k || (k === '-' ? !b.odp : b.odp === k)).length})</option>`).join('')}</select></label>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
         ${!Session.isBiuro() ? '' : `<div class="stack"><h2>Tematy do wyjaśnienia (${tem.length})</h2>${tem.map(t => `<div class="card"><div class="row"><b>${U.esc(t.urz || t.id)}</b><span class="chip">${U.esc(t.kat || 'Do wyjaśnienia')}</span></div><div>${U.esc(t.opis)}</div></div>`).join('') || '<p class="mute">Brak.</p>'}<p class="mute">Tematy widzi tylko biuro; prowadzone w liście urządzeń → Tematy.</p></div>`}
       </div>`;
     bindEtap();
-    view.querySelectorAll('[data-c]').forEach(b => b.onclick = () => UI.go('braki', { closed: b.dataset.c === '1' }));
+    view.querySelectorAll('[data-c]').forEach(b => b.onclick = () => UI.go('braki', { closed: b.dataset.c === '1', odp: fo }));
+    $('#bOdp').onchange = e => UI.go('braki', { closed: showClosed, odp: e.target.value });
     $('#nb').onclick = () => Dialogs.brak('');
     bindIssue(view); hydrateFotos(view);
   },
@@ -1339,12 +1342,13 @@ const Dialogs = {
 
   brak(urz) {
     const kats = (S.boot.slowniki.kategorie || []);
-    let kat = ''; let photos = [];   // od 1.30.0: bez domyślnego rodzaju; opis wymagany tylko przy „Inne” lub bez rodzaju
+    let kat = '', odp = ''; let photos = [];   // od 1.30.0: bez domyślnego rodzaju; opis wymagany tylko przy „Inne” lub bez rodzaju
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Zgłoś brak">
       <div class="shead"><h3>Zgłoś brak</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody">
         <div><div class="mute">Dotyczy</div><b>${urz ? U.esc(urz) : (maEtapy() && S.etap ? 'Etap ' + U.esc(etapOpis(S.etap)) : 'Cała budowa')}</b></div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
+        ${odpHtml(odp)}
         <label><span class="f" style="display:block">Opis – co jest nie tak i co jest potrzebne <span class="mute" id="bow"></span></span><textarea id="bo"></textarea></label>
         <div class="row"><button class="btn" id="bf">+ Zdjęcie</button><span class="mute" id="bfc"></span>
           <label class="row" style="margin-left:auto"><input type="checkbox" id="bb" style="width:24px;height:24px"> Blokuje dalszą pracę</label></div>
@@ -1352,13 +1356,15 @@ const Dialogs = {
       <div class="sfoot"><button class="btn" id="bx">Anuluj</button><button class="btn bad" id="bs">Zapisz brak</button></div></div></div>`;
     const opisWym = () => !kat || /^inn/i.test(kat);
     const pokazWym = () => { $('#bow').textContent = opisWym() ? '(wymagany)' : '(opcjonalny)'; };
-    modal.querySelectorAll('.cats button').forEach(b => b.onclick = () => { kat = kat === b.dataset.k ? '' : b.dataset.k; modal.querySelectorAll('.cats button').forEach(x => x.classList.toggle('on', x.dataset.k === kat)); pokazWym(); });
+    modal.querySelectorAll('.cats button[data-k]').forEach(b => b.onclick = () => { kat = kat === b.dataset.k ? '' : b.dataset.k; modal.querySelectorAll('.cats button[data-k]').forEach(x => x.classList.toggle('on', x.dataset.k === kat)); pokazWym(); });
+    modal.querySelectorAll('.cats button[data-o]').forEach(b => b.onclick = () => { odp = b.dataset.o; modal.querySelectorAll('.cats button[data-o]').forEach(x => x.classList.toggle('on', x.dataset.o === odp)); });
     pokazWym();
     $('#bf').onclick = () => pickFile(async f => { const id = await storePhoto(f, urz || 'BUDOWA', 'brak'); photos.push(id); $('#bfc').textContent = photos.length + ' zdjęć'; });
     $('#bx').onclick = () => urz ? Dialogs.device(urz) : UI.close();
     $('#bs').onclick = async () => {
+      if (!odp) { UI.toast('Wybierz odpowiedzialnego: ' + odpLista().join(' / ') + '.'); return; }
       const opis = $('#bo').value.trim(); if (!opis && opisWym()) { UI.toast(kat ? 'Przy rodzaju „' + kat + '” dodaj krótki opis.' : 'Wybierz rodzaj braku albo dodaj opis.'); return; }
-      const d = { kat: kat || 'Inne', opis, blokuje: $('#bb').checked, foto: photos };
+      const d = { kat: kat || 'Inne', odp, opis, blokuje: $('#bb').checked, foto: photos };
       if (!urz && maEtapy() && S.etap) d.etap = S.etap;
       await addEvent('brak', urz, d);
       UI.toast('Brak zapisany'); urz ? Dialogs.device(urz) : UI.close(); UI.refresh();
@@ -1370,7 +1376,7 @@ const Dialogs = {
     const F = fold(S.ev), b = F.braki[bid]; if (!b) { UI.toast('Brak nie istnieje (usunięty?)'); return; }
     const kats = (S.boot.slowniki.kategorie || []);
     const autor = b.kto === S.user.name, biuro = Session.isBiuro();
-    let kat = b.kat, nowe = [], komFoto = [];
+    let kat = b.kat, odp = b.odp || '', nowe = [], komFoto = [];
     const wroc = () => { if (after) after(); else UI.close(); UI.refresh(); };
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog" role="dialog" aria-label="Brak">
       <div class="shead"><h3>Brak – ${b.urz ? U.esc(idOz(b.urz)) : b.etap ? 'etap ' + U.esc(b.etap) : 'budowa'}</h3><span class="chip ${b.zamk ? 'ok' : 'bad'}">${b.zamk ? 'zamknięty' : 'otwarty'}</span></div>
@@ -1378,6 +1384,7 @@ const Dialogs = {
         ${b.urz ? `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="eUrz">Urządzenie ${U.esc(idOz(b.urz))}</button>${(u => `<button class="btn sm pri" id="eRys" ${u && u.arkusz && u.x !== '' && u.x != null ? '' : 'disabled title="Urządzenie nie ma pozycji na rzucie"'}>${ic('cel')} Na rzucie</button>`)(((S.proj || {}).urzadzenia || []).find(x => x.id === b.urz))}</div>` : ''}
         <div class="mute">Zgłosił: ${U.esc(b.kto)} · ${U.fmt(b.ts)}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
         <div><div class="mute" style="margin-bottom:8px">Rodzaj braku</div><div class="cats">${kats.map(k => `<button data-k="${U.esc(k)}" class="${k === kat ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>
+        ${odpHtml(odp)}
         <label><span class="f" style="display:block">Opis</span><textarea id="eo">${U.esc(b.opis)}</textarea></label>
         <div class="row"><button class="btn" id="ef">+ Zdjęcie</button><span class="mute" id="efc"></span>
           <label class="row" style="margin-left:auto"><input type="checkbox" id="eb" style="width:24px;height:24px" ${b.blokuje ? 'checked' : ''}> Blokuje dalszą pracę</label></div>
@@ -1393,11 +1400,12 @@ const Dialogs = {
         ${b.zamk ? (biuro ? '<button class="btn" id="eOpen">Otwórz ponownie</button>' : '') : '<button class="btn ok" id="eClose">Zamknij brak</button>'}
         <button class="btn" id="eX">Anuluj</button><button class="btn pri" id="eS">Zapisz zmiany</button></div></div></div>`;
     hydrateFotos(modal);
-    modal.querySelectorAll('.cats button').forEach(x => x.onclick = () => { kat = x.dataset.k; modal.querySelectorAll('.cats button').forEach(y => y.classList.toggle('on', y === x)); });
+    modal.querySelectorAll('.cats button[data-k]').forEach(x => x.onclick = () => { kat = x.dataset.k; modal.querySelectorAll('.cats button[data-k]').forEach(y => y.classList.toggle('on', y === x)); });
+    modal.querySelectorAll('.cats button[data-o]').forEach(x => x.onclick = () => { odp = x.dataset.o; modal.querySelectorAll('.cats button[data-o]').forEach(y => y.classList.toggle('on', y === x)); });
     // od 1.43.0: nowe zdjęcia widać od razu w oknie i są zapisywane także przy „Zamknij brak”, komentarzu i „Otwórz ponownie”
     $('#ef').onclick = () => pickFile(async f => { nowe.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#efc').textContent = '+' + nowe.length + ' ' + odm(nowe.length, 'zdjęcie', 'zdjęcia', 'zdjęć') + ' – niezapisane'; const t = modal.querySelector('.thumbs[data-fotos]'); if (t) thumbs(t, [...b.foto, ...nowe]); });
     const zmiany = () => { const d = { bid }, opis = $('#eo').value.trim(), blok = $('#eb').checked;
-      if (kat !== b.kat) d.kat = kat; if (opis && opis !== b.opis) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
+      if (kat !== b.kat) d.kat = kat; if (odp && odp !== (b.odp || '')) d.odp = odp; if (opis && opis !== b.opis) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
       return Object.keys(d).length > 1 ? d : null; };
     const zapiszZmiany = async () => { const d = zmiany(); if (d) { await addEvent('brak_edyc', b.urz, d); nowe = []; } return !!d; };
     $('#ekf').onclick = () => pickFile(async f => { komFoto.push(await storePhoto(f, b.urz || 'BUDOWA', 'brak')); $('#ekc').textContent = komFoto.length + ' zdjęć'; });
@@ -1411,9 +1419,10 @@ const Dialogs = {
       if (!wEtapie(u)) await ustawEtap(u.etap || ''); UI.close(); UI.go('rzut', { mode: 'rzut', ark: u.arkusz, focus: u.id, sys: '', f: 'all' }); };
     $('#eS').onclick = async () => {
       // opis wymagany tylko bez kategorii albo przy „Inne” (jak przy zgłaszaniu, od 1.30.0; w oknie braku od 1.43.1)
+      if (!odp) { UI.toast('Wybierz odpowiedzialnego: ' + odpLista().join(' / ') + '.'); return; }
       const opis = $('#eo').value.trim(), blok = $('#eb').checked; if (!opis && (!kat || kat === 'Inne')) { UI.toast(kat === 'Inne' ? 'Przy „Inne” opisz brak.' : 'Wybierz rodzaj braku albo wpisz opis.'); return; }
       const d = { bid };
-      if (kat !== b.kat) d.kat = kat; if (opis && opis !== (b.opis || '')) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
+      if (kat !== b.kat) d.kat = kat; if (odp !== (b.odp || '')) d.odp = odp; if (opis && opis !== (b.opis || '')) d.opis = opis; if (blok !== !!b.blokuje) d.blokuje = blok; if (nowe.length) d.foto = nowe;
       if (Object.keys(d).length === 1) { wroc(); return; }
       await addEvent('brak_edyc', b.urz, d); UI.toast('Zmiany zapisane'); wroc();
     };
@@ -1882,9 +1891,12 @@ function attention(arr, F) {
   return `<div class="lbl">Wymaga uwagi</div><div class="list">${b.map(u => { const x = Object.values(F.braki).find(q => q.urz === u.id && !q.zamk);
     return `<button class="li" data-u="${U.esc(u.id)}"><span class="st brak"></span><span class="grow"><b>${U.esc(u.id)}</b>${ozHtml(u)} ${U.esc(u.typ)}<br><span class="mute">${U.esc(x ? x.kat : '')}</span></span></button>`; }).join('')}</div>`;
 }
+/* Odpowiedzialny za brak (od 1.52.0): Słowniki kolumna B; serwer < 1.52.0 – lista domyślna */
+function odpLista() { const l = (S.boot && S.boot.slowniki && S.boot.slowniki.odpowiedzialni) || []; return l.length ? l : ['Budowa', 'HupBud', 'AKPiA']; }
+function odpHtml(sel) { return `<div><div class="mute" style="margin-bottom:8px">Odpowiedzialny <span class="mute">(wymagany)</span></div><div class="cats odp">${odpLista().map(k => `<button data-o="${U.esc(k)}" class="${k === sel ? 'on' : ''}">${U.esc(k)}</button>`).join('')}</div></div>`; }
 function issueHtml(b) {
   const canClose = !b.zamk;   // od 1.9.0 brak może zamknąć każdy
-  return `<div class="issue link ${b.zamk ? 'closed' : ''}" data-bid="${U.esc(b.id)}" role="button" tabindex="0" aria-label="Otwórz brak"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.urz ? `<b>${U.esc(b.urz)}</b>${ozHtml(b.urz)}` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
+  return `<div class="issue link ${b.zamk ? 'closed' : ''}" data-bid="${U.esc(b.id)}" role="button" tabindex="0" aria-label="Otwórz brak"><div class="row"><span class="chip ${b.zamk ? 'ok' : 'bad'}">${U.esc(b.kat)}</span>${b.odp ? `<span class="chip odp">${U.esc(b.odp)}</span>` : ''}${b.urz ? `<b>${U.esc(b.urz)}</b>${ozHtml(b.urz)}` : b.etap ? `<b>Etap ${U.esc(b.etap)}</b>` : '<b>Budowa</b>'}${b.blokuje && !b.zamk ? '<span class="chip warn">blokuje</span>' : ''}<span class="mute" style="margin-left:auto">${U.fmt(b.ts)}</span></div>
     <div>${U.esc(b.opis)}</div>${b.foto && b.foto.length ? `<div class="thumbs" data-fotos="${U.esc(b.foto.join(','))}"></div>` : ''}<div class="mute">Zgłosił: ${U.esc(b.kto)}${b.kom && b.kom.length ? ' · ' + b.kom.length + ' kom.' : ''}${b.zm && b.zm.length ? ' · edytowano' : ''}${b.zamk ? ' · zamknął ' + U.esc(b.zamk.kto) + ' ' + U.fmt(b.zamk.ts) + (b.zamk.opis ? ' – ' + U.esc(b.zamk.opis) : '') : ''}</div>
     ${canClose ? `<div><button class="btn sm ok" data-close="${U.esc(b.id)}">Zamknij brak</button></div>` : ''}</div>`;
 }

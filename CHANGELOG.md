@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.52.0 – 2026-11-20 (aplikacja i serwer, schemat 1.17)
+- Braki: pole „Odpowiedzialny” (Budowa / HupBud / AKPiA) – obowiązkowe przy zgłoszeniu i przy zapisie zmian w oknie braku; zmienia je każdy, kto może edytować brak (wpis w rejestrze zmian). Etykieta przy rodzaju braku na liście, filtr (lista rozwijana) w ekranie „Braki i tematy”; stare braki bez odpowiedzialnego – pozycja „Bez odpowiedzialnego”.
+- Serwer: Słowniki → kolumna B „Odpowiedzialny za brak” (`odpowiedzialni`); przy starszym serwerze aplikacja używa listy Budowa / HupBud / AKPiA.
+
 ## 1.51.0 – 2026-11-20 (aplikacja i serwer, schemat 1.16)
 - Karta urządzenia: przycisk „i” (za „Edytuj”, przed ✕) – lista typów urządzeń ze Słowników: prefiks, nazwa, opis (kiedy stosować prefiks), kroki z wariantami, nr seryjny; typ otwartego urządzenia podświetlony, wyszukiwanie.
 - Serwer: Słowniki → kolumna J „Opis typu (kiedy stosować prefiks)” w słowniku typów (`opis`).
