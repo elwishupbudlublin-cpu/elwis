@@ -1673,7 +1673,7 @@ const Dialogs = {
   typyInfo(pre) {
     const T = ((S.boot && S.boot.slowniki && S.boot.slowniki.typy) || []);
     const w = document.createElement('div'); w.className = 'ov center zsub';
-    w.innerHTML = `<div class="dialog" role="dialog" aria-label="Typy urządzeń"><div class="shead"><h3>Typy urządzeń</h3><button class="btn sm" id="tyX" aria-label="Zamknij">✕</button></div>
+    w.innerHTML = `<div class="dialog tydlg" role="dialog" aria-label="Typy urządzeń"><div class="shead"><h3>Typy urządzeń</h3><button class="btn sm" id="tyX" aria-label="Zamknij">✕</button></div>
       <div class="sbody"><input id="tyQ" type="search" placeholder="Szukaj prefiksu, typu, opisu…" class="tyq"><div id="tyL" class="tylist"></div></div></div>`;
     modal.appendChild(w);
     const rys = () => {
@@ -1928,7 +1928,7 @@ function bindIssue(root, after) {
 }
 function histTxt(e) {
   const d = e.d || {};
-  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ === 'urz_poz' ? 'zmiana pozycji na rzucie ' + (d.ark || '') : e.typ === 'urz_sys' ? 'system: ' + (d.sys || 'brak') : e.typ === 'urz_edyc' ? 'edycja danych: ' + Object.keys(d).filter(k => k !== 'było').map(k => ({ typ: 'typ', zasilanie: 'zasilanie', oz: 'oznaczenie', uwagi: 'uwagi' })[k] + ' „' + (d[k] || '—') + '”').join(', ') : e.typ === 'urz_usun' ? 'usunięto urządzenie – ' + (d.powod || '') : e.typ;
+  return e.typ === 'krok' ? (d.wart ? '✓ ' : 'cofnięto: ') + d.nazwa : e.typ === 'nr' ? 'nr seryjny ' + d.sn : e.typ === 'foto' ? (d.rodzaj === 'tabliczka' ? 'zdjęcie tabliczki' + (d.czytelna ? ` (czytelna${d.odp && d.odp.split(' > ').length > 1 ? ', podejście ' + d.odp.split(' > ').length : ''})` : '') : 'zdjęcie') : e.typ === 'brak' ? 'brak: ' + d.kat : e.typ === 'brak_zamk' ? 'zamknięcie braku' : e.typ === 'notatka' ? 'notatka' : e.typ === 'protokol' ? 'protokół: ' + Prot.opisStanu(e.d) : e.typ === 'foto_usun' ? 'usunięto zdjęcie' : e.typ === 'brak_edyc' ? (d.usun ? 'usunięto brak' : d.otworz ? 'ponownie otwarto brak' : 'edycja braku') : e.typ === 'brak_kom' ? 'komentarz do braku' : e.typ === 'urz_nowe' ? 'dodano urządzenie' : e.typ === 'urz_poz' ? 'zmiana pozycji na rzucie ' + (d.ark || '') : e.typ === 'urz_sys' ? 'system: ' + (d.sys || 'brak') : e.typ === 'urz_edyc' ? 'edycja danych: ' + Object.keys(d).filter(k => k !== 'było').map(k => ({ typ: 'typ', zasilanie: 'zasilanie', oz: 'oznaczenie', uwagi: 'uwagi' })[k] + ' „' + (d[k] || '—') + '”').join(', ') : e.typ === 'urz_usun' ? 'usunięto urządzenie – ' + (d.powod || '') : e.typ;
 }
 async function thumbs(el, foto) {
   if (!el) return;
@@ -1962,7 +1962,7 @@ const Foto = {
   mozeUsunac(fid) { const i = this.info(fid); return Session.isBiuro() || (i.kto && S.user && i.kto === S.user.name); },
   async obraz(fid) {
     const p = await DB.getPhoto(fid); if (p) return { blob: p.blob, pelne: true };
-    const m = await DB.getFile('mini:' + fid); if (m) return { blob: m.blob, pelne: false };
+    const m = await DB.getFile('mini:' + fid); if (m) return { blob: m.blob, pelne: !!m.pelne, pobrane: !!m.pelne };
     if (!navigator.onLine) throw new Error('Zdjęcie jest na Dysku – połącz się z siecią, aby je zobaczyć.');
     const r = await API.foto(S.kod, fid);
     const mini = await U.compress(U.b64ToBlob(r.b64, r.mime || 'image/jpeg'), 800, 0.6);   // pomniejszone – nie zapycha pamięci
@@ -1988,9 +1988,37 @@ const Foto = {
     };
     try {
       const o = await this.obraz(fid);
-      $('#fvImg').innerHTML = ''; const img = new Image(); img.src = URL.createObjectURL(o.blob); img.alt = 'zdjęcie'; $('#fvImg').appendChild(img);
-      $('#fvJak').textContent = o.pelne ? '· z tego tabletu' : '· podgląd pomniejszony';
+      this.pokaz(o.blob, o.pobrane ? '· pełna jakość (pobrane)' : o.pelne ? '· z tego tabletu' : '· podgląd pomniejszony');
     } catch (e) { $('#fvImg').innerHTML = `<p class="mute" style="color:#fff">${U.esc(e.message)}</p>`; }
+  },
+  /* Wyświetlenie w podglądzie z własnym powiększaniem (od 1.54.2): szczypanie / podwójne dotknięcie / kółko – powiększa się tylko zdjęcie */
+  pokaz(blob, jak) {
+    const box = $('#fvImg'); if (!box) return;
+    box.innerHTML = ''; const img = new Image(); img.src = URL.createObjectURL(blob); img.alt = 'zdjęcie'; box.appendChild(img);
+    if ($('#fvJak')) $('#fvJak').textContent = jak || '';
+    let s = 1, x = 0, y = 0; const P = new Map(); let start = null, lastTap = 0;
+    const baza = () => { const b = box.getBoundingClientRect(), r = img.getBoundingClientRect(); return { b, w: r.width / s, h: r.height / s }; };
+    const ogranicz = () => { const { b, w, h } = baza(); const ox = img.offsetLeft, oy = img.offsetTop;
+      if (s <= 1) { s = 1; x = 0; y = 0; return; }
+      const minX = b.width - (ox + w * s), minY = b.height - (oy + h * s);
+      x = w * s > b.width ? Math.min(-ox, Math.max(minX, x)) : (b.width - w * s) / 2 - ox;
+      y = h * s > b.height ? Math.min(-oy, Math.max(minY, y)) : (b.height - h * s) / 2 - oy; };
+    const ustaw = () => { ogranicz(); img.style.transform = s === 1 ? '' : `translate(${x}px,${y}px) scale(${s})`; };
+    const zoomDo = (ns, cx, cy) => { const b = box.getBoundingClientRect(); const px = cx - b.left - img.offsetLeft, py = cy - b.top - img.offsetTop;
+      ns = Math.min(8, Math.max(1, ns)); x = px - (px - x) * ns / s; y = py - (py - y) * ns / s; s = ns; ustaw(); };
+    box.onpointerdown = e => { box.setPointerCapture(e.pointerId); P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const t = Date.now(); if (P.size === 1 && t - lastTap < 300) { zoomDo(s > 1 ? 1 : 2.5, e.clientX, e.clientY); lastTap = 0; } else lastTap = t;
+      start = { s, x, y, P: new Map(P) }; };
+    box.onpointermove = e => { if (!P.has(e.pointerId) || !start) return; P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const a = [...P.values()], a0 = [...start.P.values()];
+      if (a.length >= 2 && a0.length >= 2) {
+        const d = (p, q) => Math.hypot(p.x - q.x, p.y - q.y), c = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+        const ns = start.s * d(a[0], a[1]) / Math.max(1, d(a0[0], a0[1])); const c0 = c(a0[0], a0[1]), c1 = c(a[0], a[1]);
+        s = start.s; x = start.x; y = start.y; zoomDo(ns, c0.x, c0.y); x += c1.x - c0.x; y += c1.y - c0.y; ustaw();
+      } else if (a.length === 1 && s > 1) { const k = [...start.P.keys()][0], p0 = start.P.get(k) || a0[0]; x = start.x + a[0].x - p0.x; y = start.y + a[0].y - p0.y; ustaw(); } };
+    const koniec = e => { P.delete(e.pointerId); start = { s, x, y, P: new Map(P) }; };
+    box.onpointerup = koniec; box.onpointercancel = koniec;
+    box.onwheel = e => { e.preventDefault(); zoomDo(s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY); };
   },
   /* Pobranie zdjęcia (od 1.34.0, rola biuro): z tego tabletu – oryginał, z innych – pełny plik z Dysku (nie pomniejszony podgląd) */
   async pobierz(fid) {
@@ -2000,6 +2028,9 @@ const Foto = {
       if (!blob) {
         if (!navigator.onLine) { UI.toast('Połącz się z siecią, aby pobrać zdjęcie z Dysku'); return; }
         UI.toast('Pobieram zdjęcie…'); const r = await API.foto(S.kod, fid); blob = U.b64ToBlob(r.b64, r.mime || 'image/jpeg');
+        // od 1.54.2: pełna jakość zastępuje pomniejszony podgląd – w otwartym oknie i w pamięci tabletu
+        await DB.putFile('mini:' + fid, { blob, mime: blob.type || 'image/jpeg', name: fid + '.jpg', pelne: 1 });
+        if ($('#fotoView')) this.pokaz(blob, '· pełna jakość (pobrane)');
       }
       const dz = (i.ts || new Date().toISOString()).slice(0, 10);
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -2068,15 +2099,89 @@ function opisNaZdjecie(urz, rodzaj) {
   l.push(d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + hm(d) + ' · ' + (S.user ? S.user.name : ''));
   return l.filter(Boolean);
 }
-async function storePhoto(file, urz, rodzaj) {
-  const blob = await U.compress(file, 1600, 0.75, opisNaZdjecie(urz, rodzaj));
+async function storePhoto(file, urz, rodzaj, rot = 0) {
+  const blob = await U.compress(file, 1600, 0.75, opisNaZdjecie(urz, rodzaj), rot);
   const id = U.uid('f');
   const n = (await DB.eventsFor(S.kod)).filter(e => e.typ === 'foto' && e.urz === urz).length + 1;
   const name = rodzaj === 'tabliczka' ? `${urz}_tabliczka.jpg` : `${urz}_${U.day()}_${n}_${id.slice(-4)}.jpg`;
   await DB.putPhoto({ id, kod: S.kod, name, blob, sent: 0 });
   return id;
 }
+/* Aparat wbudowany w ELWIS (od 1.54.2, tylko tabliczki): podgląd z kamery, migawka, latarka – bez systemowego ekranu „OK / Powtórz”.
+   Brak dostępu do kamery → aparat systemowy (pickFile). */
+async function aparat(cb) {
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return pickFile(cb);
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4096 }, height: { ideal: 3072 } }, audio: false }); }
+  catch (e) { UI.toast('Brak dostępu do kamery – otwieram aparat systemowy'); return pickFile(cb); }
+  const tr = stream.getVideoTracks()[0], cap = (tr.getCapabilities && tr.getCapabilities()) || {};
+  const w = document.createElement('div'); w.className = 'kam'; w.id = 'kamView';
+  w.innerHTML = `<video playsinline autoplay muted id="kmV"></video>
+    <div class="kbar top"><span class="grow">Zdjęcie tabliczki – cała tabliczka w kadrze, bez odblasku</span><button class="btn sm" id="kmX">✕ Zamknij</button></div>
+    <div class="kbar bot"><button class="btn sm" id="kmS" title="Aparat systemowy">Aparat systemowy</button>
+      <button class="kshot" id="kmF" aria-label="Zrób zdjęcie"></button>
+      ${cap.torch ? '<button class="btn sm" id="kmT" aria-pressed="false">🔦 Latarka</button>' : '<span class="kpl"></span>'}</div>`;
+  document.body.appendChild(w);
+  const v = w.querySelector('#kmV'); v.srcObject = stream;
+  const stop = () => { stream.getTracks().forEach(t => t.stop()); w.remove(); };
+  let torch = false;
+  if (w.querySelector('#kmT')) w.querySelector('#kmT').onclick = async e => { torch = !torch; try { await tr.applyConstraints({ advanced: [{ torch }] }); e.currentTarget.setAttribute('aria-pressed', torch); e.currentTarget.classList.toggle('on', torch); } catch (_) { UI.toast('Latarka niedostępna'); } };
+  if (cap.focusMode && cap.focusMode.includes('continuous')) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+  v.onclick = e => { if (!cap.pointsOfInterest) return; const b = v.getBoundingClientRect(); tr.applyConstraints({ advanced: [{ pointsOfInterest: [{ x: (e.clientX - b.left) / b.width, y: (e.clientY - b.top) / b.height }], focusMode: 'single-shot' }] }).catch(() => {}); };
+  w.querySelector('#kmX').onclick = stop;
+  w.querySelector('#kmS').onclick = () => { stop(); pickFile(cb); };
+  w.querySelector('#kmF').onclick = async () => {
+    const btn = w.querySelector('#kmF'); if (btn.disabled) return; btn.disabled = true;
+    let blob = null;
+    try { if (window.ImageCapture) blob = await new ImageCapture(tr).takePhoto(); } catch (_) { blob = null; }
+    if (!blob) { const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0); blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)); }
+    stop(); cb(new File([blob], 'tabliczka.jpg', { type: blob.type || 'image/jpeg' }));
+  };
+}
+/* Tabliczka (od 1.54.2): po zdjęciu pytanie o czytelność – Powtórz / Zachowaj / Anuluj; odpowiedzi zapisane w zdarzeniu foto (pola czytelna, odp) */
+function tabliczkaFoto(urz) {
+  const odp = [];
+  const pytaj = f => {
+    const url = URL.createObjectURL(f);
+    const w = document.createElement('div'); w.className = 'ov center zsub';
+    w.innerHTML = `<div class="dialog tabdlg" role="dialog" aria-label="Czytelność tabliczki"><div class="shead"><h3>Czy tabliczka jest czytelna?</h3></div>
+      <div class="sbody"><div class="tabbox" id="tbBox"><img src="${url}" alt="zdjęcie tabliczki" class="tabimg" id="tbImg"></div>
+        <div class="tabrot"><button class="btn sm" id="tbL" title="Obróć o 90° w lewo">↺ 90°</button><input type="range" id="tbR" min="-180" max="180" step="1" value="0" aria-label="Obrót zdjęcia"><button class="btn sm" id="tbRr" title="Obróć o 90° w prawo">90° ↻</button><span class="m tabdeg" id="tbD">0°</span><button class="btn sm" id="tb0" title="Bez obrotu, bez powiększenia">Reset</button></div>
+        <p class="mute" style="margin:0">Ustaw tekst poziomo, powiększ palcami i sprawdź nr seryjny, model i dane. Zapisuje się całe zdjęcie z obrotem z paska.</p></div>
+      <div class="sfoot"><button class="btn" id="tbA">Anuluj</button><span class="grow"></span><button class="btn" id="tbP">↻ Powtórz</button><button class="btn pri" id="tbZ">✓ Zachowaj</button></div></div>`;
+    modal.appendChild(w);
+    const zamknij = () => { w.remove(); URL.revokeObjectURL(url); };
+    // obrót (pasek / ±90°) i powiększanie palcami – tylko podgląd; obrót trafia do zapisu
+    let rot = 0, s = 1, x = 0, y = 0; const P = new Map(); let st = null;
+    const im = w.querySelector('#tbImg'), box = w.querySelector('#tbBox'), R = w.querySelector('#tbR');
+    const nor = v => { v = ((v + 180) % 360 + 360) % 360 - 180; return v === -180 ? 180 : v; };
+    const pokaz = () => { if (s <= 1) { s = 1; x = 0; y = 0; } im.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${s})`; R.value = rot; w.querySelector('#tbD').textContent = rot + '°'; };
+    R.oninput = () => { rot = +R.value; pokaz(); };
+    w.querySelector('#tbL').onclick = () => { rot = nor(rot - 90); pokaz(); };
+    w.querySelector('#tbRr').onclick = () => { rot = nor(rot + 90); pokaz(); };
+    w.querySelector('#tb0').onclick = () => { rot = 0; s = 1; pokaz(); };
+    box.onpointerdown = e => { box.setPointerCapture(e.pointerId); P.set(e.pointerId, { x: e.clientX, y: e.clientY }); st = { s, x, y, P: new Map(P) }; };
+    box.onpointermove = e => { if (!P.has(e.pointerId) || !st) return; P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const a = [...P.values()], a0 = [...st.P.values()], d = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+      if (a.length >= 2 && a0.length >= 2) { s = Math.min(8, Math.max(1, st.s * d(a[0], a[1]) / Math.max(1, d(a0[0], a0[1])))); x = st.x + (a[0].x + a[1].x - a0[0].x - a0[1].x) / 2; y = st.y + (a[0].y + a[1].y - a0[0].y - a0[1].y) / 2; }
+      else if (a.length === 1 && s > 1) { const p0 = st.P.get(e.pointerId) || a0[0]; x = st.x + a[0].x - p0.x; y = st.y + a[0].y - p0.y; }
+      pokaz(); };
+    const kon = e => { P.delete(e.pointerId); st = { s, x, y, P: new Map(P) }; };
+    box.onpointerup = kon; box.onpointercancel = kon;
+    box.onwheel = e => { e.preventDefault(); s = Math.min(8, Math.max(1, s * (e.deltaY < 0 ? 1.2 : 1 / 1.2))); pokaz(); };
+    w.querySelector('#tbA').onclick = () => { odp.push('anuluj'); zamknij(); UI.toast('Zdjęcie tabliczki odrzucone'); };
+    w.querySelector('#tbP').onclick = () => { odp.push('powtórz'); zamknij(); aparat(pytaj); };
+    w.querySelector('#tbZ').onclick = async () => {
+      odp.push('zachowaj'); zamknij();
+      const fid = await storePhoto(f, urz, 'tabliczka', rot);
+      await addEvent('foto', urz, { fid, rodzaj: 'tabliczka', czytelna: 'tak', odp: odp.join(' > '), ...(rot ? { obrot: rot } : {}) });
+      UI.toast('Zdjęcie tabliczki zapisane' + (odp.length > 1 ? ` (podejście ${odp.length})` : '')); Dialogs.device(urz); UI.refresh();
+    };
+  };
+  aparat(pytaj);
+}
 function pickPhoto(urz, rodzaj) {
+  if (rodzaj === 'tabliczka') return tabliczkaFoto(urz);
   pickFile(async f => {
     const fid = await storePhoto(f, urz, rodzaj);
     await addEvent('foto', urz, { fid, rodzaj });

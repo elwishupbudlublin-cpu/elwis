@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.54.2 – 2026-11-20 (aplikacja)
+- Okno „i” – lista typów urządzeń przewijana (nagłówek i wyszukiwanie zostają na miejscu).
+- Podgląd zdjęcia: powiększanie gestem tylko zdjęcia (szczypanie, przesuwanie, podwójne dotknięcie, kółko myszy) – pasek z przyciskami się nie powiększa.
+- „Pobierz” zdjęcie: pełna jakość zastępuje pomniejszony podgląd w oknie i w pamięci tabletu.
+- Zdjęcie tabliczki: aparat wbudowany w ELWIS (podgląd z kamery, migawka, latarka, ostrość po dotknięciu; awaryjnie aparat systemowy) – bez systemowego ekranu „OK / Powtórz”; okno „Czy tabliczka jest czytelna?” z obrotem (pasek −180…+180°, ±90°) i powiększaniem; Powtórz / Zachowaj / Anuluj. Zapis całego zdjęcia obróconego wg paska; w zdarzeniu `foto` pola `czytelna`, `odp` (sekwencja odpowiedzi) i `obrot`.
+
 ## 1.54.1 – 2026-11-20 (aplikacja)
 - Poprawka aktualizacji: przy instalacji nowej wersji pliki pobierane z pominięciem pamięci HTTP przeglądarki, zwykłe pobrania z rewalidacją (`no-cache`), pliki CSS / JS z numerem wersji w adresie – tablet nie składa już strony z plików dwóch wersji (objaw: stara wersja, brak logo, ścieżka na czarnym pasku, przyciski nagłówka przesunięte).
 

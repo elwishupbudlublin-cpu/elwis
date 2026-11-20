@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.54.1';
+const APP_VERSION = '1.54.2';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -98,11 +98,16 @@ const U = {
     const e = hdr(22); e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cl, true); e.setUint32(16, off, true);
     return new Blob([...parts, ...cen, e.buffer], { type: 'application/zip' });
   },
-  async compress(file, max = 1600, q = 0.75, opis = null) {
+  async compress(file, max = 1600, q = 0.75, opis = null, rot = 0) {
     const img = await createImageBitmap(file);
-    const s = Math.min(1, max / Math.max(img.width, img.height));
-    const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    // od 1.54.2: obrót o dowolny kąt (stopnie) – całe zdjęcie mieści się w obróconym kadrze (narożniki tła ciemne), bez przycinania
+    const a = ((rot % 360) + 360) % 360 * Math.PI / 180, cs = Math.abs(Math.cos(a)), sn = Math.abs(Math.sin(a));
+    const bw = img.width * cs + img.height * sn, bh = img.width * sn + img.height * cs;
+    const s = Math.min(1, max / Math.max(bw, bh));
+    const c = document.createElement('canvas'); c.width = Math.round(bw * s); c.height = Math.round(bh * s);
+    const g = c.getContext('2d');
+    if (a) { g.fillStyle = '#111827'; g.fillRect(0, 0, c.width, c.height); g.translate(c.width / 2, c.height / 2); g.rotate(a); g.drawImage(img, -img.width * s / 2, -img.height * s / 2, img.width * s, img.height * s); g.setTransform(1, 0, 0, 1, 0, 0); }
+    else g.drawImage(img, 0, 0, c.width, c.height);
     if (opis && opis.length) {   // opis wtopiony w lewy górny róg (od 1.12.0): budowa, urządzenie, data, autor
       const fs = Math.max(14, Math.round(Math.min(c.width, c.height) / 32)), pad = Math.round(fs * 0.6), lh = Math.round(fs * 1.3);
       g.font = `600 ${fs}px Inter, system-ui, sans-serif`; g.textBaseline = 'top';
