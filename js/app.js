@@ -580,42 +580,8 @@ const Views = {
 
   /* Dokumenty projektowe (pliki budowy) i techniczne (DTR z _Techniczne) – od 1.12.0 osobne ekrany */
   /* Priorytety budów (od 1.17.0) – tylko rola biuro; wynik silnika reguł z serwera, kafelki w kolejności wymaganego działania */
-  async priorytety(par) {
-    if (!Session.isBiuro()) return UI.go('plan');
-    UI.header('priorytety', () => UI.wstecz('plan'));
-    const r = await DB.get('prio');
-    const kiedy = r && r.czas ? new Date(r.czas).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-    const pr = (r && r.projekty) || [], n = z => pr.filter(p => p.poz === z).length;
-    const filtr = par.f == null ? -1 : par.f, lista = pr.filter(p => filtr < 0 || p.poz === filtr);
-    const KL = ['ok', 'warn', 'bad'], dni = p => p.dni == null ? (p.koniec ? '' : 'brak terminu końca') : p.dni < 0 ? `${-p.dni} dni po terminie` : `koniec za ${p.dni} dni`;
-    const kaf = p => `<div class="pkaf p${p.poz}">
-        <button class="pkh" ${p.tylkoCU ? `data-purl="${U.esc(p.url || '')}"` : `data-pk="${U.esc(p.kod)}"`}><span class="grow"><b class="m bkd">${U.esc(p.kod)}</b> <b>${U.esc(p.nazwa)}</b>${p.tylkoCU ? ' <span class="mute pcu">poza ELWIS</span>' : ''}</span>${dni(p) ? `<span class="chip ${KL[p.poz]}">${U.esc(dni(p))}</span>` : ''}</button>
-        ${p.powody.length ? `<div class="ppow p${p.powody[0].poz}">${U.esc(p.powody[0].txt)}</div>` : `<div class="mute">W normie${p.nast ? ' · następne: ' + U.esc(p.nast) : ''}</div>`}
-        ${p.kom ? `<div class="pkom">${ic('note')} ${U.esc(p.kom)}</div>` : ''}
-        <div class="mute psub">${p.tylkoCU ? 'Bez danych z budowy' : `Podłączone ${p.postep[0]}/${p.postep[1]}`}${p.zapas != null ? ` · zapas ${p.zapas} dni rob.` : ''}${p.tempo ? ` · tempo ${String(p.tempo).replace('.', ',')}/dzień` : ''}${p.ile > 1 ? ` · <button class="lnk" data-wiecej="${U.esc(p.url || p.kod)}">+ ${p.ile - 1} ${p.ile - 1 === 1 ? 'powód' : 'powody'}</button>` : ''}</div>
-        <div class="pwiecej" id="pw-${U.esc(p.url || p.kod)}" hidden>${p.powody.slice(1).map(q => `<div class="ppow p${q.poz}">${q.url ? `<a href="${U.esc(q.url)}" target="_blank" rel="noopener">${U.esc(q.txt)}</a>` : U.esc(q.txt)}</div>`).join('')}${p.powody[0] && p.powody[0].url ? `<a class="btn sm" href="${U.esc(p.powody[0].url)}" target="_blank" rel="noopener">Otwórz zadanie w ClickUp</a>` : ''}</div>
-      </div>`;
-    view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Priorytety</h1><button class="btn sm pri" id="pOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div>
-        <div class="mute" style="color:#dbe7ff">${r ? `${pr.length} budów · przeliczono ${U.esc(kiedy)}${r.pominiete ? ` · ${r.pominiete} nieprzeliczonych` : ''}` : 'Brak danych – połącz się z siecią i zsynchronizuj.'}</div>
-        <div class="pseg" style="margin-top:10px"><button class="on">Budowy</button><button id="pZm">Ostatnie zmiany</button><button id="pWyd">Wydajność ekip</button></div></section>
-      ${r && r.brakKlucza ? '<div class="card mute">Brak klucza ClickUp na serwerze – priorytety liczone tylko z danych z budów.</div>' : ''}
-      ${r && r.komentarz ? `<div class="card pkom">${ic('note')} ${U.esc(r.komentarz)}</div>` : ''}
-      ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
-      <div class="tabs" style="margin:10px 0">${[[-1, 'Wszystkie ' + pr.length], [2, 'Pilne ' + n(2)], [1, 'Uwaga ' + n(1)], [0, 'W normie ' + n(0)]].map(([k, l]) => `<button class="tab ${k === filtr ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}</div>
-      <div class="prgrid">${lista.map(kaf).join('') || '<div class="card mute">Brak budów w tej grupie.</div>'}</div>`;
-    view.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => UI.go('priorytety', { f: Number(b.dataset.pf) }, { zastap: true }));
-    view.querySelectorAll('[data-wiecej]').forEach(b => b.onclick = () => { const e = document.getElementById('pw-' + b.dataset.wiecej); e.hidden = !e.hidden; });
-    view.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => openProject(b.dataset.pk));
-    view.querySelectorAll('[data-purl]').forEach(b => b.onclick = () => { if (b.dataset.purl) window.open(b.dataset.purl, '_blank', 'noopener'); });
-    $('#pWyd').onclick = () => UI.go('wydajnosc');
-    $('#pZm').onclick = () => UI.go('zmiany');
-    $('#pOdsw').onclick = async () => {
-      if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
-      $('#pOdsw').disabled = true; $('#pOdsw').textContent = 'Przeliczam… (do kilku minut)';
-      try { await DB.set('prio', await API.priorytety(true)); UI.toast('Przeliczono'); } catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); }
-      if (UI.cur === 'priorytety') UI.refresh();
-    };
-  },
+  /* Priorytety – wycofane w 1.55.0 (decyzja 20.11.2026); stary adres prowadzi do „Ostatnich zmian” */
+  async priorytety() { return UI.go('zmiany', {}, { zastap: true }); },
   /* Ostatnie zmiany (od 1.24.0) – tylko rola biuro: aktywne budowy od najnowszej zmiany (ostatni wpis z tabletu), z licznikami i usterkami */
   async zmiany() {
     if (!Session.isBiuro()) return UI.go('plan');
@@ -635,9 +601,8 @@ const Views = {
         ${l && l.w != null ? `<span class="lstat"><span class="m"><b>${l.u} / ${l.p} / ${l.d} / ${l.w}</b></span><small>uruch. / podł. / rozp. / wszystkie</small>${l.b ? `<span class="usterki">⚠ ${l.b} ${odmUsterki(l.b)}</span>` : ''}${pasek3(l, true)}</span>` : '<span class="lstat mute">brak danych</span>'}
       </button>`;
     view.innerHTML = `<section class="phero"><h1>Ostatnie zmiany</h1><div class="mute" style="color:#dbe7ff">${lista.length} aktywnych budów · od ostatniego wpisu z tabletu</div>
-        <div class="pseg" style="margin-top:10px"><button id="zBud">Budowy</button><button class="on">Ostatnie zmiany</button><button id="zWyd">Wydajność ekip</button></div></section>
+        <div class="pseg" style="margin-top:10px"><button class="on">Ostatnie zmiany</button><button id="zWyd">Wydajność ekip</button></div></section>
       <div class="list" style="margin-top:12px">${lista.map(wiersz).join('') || '<div class="li mute">Brak aktywnych budów.</div>'}</div>`;
-    $('#zBud').onclick = () => UI.go('priorytety');
     $('#zWyd').onclick = () => UI.go('wydajnosc');
     view.querySelectorAll('[data-k]').forEach(b => b.onclick = () => openProject(b.dataset.k));
   },
@@ -646,7 +611,7 @@ const Views = {
   async wydajnosc(par) {
     if (!Session.isBiuro()) return UI.go('plan');
     const ekN = e => /^\d+$/.test(e) ? 'Ekipa ' + e : e;
-    UI.header('wydajność ekip', () => UI.wstecz('priorytety'));
+    UI.header('wydajność ekip', () => UI.wstecz('zmiany'));
     const r = await DB.get('prio'), w = (r && r.wyd) || { tyg: [], serie: [] };
     const KAT = { podl: ['Podłączenia', '% normy dnia'], term: ['Terminowość', '% zadań w terminie'], kompl: ['Kompletność wpisów', '% z nr seryjnym'], prz: ['Przestoje', 'braki blokujące'] };
     const kat = KAT[par.k] ? par.k : 'podl', mies = par.o === 'm';
@@ -678,8 +643,8 @@ const Views = {
         <div class="mute">${ost && ost.malo ? 'mało danych · ' : ''}${sr != null ? 'średnia z poprzednich: ' + Math.round(sr) + (kat === 'prz' ? '' : '%') : 'brak wcześniejszych danych'}</div>
         ${s.typy.length ? `<div class="mute wtyp">${s.typy.sort((a, b) => b.n - a.n).slice(0, 4).map(t => `${U.esc(t.typ)}: ${t.czas} min (norma ${t.norma}, n=${t.n})`).join(' · ')}</div>` : ''}</div>`;
     };
-    view.innerHTML = `<section class="phero"><h1>Wydajność ekip</h1><div class="mute" style="color:#dbe7ff">${r && r.czas ? 'Stan na ' + new Date(r.czas).toLocaleDateString('pl-PL') + ' · widok tylko dla biura' : 'Brak danych – zsynchronizuj.'}</div>
-        <div class="pseg" style="margin-top:10px"><button id="wBud">Budowy</button><button id="wZm">Ostatnie zmiany</button><button class="on">Wydajność ekip</button></div></section>
+    view.innerHTML = `<section class="phero"><div class="row"><h1 class="grow">Wydajność ekip</h1><button class="btn sm pri" id="wOdsw" style="background:#fff;color:#0E1A2B">Przelicz teraz</button></div><div class="mute" style="color:#dbe7ff">${r && r.czas ? 'Stan na ' + new Date(r.czas).toLocaleString('pl-PL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · liczone na żądanie · widok tylko dla biura' : 'Brak danych – naciśnij „Przelicz teraz” (potrzebna sieć).'}</div>
+        <div class="pseg" style="margin-top:10px"><button id="wZm">Ostatnie zmiany</button><button class="on">Wydajność ekip</button></div></section>
       ${((r && r.alarmy) || []).map(a => `<div class="card palarm">⚠ ${U.esc(a.txt)}</div>`).join('')}
       <div class="tabs" style="margin:10px 0">${Object.keys(KAT).map(k => `<button class="tab ${k === kat ? 'on' : ''}" data-wk="${k}">${KAT[k][0]}</button>`).join('')}
         <span style="width:12px"></span><button class="tab ${!mies ? 'on' : ''}" data-wo="t">Tygodnie</button><button class="tab ${mies ? 'on' : ''}" data-wo="m">Miesiące</button></div>
@@ -687,7 +652,12 @@ const Views = {
         <svg viewBox="0 0 600 250" class="wchart" role="img" aria-label="Wykres: ${KAT[kat][0]} wg ekip">${siatka}${linie}${osX}</svg>
         <div class="row wleg">${serie.map(s => `<span class="row"><svg width="28" height="8"><line x1="0" x2="28" y1="4" y2="4" stroke="${s.kol}" stroke-width="3" stroke-dasharray="${s.dash}"/></svg>${U.esc(ekN(s.ek))}</span>`).join('')}</div></div>
         <div class="grid2" style="margin-top:12px">${serie.map(karta).join('')}</div>` : '<div class="card mute">Brak wpisów ekip z ostatnich 12 tygodni.</div>'}`;
-    $('#wBud').onclick = () => UI.go('priorytety');
+    $('#wOdsw').onclick = async () => {   // od 1.55.0: wydajność liczona tylko na żądanie (bez przeliczania co godzinę)
+      if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
+      $('#wOdsw').disabled = true; $('#wOdsw').textContent = 'Przeliczam… (do kilku minut)';
+      try { await DB.set('prio', await API.priorytety(true)); UI.toast('Przeliczono'); } catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); }
+      if (UI.cur === 'wydajnosc') UI.refresh();
+    };
     $('#wZm').onclick = () => UI.go('zmiany');
     view.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, k: b.dataset.wk }, { zastap: true }));
     view.querySelectorAll('[data-wo]').forEach(b => b.onclick = () => UI.go('wydajnosc', { ...par, o: b.dataset.wo }, { zastap: true }));
@@ -2312,7 +2282,7 @@ function settings() {
   $('#nPlan').onclick = () => { UI.close(); UI.go('plan'); };
   $('#nBud').onclick = () => { UI.close(); UI.go('home'); };
   $('#nDok').onclick = () => { UI.close(); UI.go('dokumenty', { typ: 'tech' }); };
-  $('#nPrio').onclick = () => { UI.close(); UI.go('priorytety'); };
+  $('#nPrio').onclick = () => { UI.close(); UI.go('zmiany'); };
   $('#nZak').onclick = () => { UI.close(); UI.go('zakupy'); };
   // od 1.50.1: przy otwartym oknie (modal) tło nie przewija się i nie powiększa (blokada gestu powiększania poza oknem)
   new MutationObserver(() => document.body.classList.toggle('mopen', !!modal.firstElementChild)).observe(modal, { childList: true });

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.52.0';
+const SCRIPT_VERSION = '1.55.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -47,6 +47,7 @@ function doPost(e) {
 }
 
 function handle_(p, body) {
+  try { migracjaWyzwalaczy_(); } catch (e) { }   // od 1.55.0: jednorazowo – zamiana godzinowego przeliczania priorytetów na zadanie dzienne
   try {
     const tablet = auth_(p.key);
     if (!tablet) return out_({ ok: false, error: 'Nieznany lub wyłączony klucz tabletu' });
@@ -901,7 +902,7 @@ function przelicz_(p, ids, zmiany) {
 }
 
 /* Uzupełnienie liczników (od 1.25.1): budowy, które nie mają jeszcze licz (brak wpisów od wdrożenia 1.23.0).
-   Uruchamiane co godzinę z przeliczPriorytety (po max kilka budów) albo ręcznie: przeliczLiczniki() – wszystkie aktywne od nowa. */
+   Uruchamiane raz dziennie z `codziennie` (od 1.55.0, max 50 budów) albo ręcznie: przeliczLiczniki() – wszystkie aktywne od nowa. */
 function uzupelnijLicz_(max) {
   const m = safeJson_(P.getProperty('LICZ') || '{}'); let n = 0;
   aktywne_().forEach(p => {
@@ -1173,7 +1174,7 @@ const ARCH_PROG_WOLNE = 0.20;   // od 1.40.0: przy wolnym miejscu na Dysku poni�
 function wolneMiejsce_() {
   try { const lim = DriveApp.getStorageLimit(), uz = DriveApp.getStorageUsed(); return lim > 0 ? Math.max(0, 1 - uz / lim) : null; } catch (e) { return null; }
 }
-/* Codzienna kontrola miejsca (od 1.40.0) – wywoływana z przeliczania priorytetów (co godzinę), działa raz na dzień.
+/* Codzienna kontrola miejsca (od 1.40.0) – od 1.55.0 wywoływana z zadania dziennego `codziennie`, działa raz na dzień.
    Mało miejsca → porządki archiwum w trybie pilnym: stare kopie usuwane trwale (kosz też zajmuje miejsce). */
 function kontrolaMiejsca_() {
   const dzis = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd');
@@ -1268,10 +1269,20 @@ function pary_(s, dom) {
   txt_(s).split(';').forEach(x => { const i = x.indexOf(':'); if (i < 0) return; const k = x.slice(0, i).trim(), v = Number(x.slice(i + 1).trim().replace(',', '.')); if (k && !isNaN(v)) o[k] = v; });
   return o;
 }
-function instalacjaPriorytetow() {
-  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'przeliczPriorytety')) ScriptApp.newTrigger('przeliczPriorytety').timeBased().everyHours(1).create();
-  przeliczPriorytety();
-  Logger.log('OK. Priorytety przeliczane co godzinę.');
+/* Od 1.55.0 ekran „Priorytety” wycofany (decyzja 20.11.2026): bez przeliczania co godzinę – oszczędność dziennego limitu czasu wyzwalaczy.
+   Wydajność ekip liczona tylko na żądanie (przycisk „Przelicz” w aplikacji). Czynności, które szły przy okazji przeliczania
+   (brakujące liczniki budów, kontrola miejsca na Dysku), robi zadanie dzienne `codziennie` (ok. 4:00). */
+function instalacjaPriorytetow() { migracjaWyzwalaczy_(true); Logger.log('OK. Przeliczanie co godzinę wyłączone, zadanie dzienne `codziennie` włączone.'); }
+function migracjaWyzwalaczy_(wymus) {
+  if (!wymus && P.getProperty('WYZW_155') === '1') return;
+  const tr = ScriptApp.getProjectTriggers();
+  tr.filter(t => t.getHandlerFunction() === 'przeliczPriorytety').forEach(t => ScriptApp.deleteTrigger(t));
+  if (!tr.some(t => t.getHandlerFunction() === 'codziennie')) ScriptApp.newTrigger('codziennie').timeBased().everyDays(1).atHour(4).create();
+  P.setProperty('WYZW_155', '1');
+}
+function codziennie() {
+  try { uzupelnijLicz_(50); } catch (e) { Logger.log('liczniki: ' + e); }
+  try { kontrolaMiejsca_(); } catch (e) { Logger.log('miejsce: ' + e); }
 }
 const DZIEN = 864e5;
 function dzien_(t) { return Utilities.formatDate(new Date(t), 'Europe/Warsaw', 'yyyy-MM-dd'); }
@@ -1312,8 +1323,6 @@ function zadaniaWszystkie_() {
 }
 
 function przeliczPriorytety() {
-  try { uzupelnijLicz_(5); } catch (e) { }   // od 1.25.1: brakujące liczniki budów, po 5 na godzinę
-  try { kontrolaMiejsca_(); } catch (e) { }   // od 1.40.0: raz dziennie – wolne miejsce na Dysku, przy < 20% porządki archiwum
   const start = Date.now(), k = konfig_();
   const normy = pary_(k.normy_min, NORMY_DOM), progi = pary_(k.progi, PROGI_DOM);
   const cu = zadaniaWszystkie_();
@@ -1511,8 +1520,8 @@ function czytajDuze_(nazwa) {
 /** Operacja `priorytety` – tylko rola biuro. `odswiez=1` przelicza od razu (do kilku minut). */
 function priorytety_(kto, odswiez) {
   if (!rolaBiuro_()[txt_(kto)]) throw new Error('Priorytety – tylko rola biuro');
-  let r = odswiez ? null : czytajDuze_('PRIO');
-  if (!r) r = przeliczPriorytety();
+  let r = odswiez ? przeliczPriorytety() : czytajDuze_('PRIO');
+  if (!r) r = { czas: 0, projekty: [], alarmy: [], wyd: { tyg: [], serie: [] }, progi: {} };   // od 1.55.0: bez przeliczania przy synchronizacji
   const kom = {}; txt_(konfig_().analiza_claude).split(/\n+/).forEach(l => { const m = l.match(/^\s*([0-9]{2}[_p][0-9]{3})\s*[:–-]\s*(.+)$/); if (m) kom[m[1]] = m[2].slice(0, 300); else if (l.trim() && !kom._) kom._ = l.trim().slice(0, 400); });
   r.projekty.forEach(p => { if (kom[p.kod]) p.kom = kom[p.kod]; });
   r.komentarz = kom._ || '';

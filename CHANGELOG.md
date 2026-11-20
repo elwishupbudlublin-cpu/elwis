@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.55.0 – 2026-11-20 (aplikacja i serwer)
+- Ekran „Priorytety” wycofany. W dolnym pasku (rola biuro) „Zmiany i ekipy”: zakładki Ostatnie zmiany i Wydajność ekip; wydajność liczona tylko na żądanie („Przelicz teraz”).
+- Serwer: koniec przeliczania co godzinę (oszczędność dziennego limitu czasu wyzwalaczy); brakujące liczniki budów i kontrola miejsca na Dysku w zadaniu dziennym `codziennie` (ok. 4:00). Wyzwalacze zmieniają się same przy pierwszym zapytaniu po wklejeniu kodu (`migracjaWyzwalaczy_`). Synchronizacja roli biuro nie uruchamia przeliczania.
+
 ## 1.54.2 – 2026-11-20 (aplikacja)
 - Okno „i” – lista typów urządzeń przewijana (nagłówek i wyszukiwanie zostają na miejscu).
 - Podgląd zdjęcia: powiększanie gestem tylko zdjęcia (szczypanie, przesuwanie, podwójne dotknięcie, kółko myszy) – pasek z przyciskami się nie powiększa.

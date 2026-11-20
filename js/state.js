@@ -347,7 +347,7 @@ const Sync = {
     try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
     // priorytety budów i wydajność ekip – tylko rola biuro (od 1.17.0); wynik gotowy z serwera, bez przeliczania
-    if (Session.isBiuro()) { try { const r = await API.priorytety(false); await DB.set('prio', r); } catch (e) { console.warn('priorytety', e); } }
+    if (Session.isBiuro()) { try { const r = await API.priorytety(false); if (r && r.czas) await DB.set('prio', r); } catch (e) { console.warn('priorytety', e); } }
   },
   /* Prognoza Open-Meteo (od 1.11.0): godziny 7–16 dla Lublina i budów z lokalizacją z planu; tylko odczyt, bez danych budowy */
   async pullPogoda() {
