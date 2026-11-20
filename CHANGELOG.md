@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.54.0 – 2026-11-20 (aplikacja)
+- Ścieżka (nr budowy › nazwa › ekran) przeniesiona do nagłówka: od przycisku wstecz do przycisku logowania, dół wyrównany z dołem tych przycisków; logo i przycisk synchronizacji nad ścieżką. Bez osobnego paska – nagłówek 68 px.
+
 ## 1.53.0 – 2026-11-20 (aplikacja)
 - Nagłówek: stan sieci i synchronizacja w jednym przycisku (kropka, stan / czas synchronizacji, ⟳); dotknięcie uruchamia synchronizację; liczba wpisów do wysłania jako czerwona plakietka; postęp synchronizacji jako zielone tło przycisku (zamiast paska pod nagłówkiem).
 - Przycisk wstecz mniejszy o 10%; nagłówek niższy.

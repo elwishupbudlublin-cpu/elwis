@@ -666,3 +666,12 @@ body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}
 .top{height:54px;padding-top:6px}
 .crumb{top:54px}
 .ubar{top:74px}
+/* od 1.54.0: ścieżka w nagłówku – między przyciskiem wstecz a przyciskiem użytkownika, dół wyrównany z ich dołem */
+.top{height:68px;padding:6px 14px;align-items:stretch}
+.top #btnBack,.top .who{height:auto;align-self:stretch}
+.tmid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+.trow{display:flex;align-items:center;gap:10px;min-width:0}
+.trow #btnSync.net{height:36px}
+.crumb{position:static;height:16px;line-height:16px;padding:0 2px;background:none;align-items:flex-end;margin:0}
+.crumb .clink{line-height:16px}
+.ubar{top:68px}
