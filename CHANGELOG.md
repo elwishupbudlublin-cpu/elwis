@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.56.1 – 2026-11-21 (aplikacja i serwer)
+- Harmonogram: nie wraca do poprzedniego dnia (wyścig odświeżania), pokazuje zadania wielodniowe (start przed końcem okna). Przycisk „Nowe zadanie” tej samej wysokości co pozostałe, na środku nagłówka.
+- Nowe zadanie: okno otwiera się od razu; lista projektów i obciążenie ekip wczytywane w tle z licznikiem (serwer `zadNowe` op `odswiez`, pamięć obciążenia do 10 min dla wariantów; „Zaplanuj” zawsze na bieżącym). Pole projektu z podpowiedziami po wpisaniu kodu lub nazwy, „nie znaleziono – utworzyć nowy projekt?”. Osobny przycisk dla każdej osoby (także zgłaszającego) – wspólny wolny czas wybranych osób (`ekipa: 'osoby'`). Pola liczbowe tej samej wysokości co pozostałe.
+- Oczekiwanie na serwer: limit czasu każdego zapytania (30–120 s), pasek „Czekam na serwer” z odliczaniem i „Przerwij” dla działań z przycisku, odliczanie przy synchronizacji w tle; zawieszone połączenie nie blokuje już synchronizacji. Szukanie terminu bez odpowiedzi → propozycja kolejki; spóźniona odpowiedź po „Anuluj” ignorowana; ponowne „Zaplanuj” nie tworzy duplikatu (serwer pamięta zgłoszenie 6 h).
+- Word w protokole wysyła tylko zmiany tej budowy (bez pełnej synchronizacji); „Synchronizuj” na ekranie PIN w tle.
+
 ## 1.56.0 – 2026-11-21 (aplikacja i serwer, schemat 1.18)
 - Harmonogram (rola biuro): „+ Nowe zadanie” – projekt (aktywne i z Bazy, także „＋ Nowy projekt”), faza, opis, ekipa (+ Dariusz), godziny, „nie wcześniej / najpóźniej”, uwagi → „Znajdź termin”: serwer liczy pierwszy wolny termin każdej pasującej ekipy (dzień 8 h, godziny pracy ekipy, urlopy, zaległe, podział na części) z ostrzeżeniami (zasięg z pinezki / adresu, obiekt wojskowy – M, zaległe, Dariusz) i „prowadzi budowę”. „Zaplanuj” = akceptacja → podzadania wybranej fazy w ClickUp (terminy, godziny, szacowany czas, osoby), przy kolizji – nowe warianty i powiadomienie.
 - Nowy projekt z formularza: lista w ClickUp (szablon z Konfiguracji `clickup_szablon_listy` albo same fazy) w przestrzeni PROJ wg roku z kodu, wiersz w Bazie (Aktywna = nie); kontrola duplikatów kodu w Bazie i ClickUp.

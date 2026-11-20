@@ -1,24 +1,42 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.56.0';
+const APP_VERSION = '1.56.1';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
   async function load() { cfg = await DB.get('cfg'); return cfg; }
   function ready() { return !!(cfg && cfg.url && cfg.key); }
 
+  /* Oczekiwanie na serwer (od 1.56.1): każde zapytanie ma limit czasu, a oczekujące są widoczne z odliczaniem.
+     et = etykieta działania wywołanego przyciskiem (pasek „Czekam na serwer” z przyciskiem Przerwij);
+     bez etykiety = praca w tle (odliczanie przy wskaźniku synchronizacji). */
+  const LIMIT = { bootstrap: 45, project: 90, events: 60, plan: 60, powiad: 30, techniczne: 60, priorytety: 90, file: 90, foto: 60,
+    push: 120, zadNowe: 120, zadania: 90, zakupy: 90, docx: 120 };
+  const W = new Map(); let wid = 0, fgEt = null;
+  async function req(action, url, opts) {
+    const lim = LIMIT[action] || 60, ctrl = new AbortController(), id = ++wid;
+    const w = { id, action, et: fgEt, start: Date.now(), lim: lim * 1000, ctrl, timeout: false };
+    W.set(id, w); API.onWait();
+    const tm = setTimeout(() => { w.timeout = true; ctrl.abort(); }, lim * 1000);
+    try { const r = await fetch(url, Object.assign({}, opts, { signal: ctrl.signal })); return await parse(r); }
+    catch (e) {
+      if (e && e.name === 'AbortError') { const er = new Error(w.timeout ? `Serwer nie odpowiedział w ${lim} s – spróbuj ponownie` : 'Przerwano'); er.timeout = w.timeout; er.przerwane = !w.timeout; throw er; }
+      if (e instanceof TypeError) { const er = new Error('Brak połączenia z serwerem'); er.siec = true; throw er; }
+      throw e;
+    } finally { clearTimeout(tm); W.delete(id); API.onWait(); }
+  }
   async function get(action, params = {}) {
     const q = new URLSearchParams({ action, key: cfg.key, v: APP_VERSION, ...params });
-    const r = await fetch(cfg.url + (cfg.url.includes('?') ? '&' : '?') + q.toString(), { method: 'GET', redirect: 'follow' });
-    return parse(r);
+    return req(action, cfg.url + (cfg.url.includes('?') ? '&' : '?') + q.toString(), { method: 'GET', redirect: 'follow' });
   }
   async function post(body) {
-    const r = await fetch(cfg.url, {
+    return req(body.action, cfg.url, {
       method: 'POST', redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: cfg.key, v: APP_VERSION, ...body })
     });
-    return parse(r);
   }
+  /* Działanie z przycisku: fg('Szukam terminu', () => API.zadNowe(...)) */
+  function fg(et, fn) { const st = fgEt; fgEt = et; try { return fn(); } finally { fgEt = st; } }
   async function parse(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
@@ -29,11 +47,14 @@ const API = (() => {
   /* Test konfiguracji przy pierwszym uruchomieniu */
   async function test(url, key) {
     const saved = cfg; cfg = { url, key };
-    try { const b = await get('bootstrap'); return b; } finally { cfg = saved; }
+    try { const b = await fg('Sprawdzam połączenie', () => get('bootstrap')); return b; } finally { cfg = saved; }
   }
 
   return {
-    load, ready, test,
+    load, ready, test, fg,
+    onWait: () => { },
+    oczekujace: () => [...W.values()],
+    przerwij: (id) => { const w = W.get(id); if (w) w.ctrl.abort(); },
     setCfg: async (c) => { cfg = c; await DB.set('cfg', c); },
     cfg: () => cfg,
     bootstrap: (pamiec) => get('bootstrap', pamiec ? { pamiec } : {}),
@@ -48,11 +69,12 @@ const API = (() => {
     file: (id, part) => get('file', part === undefined ? { id } : { id, part }),
     /* Plik w częściach (serwer 1.2+); stary serwer zwraca od razu cały plik. */
     async fileFull(id, onProgress) {
-      const first = await get('file', { id, part: 0 });
+      const et = fgEt, g = (o) => fg(et, () => get('file', o));
+      const first = await g({ id, part: 0 });
       const parts = first.parts || 1, chunks = [U.b64ToBlob(first.b64, first.mime)];
       for (let i = 1; i < parts; i++) {
         if (onProgress) onProgress(i, parts);
-        const r = await get('file', { id, part: i });
+        const r = await g({ id, part: i });
         chunks.push(U.b64ToBlob(r.b64, first.mime));
       }
       return { name: first.name, mime: first.mime, blob: new Blob(chunks, { type: first.mime }) };

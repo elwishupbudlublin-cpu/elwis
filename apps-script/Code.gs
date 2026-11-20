@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.56.0';
+const SCRIPT_VERSION = '1.56.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -340,13 +340,15 @@ function plan_(od, doDnia) {
   }
   const out = [], seen = {};
   for (let page = 0; page < 20; page++) {
-    const q = ['page=' + page, 'include_closed=true', 'subtasks=true', 'due_date_gt=' + (t0 - 1), 'due_date_lt=' + (t1 + 1)]
+    // od 1.56.1: także zadania wielodniowe, które trwają w zakresie, a termin mają później (start ≤ koniec zakresu) – do 90 dni po zakresie
+    const q = ['page=' + page, 'include_closed=true', 'subtasks=true', 'due_date_gt=' + (t0 - 1), 'due_date_lt=' + (t1 + 90 * 864e5)]
       .concat(ids.map(i => 'assignees[]=' + encodeURIComponent(i))).join('&');
     const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team/' + team + '/task?' + q, H);
     if (r.getResponseCode() !== 200) throw new Error('ClickUp: błąd ' + r.getResponseCode());
     const d = JSON.parse(r.getContentText());
     (d.tasks || []).forEach(t => {
       if (seen[t.id]) return; seen[t.id] = true;
+      if (Number(t.due_date) > t1 && !(t.start_date && Number(t.start_date) <= t1)) return;   // termin po zakresie i start też po – nie dotyczy tych dni
       out.push({
         id: t.id, nazwa: t.name, status: t.status && t.status.status, zamk: !!(t.status && /closed|done/.test(t.status.type)),
         lista: t.list && t.list.id, listaNazwa: t.list && t.list.name,
@@ -1675,8 +1677,13 @@ function warianty_(z, O) {
   if (!pr) throw new Error('Nie ma projektu ' + z.kod + ' w Bazie');
   const gdzie = wsp_(pr.pin, pr.adres), odl = gdzie ? km_(LUBLIN, gdzie) : null;
   const ekipy = {}; O.ludzie.forEach(o => { if (/^\d+$/.test(o.ek)) (ekipy[o.ek] = ekipy[o.ek] || []).push(o); });
+  if (txt_(z.ekipa) === 'osoby') {   // od 1.56.1: wybrane osoby – wspólny wolny czas
+    const os = (z.osoby || []).map(n => O.ludzie.find(o => o.name === txt_(n))).filter(Boolean);
+    if (!os.length) throw new Error('Wybrane osoby nie mają ID ClickUp w zakładce Pracownicy');
+    ekipy.osoby = os;
+  }
   const dar = O.ludzie.find(o => /pomocnik/i.test(o.ek));
-  const wybrane = /^\d+$/.test(txt_(z.ekipa)) ? [txt_(z.ekipa)] : Object.keys(ekipy).sort();
+  const wybrane = /^\d+$/.test(txt_(z.ekipa)) || txt_(z.ekipa) === 'osoby' ? [txt_(z.ekipa)] : Object.keys(ekipy).filter(e => e !== 'osoby').sort();
   let prow = {}; if (pr.cu) { try { (cu_('get', 'list/' + pr.cu + '/task?include_closed=true&subtasks=true').tasks || []).forEach(t => (t.assignees || []).forEach(a => { const o = O.ludzie.find(x => x.id === String(a.id)); if (o && /^\d+$/.test(o.ek)) prow[o.ek] = (prow[o.ek] || 0) + 1; })); } catch (e) { } }
   const prowEk = Object.keys(prow).sort((a, b) => prow[b] - prow[a])[0];
   const potrzeba = Math.round(Number(z.h) * 60), teraz = Date.now(), dzis = O.dzis;
@@ -1694,10 +1701,11 @@ function warianty_(z, O) {
     if (ok && txt_(z.do) && czesci[czesci.length - 1].dzien > txt_(z.do)) { ok = false; blad = 'po terminie'; }
     if (pr.wojsk && os.some(o => !o.m)) { ok = false; blad = 'obiekt wojskowy – brak uprawnienia M'; }
     if (odl == null) uwagi.push('Zasięg nieznany – brak pinezki / adresu budowy');
+    else if (e === 'osoby') { const ek = [...new Set(os.map(o => o.ek).filter(x => /^\d+$/.test(x)))]; ek.forEach(x => { if (odl > (zas[x] || 9999)) uwagi.push('Budowa ok. ' + odl + ' km od Lublina – poza zasięgiem jednodniowym ekipy ' + x + ' (' + zas[x] + ' km) – wymaga uzgodnienia'); }); }
     else if (odl > (zas[e] || 9999)) uwagi.push('Budowa ok. ' + odl + ' km od Lublina – poza zasięgiem jednodniowym ekipy ' + e + ' (' + zas[e] + ' km) – wymaga uzgodnienia');
     os.forEach(o => { if (O.zaleg[o.id]) uwagi.push(o.name + ': zaległe zadania ok. ' + Math.round(O.zaleg[o.id]) + ' h'); });
     if (z.dariusz && dar) czesci.forEach(c => { const w = przetnij_(wolne_(O, dar, c.dzien), [[minOf_(c.od), minOf_(c.do)]]).reduce((s, [a, b]) => s + b - a, 0); if (w < (minOf_(c.do) - minOf_(c.od)) && uwagi.indexOf('Dariusz zajęty w części terminu') < 0) uwagi.push('Dariusz zajęty w części terminu'); });
-    return { ek: e, ekipa: 'Ekipa ' + e + ' (' + os.map(o => o.name).join(', ') + ')', osoby: os.map(o => o.id), ok, blad, prow: e === prowEk, czesci, uwagi };
+    return { ek: e, ekipa: e === 'osoby' ? os.map(o => o.name).join(', ') : 'Ekipa ' + e + ' (' + os.map(o => o.name).join(', ') + ')', osoby: os.map(o => o.id), ok, blad, prow: e === prowEk, czesci, uwagi };
   }).sort((a, b) => (b.ok - a.ok) || ((a.czesci[a.czesci.length - 1] || { dzien: 'z' }).dzien < (b.czesci[b.czesci.length - 1] || { dzien: 'z' }).dzien ? -1 : 1));
 }
 function minOf_(s) { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); }
@@ -1736,16 +1744,34 @@ function faza_(lid, nazwa) {
 }
 
 /** Operacja `zadNowe` (od 1.56.0) – tylko rola biuro: projekty | warianty | zaplanuj */
+/* Obciążenie w pamięci skryptu (od 1.56.1) – bez listy zadań (tylko do wariantów terminu) */
+function obcZapamietaj_(O) {
+  try { const j = JSON.stringify({ ts: Date.now(), stan: O.stan, dzis: O.dzis, dni: O.dni, tyg: O.tyg, koniec: O.koniec, ludzie: O.ludzie, dzienne: O.dzienne, zaleg: O.zaleg });
+    if (j.length < 95000) CACHE.put('obc', j, 900); } catch (e) { Logger.log('obc pamięć: ' + e); }
+}
+function obcPamiec_(maxMin) {
+  const c = CACHE.get('obc');
+  if (c) { const o = JSON.parse(c); if (Date.now() - o.ts <= maxMin * 6e4) return o; }
+  const O = obciazenie_(); obcZapamietaj_(O); try { obciazenieZapisz_(O); } catch (e) { Logger.log(e); } return O;
+}
 function zadNowe_(b) {
   const kto = txt_(b.kto); if (!rolaBiuro_()[kto]) throw new Error('Nowe zadania – tylko rola biuro');
+  if (b.op === 'odswiez') {   // od 1.56.1: przy otwarciu okna „Nowe zadanie” – obciążenie ekip liczone w tle, zanim użytkownik wypełni pola
+    const lk = LockService.getScriptLock(); lk.waitLock(25000);
+    try { const O = obciazenie_(); obcZapamietaj_(O); obciazenieZapisz_(O); return { ok: true, stan: O.stan }; } finally { lk.releaseLock(); }
+  }
   if (b.op === 'projekty') return { ok: true, projekty: projektyBaza_().filter(p => p.cu || p.aktywna).map(p => ({ kod: p.kod, nazwa: p.nazwa, aktywna: p.aktywna })) };
   const z = b.zgl || {}; if (!(Number(z.h) > 0)) throw new Error('Brak czasu pracy');
+  z.kto = kto;   // od 1.56.1: ekipa „biuro” = zadanie dla zgłaszającego
   if (!FAZY_PROJ.includes(txt_(z.faza))) z.faza = 'Montaż i Wykonawstwo';
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   try {
-    const O = obciazenie_();
-    if (b.op === 'warianty') { obciazenieZapisz_(O); return { ok: true, stan: O.stan, warianty: warianty_(z, O) }; }
+    // od 1.56.1: warianty liczone na obciążeniu odświeżonym przy otwarciu okna (pamięć do 10 min); „Zaplanuj” zawsze na bieżącym
+    if (b.op === 'warianty') { const O = obcPamiec_(10); return { ok: true, stan: O.stan, warianty: warianty_(z, O) }; }
     if (b.op !== 'zaplanuj') throw new Error('Nieznana operacja');
+    const juz = CACHE.get('zn:' + txt_(z.id));   // od 1.56.1: powtórzenie po przekroczonym czasie oczekiwania nie tworzy zadań drugi raz
+    if (juz) return Object.assign(JSON.parse(juz), { powtorka: true });
+    const O = obciazenie_();
     const w = b.wyb || {}, L = O.ludzie.filter(o => (w.osoby || []).indexOf(o.id) >= 0);
     if (!L.length || !(w.czesci || []).length) throw new Error('Brak wybranego wariantu');
     // kontrola kolizji na aktualnym obciążeniu
@@ -1769,8 +1795,10 @@ function zadNowe_(b) {
     });
     P.setProperty('PLAN_VER', String(Date.now()));
     powDodaj_([{ t: 'zad', kod: pr.kod, tyt: 'Zaplanowano: ' + txt_(z.nazwa).slice(0, 80) + ' – ' + txt_(w.ekipa).replace(/\s*\(.*/, '') + ', ' + w.czesci.map(c => dzTxt_(c.dzien) + ' ' + c.od + '–' + c.do).join(' + '), opis: (z.nowy ? 'Nowy projekt założony w ClickUp i Bazie · ' : '') + z.faza, kto }]);
+    const wyn = { ok: true, urls, kod: pr.kod, nowy: z.nowy ? pr : null };
+    CACHE.put('zn:' + txt_(z.id), JSON.stringify(wyn), 21600); CACHE.remove('obc');
     try { obciazenieZapisz_(); } catch (e) { Logger.log('obciążenie po zaplanowaniu: ' + e); }
-    return { ok: true, urls, kod: pr.kod, nowy: z.nowy ? pr : null };
+    return wyn;
   } finally { lock.releaseLock(); }
 }
 

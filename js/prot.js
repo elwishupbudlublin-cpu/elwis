@@ -388,9 +388,13 @@ ProtViews.protokol = async function (par) {
   if ($('#pLock')) $('#pLock').onclick = async () => { rec.stan = rec.stan === 'zablokowany' ? 'gotowy' : 'zablokowany'; await zapisz(rec.stan); ProtViews.protokol({ pid: rec.pid }); };
   if ($('#pWord')) $('#pWord').onclick = async () => {
     if (!navigator.onLine) return UI.toast('Generowanie Word wymaga internetu.');
-    if (zmiana || S.pending) { await zapiszPrzyWyjsciu(); await Sync.run(); }
+    if (zmiana || S.pending) {   // od 1.56.1: wysyłane są tylko zmiany tej budowy (wcześniej pełna synchronizacja wszystkich budów)
+      await zapiszPrzyWyjsciu();
+      $('#pInfo').textContent = S.syncing ? 'Czekam na zakończenie synchronizacji (postęp na przycisku u góry)…' : 'Wysyłam zmiany tej budowy…';
+      try { await Sync.wyslijBudowe(S.kod); } catch (e) { $('#pInfo').textContent = 'Nie udało się wysłać zmian: ' + (e.message || e); return; }
+    }
     $('#pInfo').textContent = 'Generuję Word…';
-    try { const r = await API.docx(S.kod, rec.pid); $('#pInfo').innerHTML = `Zapisano na Dysku (folder budowy → Protokoły): <a href="${U.esc(r.url)}" target="_blank" rel="noopener">${U.esc(r.name)}</a>`; }
+    try { const r = await API.fg('Generuję Word', () => API.docx(S.kod, rec.pid)); $('#pInfo').innerHTML = `Zapisano na Dysku (folder budowy → Protokoły): <a href="${U.esc(r.url)}" target="_blank" rel="noopener">${U.esc(r.name)}</a>`; }
     catch (e) { $('#pInfo').textContent = 'Nie udało się: ' + e.message; }
   };
   function pokazBraki(b) {

@@ -218,7 +218,8 @@ const Sync = {
   /* postęp synchronizacji (od 1.7.0): p = 0..1, t = opis etapu */
   prog(p, t) { S.prog = { p: Math.max(0, Math.min(1, p)), t: t || '' }; UI.prog(); },
   soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 1500); },
-  async run(full) {
+  run(full) { if (S.syncing || !API.ready()) return this.biezaca || Promise.resolve(); this.biezaca = this._run(full).finally(() => { this.biezaca = null; }); return this.biezaca; },
+  async _run(full) {
     if (S.syncing || !API.ready()) return;
     if (!navigator.onLine) { UI.net(); return; }
     S.syncing = true; S.syncErr = null; UI.net();
@@ -233,37 +234,7 @@ const Sync = {
       // pinezki z tabletu, które serwer już wpisał do Bazy, nie są dłużej potrzebne lokalnie (od 1.12.0)
       if (S.pinezki && Object.keys(S.pinezki).length) { for (const k of Object.keys(S.pinezki)) if ((b.projekty || []).some(p => p.kod === k && p.lokalizacja)) delete S.pinezki[k]; await DB.set('pinezki', S.pinezki); }
       // 1b. nowe urządzenia z tabletu – najpierw, żeby zdjęcia i wpisy dostały ID nadane przez serwer (od 1.15.0)
-      const noweU = (await DB.unsynced()).filter(e => e.typ === 'urz_nowe');
-      for (const kod of [...new Set(noweU.map(e => e.kod))]) {
-        this.prog(0.04, 'Nowe urządzenia');
-        const r = await API.push(kod, noweU.filter(e => e.kod === kod).map(({ synced, ...e }) => e), []);
-        await zamienTmp(kod, r.nowe || {}, new Set(r.accepted || []));
-      }
-      // 2. zdjęcia (pojedynczo – mniejsze paczki)
-      const fotki = await DB.unsentPhotos(); let fi = 0;
-      for (const p of fotki) {
-        this.prog(0.05 + 0.1 * fi++ / fotki.length, `Wysyłam zdjęcia ${fi}/${fotki.length}`);
-        const b64 = await U.blobToB64(p.blob);
-        await API.push(p.kod, [], [{ id: p.id, name: p.name, b64 }]);
-        p.sent = 1; await DB.putPhoto(p);
-      }
-      // 3. zdarzenia – paczkami po budowie
-      const un = await DB.unsynced();
-      const byKod = {};
-      un.forEach(e => (byKod[e.kod] = byKod[e.kod] || []).push(e));
-      let wyslane = 0;
-      for (const kod of Object.keys(byKod)) {
-        const all = byKod[kod];
-        for (let i = 0; i < all.length; i += 100) {
-          this.prog(0.15 + 0.1 * wyslane / un.length, `Wysyłam wpisy ${wyslane}/${un.length}`); wyslane += Math.min(100, all.length - i);
-          const part = all.slice(i, i + 100).map(({ synced, ...e }) => e);
-          const r = await API.push(kod, part, []);
-          const ok = new Set(r.accepted || []);
-          const num = r.numery || {};   // numery protokołów nadane przez serwer
-          const marked = all.slice(i, i + 100).filter(e => ok.has(e.id)).map(e => (e.typ === 'protokol' && e.d && num[e.d.pid] ? { ...e, d: { ...e.d, nr: num[e.d.pid] }, synced: 1 } : { ...e, synced: 1 }));
-          await DB.putEvents(marked);
-        }
-      }
+      await this.wyslijZmiany();
       // 3a. zapotrzebowania (od 1.48.0): kolejka zgłoszeń i statusów, potem zdjęcia pojedynczo; zawsze pobranie listy
       if (!(S.boot && S.boot.dostep)) { this.prog(0.25, 'Zapotrzebowania'); try { await Zakupy.sync(); } catch (e) { console.warn('zakupy', e); } }
       // 3b. statusy zadań z kalendarza → ClickUp (od 1.12.0)
@@ -305,6 +276,46 @@ const Sync = {
       await liczOczekujace();
       UI.net(); if (!['login', 'setup', 'protokol'].includes(UI.cur)) UI.refresh();   // formularza protokołu nie przerysowujemy w trakcie pisania
     }
+  },
+  /* Wysłanie zmian z tabletu (od 1.56.1 osobno): kod = tylko jedna budowa (np. przed „Word” w protokole) */
+  async wyslijZmiany(kod) {
+    const noweU = (await DB.unsynced()).filter(e => e.typ === 'urz_nowe' && (!kod || e.kod === kod));
+    for (const k of [...new Set(noweU.map(e => e.kod))]) {
+      this.prog(0.04, 'Nowe urządzenia');
+      const r = await API.push(k, noweU.filter(e => e.kod === k).map(({ synced, ...e }) => e), []);
+      await zamienTmp(k, r.nowe || {}, new Set(r.accepted || []));
+    }
+    // 2. zdjęcia (pojedynczo – mniejsze paczki)
+    const fotki = (await DB.unsentPhotos()).filter(p => !kod || p.kod === kod); let fi = 0;
+    for (const p of fotki) {
+      this.prog(0.05 + 0.1 * fi++ / fotki.length, `Wysyłam zdjęcia ${fi}/${fotki.length}`);
+      const b64 = await U.blobToB64(p.blob);
+      await API.push(p.kod, [], [{ id: p.id, name: p.name, b64 }]);
+      p.sent = 1; await DB.putPhoto(p);
+    }
+    // 3. zdarzenia – paczkami po budowie
+    const un = (await DB.unsynced()).filter(e => !kod || e.kod === kod);
+    const byKod = {};
+    un.forEach(e => (byKod[e.kod] = byKod[e.kod] || []).push(e));
+    let wyslane = 0;
+    for (const k of Object.keys(byKod)) {
+      const all = byKod[k];
+      for (let i = 0; i < all.length; i += 100) {
+        this.prog(0.15 + 0.1 * wyslane / un.length, `Wysyłam wpisy ${wyslane}/${un.length}`); wyslane += Math.min(100, all.length - i);
+        const part = all.slice(i, i + 100).map(({ synced, ...e }) => e);
+        const r = await API.push(k, part, []);
+        const ok = new Set(r.accepted || []);
+        const num = r.numery || {};   // numery protokołów nadane przez serwer
+        const marked = all.slice(i, i + 100).filter(e => ok.has(e.id)).map(e => (e.typ === 'protokol' && e.d && num[e.d.pid] ? { ...e, d: { ...e.d, nr: num[e.d.pid] }, synced: 1 } : { ...e, synced: 1 }));
+        await DB.putEvents(marked);
+      }
+    }
+  },
+  /* Szybkie wysłanie zmian jednej budowy, bez pobierania danych (od 1.56.1) */
+  async wyslijBudowe(kod) {
+    while (S.syncing && this.biezaca) await this.biezaca.catch(() => { });
+    S.syncing = true; UI.net();
+    try { await this.wyslijZmiany(kod); } finally { S.syncing = false; S.prog = null; await liczOczekujace(); UI.net(); }
   },
   async pullProject(kod, full, onProg) {
     const pr = onProg || (() => { });

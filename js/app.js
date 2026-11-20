@@ -26,6 +26,27 @@ const UI = {
     $('#memWarn').hidden = !(S.malo && S.user);
     if ($('#nPend')) { $('#nPend').hidden = !S.pending; $('#nPend').textContent = S.pending || ''; }
   },
+  /* Oczekiwanie na serwer z odliczaniem (od 1.56.1). Praca w tle: dopisek przy wskaźniku synchronizacji (po 3 s);
+     działanie z przycisku: pasek „Czekam na serwer” na wierzchu (po 0,6 s) z przyciskiem Przerwij. */
+  czekTlo() {
+    const w = API.oczekujace().filter(x => !x.et && Date.now() - x.start > 3000);
+    if (!w.length) return '';
+    const r = Math.max(0, Math.ceil(Math.min(...w.map(x => x.start + x.lim - Date.now())) / 1000));
+    return ' · czekam na serwer, limit ' + r + ' s';
+  },
+  czekaj() {
+    const w = API.oczekujace();
+    if (w.length && !this._czT) this._czT = setInterval(() => this.czekaj(), 500);
+    if (!w.length && this._czT) { clearInterval(this._czT); this._czT = null; }
+    if (S.syncing && S.prog) this.prog(); else if (S.syncing) $('#netText').textContent = 'Synchronizuję…' + this.czekTlo();
+    const fgw = w.filter(x => x.et && Date.now() - x.start > 600);
+    let el = $('#czeka');
+    if (!fgw.length) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'czeka'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+    const html = fgw.map(x => { const r = Math.max(0, Math.ceil((x.start + x.lim - Date.now()) / 1000)), up = Math.round((Date.now() - x.start) / 1000);
+      return `<div class="czr"><span class="czs"></span><span class="czt"><b>${U.esc(x.et)}… ${up} s</b><small>Czekam na serwer – ${!navigator.onLine ? 'brak internetu' : up > 15 ? 'wolne łącze albo serwer zajęty' : 'proszę czekać'} · przerwę za ${r} s</small></span><button class="btn sm" data-czp="${x.id}">Przerwij</button></div>`; }).join('');
+    if (el._h !== html) { el._h = html; el.innerHTML = html; el.querySelectorAll('[data-czp]').forEach(b => b.onclick = () => API.przerwij(+b.dataset.czp)); }
+  },
   /* pasek postępu pod nagłówkiem (od 1.7.0) */
   prog() {
     const on = !!(S.syncing && S.prog);
@@ -36,7 +57,7 @@ const UI = {
     $('#syncFill').style.width = Math.round(S.prog.p * 100) + '%';
     // od 1.31.9: bieżąca czynność synchronizacji w polu stanu sieci (zamiast „Online”), bez osobnej plakietki
     $('#syncTxt').textContent = '';
-    $('#netText').textContent = (S.prog.t || 'Synchronizuję…') + ' · ' + Math.round(S.prog.p * 100) + '%';
+    $('#netText').textContent = (S.prog.t || 'Synchronizuję…') + ' · ' + Math.round(S.prog.p * 100) + '%' + this.czekTlo();
     $('#btnSync').classList.add('sync');
   },
   header(sub, back) {
@@ -197,7 +218,7 @@ const Views = {
       if (k === 'C') pin = ''; else if (k === '⌫') pin = pin.slice(0, -1); else if (pin.length < 6) pin += k;
       dots();
     });
-    if ($('#pinSync')) $('#pinSync').onclick = async () => { await Sync.run(); UI.go('login'); };
+    if ($('#pinSync')) $('#pinSync').onclick = () => { Sync.run().then(() => { if (UI.cur === 'login') UI.go('login'); }); UI.toast('Synchronizuję w tle – lista osób odświeży się po pobraniu'); };   // od 1.56.1 bez czekania
     $('#pinGo').onclick = async () => {
       if (!sel) { $('#pinMsg').textContent = 'Wybierz osobę.'; return; }
       const lock = (await DB.get('lock')) || { n: 0, until: 0 };
@@ -343,6 +364,7 @@ const Views = {
     const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
     const inicjaly = n => n.split(' ').map(w => w[0]).join('');
+    if (UI.cur !== 'plan' || UI.par !== par) return;   // od 1.56.1: późniejsze przerysowanie (np. po synchronizacji) nie cofa wybranego dnia
     view.innerHTML = `
       <section class="phero">
         <div class="phtop">
@@ -689,7 +711,7 @@ const Views = {
     $('#wOdsw').onclick = async () => {   // od 1.55.0: wydajność liczona tylko na żądanie (bez przeliczania co godzinę)
       if (!navigator.onLine) { UI.toast('Brak sieci.'); return; }
       $('#wOdsw').disabled = true; $('#wOdsw').textContent = 'Przeliczam… (do kilku minut)';
-      try { await DB.set('prio', await API.priorytety(true)); UI.toast('Przeliczono'); } catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); }
+      try { await DB.set('prio', await API.fg('Przeliczam', () => API.priorytety(true))); UI.toast('Przeliczono'); } catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); }
       if (UI.cur === 'wydajnosc') UI.refresh();
     };
     $('#wZm').onclick = () => UI.go('zmiany');
@@ -1555,19 +1577,21 @@ const Dialogs = {
   async noweZadanie(kod, dzien, zKolejki) {
     if (!Session.isBiuro()) return;
     // projekty: aktywne z tabletu + wszystkie z Bazy (z listą ClickUp) – pobierane przy otwarciu, gdy jest sieć (od 1.56.0)
-    let baza = (await DB.get('projektyBaza')) || [];
-    if (navigator.onLine) { try { const r = await API.zadNowe({ op: 'projekty' }); baza = r.projekty || []; await DB.set('projektyBaza', baza); } catch (e) { } }
+    let baza = (await DB.get('projektyBaza')) || [];   // od 1.56.1: okno od razu z danymi z tabletu, lista z Bazy doczytywana w tle
     const mapa = new Map(); ((S.boot && S.boot.projekty) || []).forEach(p => mapa.set(p.kod, p)); baza.forEach(p => { if (!mapa.has(p.kod)) mapa.set(p.kod, p); });
     const pr = [...mapa.values()].sort((a, b) => natCmp(b.kod, a.kod));
     const budTxt = p => p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + (p.nazwa || '');
     const FAZY = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
     const EK = ['Dowolna', 'Ekipa 1', 'Ekipa 2', 'Ekipa 3'];
+    const OSOBY = ((S.boot && S.boot.pracownicy) || []).filter(p => p.cu).map(p => p.name);   // od 1.56.1: osobne przyciski osób (także biuro)
     const zk = zKolejki || null;
-    let faza = zk ? zk.faza : 'Montaż i Wykonawstwo', ekipa = zk ? (zk.ekipa === 'Dowolna' ? 'Dowolna' : 'Ekipa ' + zk.ekipa) : 'Dowolna';
+    let faza = zk ? zk.faza : 'Montaż i Wykonawstwo', ekipa = zk ? (zk.ekipa === 'Dowolna' ? 'Dowolna' : zk.ekipa === 'osoby' ? '' : 'Ekipa ' + zk.ekipa) : 'Dowolna';
+    let osoby = new Set(zk && zk.osoby ? zk.osoby : []);
+    let wybKod = kod || '';   // wybrany projekt: kod, '+' = nowy, '' = brak
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Nowe zadanie">
       <div class="shead"><h3>Nowe zadanie</h3><span class="mute">${U.esc(S.user.name)}</span></div>
       <div class="sbody zapform">
-        <label class="fld"><span class="mute">Projekt</span><select id="nzB"><option value="">— wybierz budowę —</option>${pr.map(p => `<option value="${U.esc(p.kod)}" ${p.kod === kod ? 'selected' : ''}>${U.esc(budTxt(p))}</option>`).join('')}<option value="+">＋ Nowy projekt (brak w ClickUp)…</option></select></label>
+        <div class="fld nzpw"><span class="mute">Projekt – wpisz kod lub początek nazwy</span><input id="nzB" type="text" autocomplete="off" placeholder="np. 26_0 albo Kwitn…" value="${U.esc(kod ? budTxt(mapa.get(kod) || { kod }) : '')}"><div class="nzpod" id="nzBL" hidden></div></div>
         <div class="nzproj card" id="nzP" hidden><div class="mute" style="margin-bottom:8px">Nowy projekt – ELWIS założy listę w ClickUp z szablonu projektu (fazy i zadania standardowe) w przestrzeni PROJ wg roku z kodu i wiersz w Bazie projektów (Aktywna = nie). Resztę uzupełni później skill „nowa budowa”.</div>
           <div class="row" style="gap:12px;flex-wrap:wrap"><label class="fld" style="width:150px"><span class="mute">Kod</span><input id="nzPK" type="text" placeholder="26_045 lub 26p045" autocomplete="off"></label>
           <label class="fld grow"><span class="mute">Nazwa</span><input id="nzPN" type="text" placeholder="np. Osiedle Zielone B2" autocomplete="off"></label>
@@ -1576,8 +1600,9 @@ const Dialogs = {
         <label class="fld"><span class="mute">Co trzeba zrobić</span><input id="nzN" type="text" placeholder="np. Podłączenie wentylatorów R1–R7 w garażu" autocomplete="off"></label>
         <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
           <div><div class="mute" style="margin-bottom:6px">Ekipa</div><div class="cats" id="nzE">${EK.map(e => `<button data-e="${e}" class="${e === ekipa ? 'on' : ''}">${e}</button>`).join('')}</div></div>
-          <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="nzD"> + Dariusz (pomocnik)</label>
+          <label class="chk" style="margin-bottom:8px" id="nzDl"><input type="checkbox" id="nzD"> + Dariusz (pomocnik)</label>
         </div>
+        <div><div class="mute" style="margin-bottom:6px">albo wybrane osoby (wspólny wolny czas)</div><div class="cats" id="nzO">${OSOBY.map(o => `<button data-o="${U.esc(o)}" class="${osoby.has(o) ? 'on' : ''}">${U.esc(o === S.user.name ? o + ' (ja)' : o)}</button>`).join('')}</div></div>
         <div class="row" style="gap:12px;flex-wrap:wrap">
           <label class="fld" style="width:150px"><span class="mute">Czas pracy (h)</span><input id="nzH" type="number" min="0.5" step="0.5" inputmode="decimal" placeholder="np. 6"></label>
           <label class="fld" style="width:190px"><span class="mute">Nie wcześniej niż</span><input id="nzOd" type="date" value="${U.esc(dzien && dzien > U.day(new Date()) ? dzien : '')}"></label>
@@ -1585,27 +1610,81 @@ const Dialogs = {
         </div>
         <label class="fld"><span class="mute">Uwagi (warunek startu, po czym, kontakt na budowie)</span><textarea id="nzU" rows="2" placeholder="np. po dostawie szafy SZ1; przed tynkami"></textarea></label>
       </div>
-      <div class="sfoot"><button class="btn" id="nzX">Anuluj</button><span class="grow"></span><button class="btn pri" id="nzS">Znajdź termin →</button></div></div></div>`;
-    $('#nzB').onchange = () => { $('#nzP').hidden = $('#nzB').value !== '+'; };
-    if (zk) { $('#nzB').value = zk.nowy ? '+' : zk.kod; $('#nzP').hidden = !zk.nowy; if (zk.nowy) { $('#nzPK').value = zk.nowy.kod; $('#nzPN').value = zk.nowy.nazwa; $('#nzPM').value = zk.nowy.miejsc || ''; }
+      <div class="sfoot"><button class="btn" id="nzX">Anuluj</button><span class="grow mute nzobc" id="nzObc"></span><button class="btn pri" id="nzS">Znajdź termin →</button></div></div></div>`;
+    // podpowiedzi projektu (od 1.56.1): po kodzie lub fragmencie nazwy; brak dopasowania → „utwórz nowy projekt”
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l');
+    const nowyZ = t => { wybKod = '+'; $('#nzP').hidden = false; $('#nzBL').hidden = true; const x = t.trim(), m = x.match(/^(\d{2}[_p]\d{3})\s*(.*)$/);
+      if (m) { $('#nzPK').value = m[1]; if (m[2]) $('#nzPN').value = m[2]; } else if (x) $('#nzPN').value = x; ($('#nzPK').value ? $('#nzPN') : $('#nzPK')).focus(); };
+    const podpowiedz = () => {
+      const t = $('#nzB').value.trim(), q = norm(t); wybKod = ''; $('#nzP').hidden = true;
+      if (!q) { $('#nzBL').hidden = true; return; }
+      const traf = [...mapa.values()].filter(p => norm(p.kod).startsWith(q) || norm(budTxt(p)).includes(q)).sort((a, b) => natCmp(b.kod, a.kod)).slice(0, 8);
+      $('#nzBL').innerHTML = traf.map(p => `<button type="button" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b> ${U.esc(budTxt(p).replace(p.kod, '').trim())}${p.aktywna === false ? ' <span class="mute">poza ELWIS</span>' : ''}</button>`).join('')
+        + `<button type="button" class="nznowy" data-nowy="1">＋ ${traf.length ? 'Inny – utwórz nowy projekt' : 'Nie znaleziono – utworzyć nowy projekt'} „${U.esc(t)}”?</button>`;
+      $('#nzBL').hidden = false;
+      $('#nzBL').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { wybKod = b.dataset.k; $('#nzB').value = budTxt(mapa.get(wybKod)); $('#nzBL').hidden = true; });
+      $('#nzBL').querySelector('[data-nowy]').onclick = () => nowyZ(t);
+    };
+    $('#nzB').oninput = podpowiedz;
+    $('#nzB').onfocus = () => { if (!wybKod && $('#nzB').value.trim()) podpowiedz(); };
+    // od 1.56.1: w tle, gdy wypełniasz pola – lista projektów z Bazy i odświeżenie obciążenia ekip (z odliczaniem)
+    const tok = this._nzTok = U.uid('nz'), ods = { start: Date.now(), done: !navigator.onLine, stan: '', err: navigator.onLine ? '' : 'brak sieci' };
+    const sek = (t0, lim) => Math.round((Date.now() - t0) / 1000) + ' s (limit ' + lim + ' s)';
+    const t0p = Date.now();
+    const tik = () => {
+      if (this._nzTok !== tok || !$('#nzObc')) return clearInterval(tim);
+      $('#nzObc').textContent = !ods.done ? 'Obciążenie ekip: odświeżam w tle… ' + sek(ods.start, 120) : ods.err ? 'Obciążenie: ' + ods.err + ' – policzę przy wyszukiwaniu' : 'Obciążenie ekip aktualne (stan na ' + ods.stan.slice(11) + ')';
+      $('#nzObc').classList.toggle('ok', ods.done && !ods.err);
+      const inf = modal.querySelector('.nzwczyt[data-l]'); if (inf) inf.textContent = 'Wczytuję listę projektów z Bazy… ' + sek(t0p, 120);
+      if (this._nzCzeka) $('#nzS').textContent = 'Czekam na obciążenie ekip… ' + Math.round((Date.now() - ods.start) / 1000) + ' s';
+    };
+    const tim = setInterval(tik, 1000);
+    if (navigator.onLine) {
+      ods.p = API.zadNowe({ op: 'odswiez' }).then(r => { ods.stan = r.stan || ''; }).catch(e => { ods.err = /Brak czasu pracy|Nieznana/.test(e.message) ? 'serwer bez odświeżania' : e.timeout ? 'serwer nie odpowiedział' : 'nie udało się odświeżyć'; }).finally(() => { ods.done = true; tik(); });
+      const inf = document.createElement('div'); inf.className = 'mute nzwczyt'; inf.dataset.l = '1'; inf.textContent = 'Wczytuję listę projektów z Bazy…'; $('#nzB').closest('.fld').appendChild(inf);
+      API.zadNowe({ op: 'projekty' }).then(async r => {
+        await DB.set('projektyBaza', r.projekty || []); (r.projekty || []).forEach(p => { if (!mapa.has(p.kod)) mapa.set(p.kod, p); });
+        inf.remove(); if ($('#nzB') && document.activeElement === $('#nzB') && !wybKod) podpowiedz();
+      }).catch(() => { delete inf.dataset.l; inf.textContent = 'Nie udało się wczytać listy z Bazy – podpowiadam budowy z tabletu.'; });
+    }
+    tik();
+    if (zk) { wybKod = zk.nowy ? '+' : zk.kod; $('#nzB').value = zk.nowy ? zk.nowy.kod + ' ' + zk.nowy.nazwa : budTxt(mapa.get(zk.kod) || { kod: zk.kod }); $('#nzP').hidden = !zk.nowy; if (zk.nowy) { $('#nzPK').value = zk.nowy.kod; $('#nzPN').value = zk.nowy.nazwa; $('#nzPM').value = zk.nowy.miejsc || ''; }
       $('#nzN').value = zk.nazwa; $('#nzH').value = zk.h; $('#nzOd').value = zk.od || ''; $('#nzDo').value = zk.do || ''; $('#nzU').value = zk.uw || ''; $('#nzD').checked = !!zk.dariusz; }
     modal.querySelectorAll('#nzF [data-f]').forEach(b => b.onclick = () => { faza = b.dataset.f; modal.querySelectorAll('#nzF [data-f]').forEach(x => x.classList.toggle('on', x === b)); });
-    modal.querySelectorAll('#nzE [data-e]').forEach(b => b.onclick = () => { ekipa = b.dataset.e; modal.querySelectorAll('#nzE [data-e]').forEach(x => x.classList.toggle('on', x === b)); });
+    const pokazWyb = () => { modal.querySelectorAll('#nzE [data-e]').forEach(x => x.classList.toggle('on', x.dataset.e === ekipa)); modal.querySelectorAll('#nzO [data-o]').forEach(x => x.classList.toggle('on', osoby.has(x.dataset.o))); $('#nzDl').hidden = !ekipa; };
+    modal.querySelectorAll('#nzE [data-e]').forEach(b => b.onclick = () => { ekipa = b.dataset.e; osoby.clear(); pokazWyb(); });
+    modal.querySelectorAll('#nzO [data-o]').forEach(b => b.onclick = () => { const o = b.dataset.o; osoby.has(o) ? osoby.delete(o) : osoby.add(o); ekipa = osoby.size ? '' : 'Dowolna'; pokazWyb(); });
+    pokazWyb();
     $('#nzX').onclick = UI.close;
     $('#nzS').onclick = async () => {
-      const k = $('#nzB').value, n = $('#nzN').value.trim(), h = Number(String($('#nzH').value).replace(',', '.'));
-      if (!k) return UI.toast('Wybierz projekt.'); if (!n) return UI.toast('Wpisz, co trzeba zrobić.'); if (!(h > 0)) return UI.toast('Podaj czas pracy w godzinach.');
+      const n = $('#nzN').value.trim(), h = Number(String($('#nzH').value).replace(',', '.'));
+      if (!wybKod) {   // wpisany tekst bez wyboru z podpowiedzi
+        const t = $('#nzB').value.trim(); if (!t) return UI.toast('Wpisz projekt.');
+        const dok = [...mapa.values()].find(p => norm(p.kod) === norm(t) || norm(budTxt(p)) === norm(t));
+        if (dok) wybKod = dok.kod;
+        else { if (confirm('Nie znaleziono projektu „' + t + '”. Utworzyć nowy projekt?')) nowyZ(t); return; }
+      }
+      const k = wybKod; if (!n) return UI.toast('Wpisz, co trzeba zrobić.'); if (!(h > 0)) return UI.toast('Podaj czas pracy w godzinach.');
       const nowy = k === '+' ? { kod: $('#nzPK').value.trim(), nazwa: $('#nzPN').value.trim(), miejsc: $('#nzPM').value.trim() } : null;
       if (nowy && !/^\d{2}[_p]\d{3}$/.test(nowy.kod)) return UI.toast('Kod projektu w formacie RR_NNN lub RRpNNN (np. 26_045).');
       if (nowy && !nowy.nazwa) return UI.toast('Podaj nazwę nowego projektu.');
-      const zgl = { id: (zk && zk.id) || U.uid('zn'), kod: nowy ? nowy.kod : k, nowy, faza, nazwa: n, ekipa: ekipa === 'Dowolna' ? 'Dowolna' : ekipa.replace('Ekipa ', ''), dariusz: $('#nzD').checked, h, od: $('#nzOd').value, do: $('#nzDo').value, uw: $('#nzU').value.trim() };
-      if (!navigator.onLine) {   // bez sieci: zgłoszenie czeka – termin dobierany po połączeniu, na aktualnym obciążeniu
-        const q = ((await DB.get('zadNoweKolejka')) || []).filter(x => x.id !== zgl.id); q.push(zgl); await DB.set('zadNoweKolejka', q);
-        UI.close(); UI.toast('Zapisano bez sieci – termin wybierzesz po połączeniu (Plan → Nowe zadanie)'); if (UI.cur === 'plan') UI.refresh(); return;
+      if (!ekipa && !osoby.size) return UI.toast('Wybierz ekipę albo osoby.');
+      const zgl = { id: (zk && zk.id) || U.uid('zn'), kod: nowy ? nowy.kod : k, nowy, faza, nazwa: n, ekipa: !ekipa ? 'osoby' : ekipa === 'Dowolna' ? 'Dowolna' : ekipa.replace('Ekipa ', ''), osoby: [...osoby], dariusz: $('#nzD').checked, h, od: $('#nzOd').value, do: $('#nzDo').value, uw: $('#nzU').value.trim() };
+      const kolejka = async (pow) => { const q = ((await DB.get('zadNoweKolejka')) || []).filter(x => x.id !== zgl.id); q.push(zgl); await DB.set('zadNoweKolejka', q);
+        UI.close(); UI.toast('Zapisano ' + pow + ' – termin wybierzesz później (Plan → Nowe zadanie)'); planNZ(); if (UI.cur === 'plan') UI.refresh(); };
+      if (!navigator.onLine) return kolejka('bez sieci');
+      $('#nzS').disabled = true;
+      if (!ods.done && ods.p) { this._nzCzeka = true; tik(); await ods.p.catch(() => { }); this._nzCzeka = false; }
+      if (this._nzTok !== tok || !$('#nzS')) return;   // okno zamknięte w trakcie
+      $('#nzS').textContent = 'Szukam terminu…';
+      try { const w = await API.fg('Szukam terminu', () => API.zadNowe({ op: 'warianty', zgl })); if (this._nzTok !== tok || !$('#nzS')) return; this.zadWarianty(zgl, w); }
+      catch (e) {
+        if (this._nzTok !== tok || !$('#nzS')) return;
+        $('#nzS').disabled = false; $('#nzS').textContent = 'Znajdź termin →';
+        if (e.przerwane) return UI.toast('Przerwano – możesz spróbować ponownie.');
+        if ((e.timeout || e.siec) && confirm((e.timeout ? 'Serwer nie odpowiada.' : 'Brak połączenia z serwerem.') + ' Zapisać zgłoszenie w kolejce? Termin wybierzesz później.')) return kolejka('w kolejce');
+        UI.toast('Nie udało się: ' + (e.message || e));
       }
-      $('#nzS').disabled = true; $('#nzS').textContent = 'Szukam terminu…';
-      try { const w = await API.zadNowe({ op: 'warianty', zgl }); this.zadWarianty(zgl, w); }
-      catch (e) { $('#nzS').disabled = false; $('#nzS').textContent = 'Znajdź termin →'; UI.toast('Nie udało się: ' + (e.message || e)); }
     };
   },
   /* Zgłoszenia zapisane bez sieci – czekają na wybór terminu (od 1.56.0) */
@@ -1613,7 +1692,7 @@ const Dialogs = {
     const q = (await DB.get('zadNoweKolejka')) || [];
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Czekają na termin">
       <div class="shead"><h3>Czekają na wybór terminu (${q.length})</h3></div>
-      <div class="sbody"><div class="list">${q.map((x, i) => `<div class="li tzli"><span class="grow"><b class="m bkd">${U.esc(x.kod)}</b> <b>${U.esc(x.nazwa)}</b><span class="mute">${U.esc(x.faza)} · ${x.ekipa === 'Dowolna' ? 'dowolna ekipa' : 'Ekipa ' + U.esc(x.ekipa)} · ${String(x.h).replace('.', ',')} h${x.do ? ' · najpóźniej ' + U.esc(x.do) : ''}${x.nowy ? ' · nowy projekt' : ''}</span></span><button class="btn sm pri" data-w="${i}">Wybierz termin</button><button class="btn sm" data-u="${i}">Usuń</button></div>`).join('') || '<div class="li mute">Brak.</div>'}</div></div>
+      <div class="sbody"><div class="list">${q.map((x, i) => `<div class="li tzli"><span class="grow"><b class="m bkd">${U.esc(x.kod)}</b> <b>${U.esc(x.nazwa)}</b><span class="mute">${U.esc(x.faza)} · ${x.ekipa === 'Dowolna' ? 'dowolna ekipa' : x.ekipa === 'osoby' ? U.esc((x.osoby || []).join(', ')) : 'Ekipa ' + U.esc(x.ekipa)} · ${String(x.h).replace('.', ',')} h${x.do ? ' · najpóźniej ' + U.esc(x.do) : ''}${x.nowy ? ' · nowy projekt' : ''}</span></span><button class="btn sm pri" data-w="${i}">Wybierz termin</button><button class="btn sm" data-u="${i}">Usuń</button></div>`).join('') || '<div class="li mute">Brak.</div>'}</div></div>
       <div class="sfoot"><button class="btn" id="kqX">Zamknij</button><span class="grow"></span><button class="btn pri" id="kqN">${ic('plus')} Nowe zadanie</button></div></div></div>`;
     $('#kqX').onclick = UI.close;
     $('#kqN').onclick = () => this.noweZadanie();
@@ -1648,13 +1727,19 @@ const Dialogs = {
       if (!navigator.onLine) return UI.toast('Brak sieci – zaplanuj po połączeniu.');
       $('#wvZ').disabled = true; $('#wvZ').textContent = zgl.nowy ? 'Tworzę projekt i zapisuję…' : 'Zapisuję w ClickUp…';
       try {
-        const r = await API.zadNowe({ op: 'zaplanuj', zgl, wyb: { osoby: v.osoby, czesci: v.czesci, ekipa: v.ekipa, nr: (wyb + 1) + ' z ' + w.warianty.length } });
-        if (r.kolizja) return this.zadWarianty(zgl, r, r.kolizja);
+        const tz = this._nzTok = U.uid('nz');
+        const r = await API.fg(zgl.nowy ? 'Tworzę projekt i zapisuję w ClickUp' : 'Zapisuję zadanie w ClickUp', () => API.zadNowe({ op: 'zaplanuj', zgl, wyb: { osoby: v.osoby, czesci: v.czesci, ekipa: v.ekipa, nr: (wyb + 1) + ' z ' + w.warianty.length } }));
+        const otw = this._nzTok === tz && !!$('#wvZ');
+        if (r.kolizja) { if (otw) this.zadWarianty(zgl, r, r.kolizja); else UI.toast('Kolizja – termin zajęty, wybierz nowy wariant (Plan → Nowe zadanie)'); return; }
         const q = ((await DB.get('zadNoweKolejka')) || []).filter(x => x.id !== zgl.id); await DB.set('zadNoweKolejka', q);
-        UI.close(); UI.toast('Zaplanowano w ClickUp: ' + v.ekipa.replace(/\s*\(.*/, '') + ', ' + v.czesci.map(c => c.dz + ' ' + c.od + '–' + c.do).join(' + '));
+        if (otw) UI.close(); UI.toast((r.powtorka ? 'Już było zapisane w ClickUp: ' : 'Zaplanowano w ClickUp: ') + v.ekipa.replace(/\s*\(.*/, '') + ', ' + v.czesci.map(c => c.dz + ' ' + c.od + '–' + c.do).join(' + '));
         try { await Sync.pullPlan(); await pullPowiad(); } catch (e) { }
         if (UI.cur === 'plan') UI.refresh(); planNZ();
-      } catch (e) { $('#wvZ').disabled = false; $('#wvZ').textContent = 'Zaplanuj'; UI.toast('Nie udało się: ' + (e.message || e)); }
+      } catch (e) {
+        if (!$('#wvZ')) return UI.toast('Zapis zadania: ' + (e.message || e));
+        $('#wvZ').disabled = false; $('#wvZ').textContent = 'Zaplanuj';
+        UI.toast(e.timeout || e.przerwane ? 'Brak potwierdzenia z serwera – zadanie mogło się zapisać. „Zaplanuj” ponownie nie utworzy duplikatu.' : 'Nie udało się: ' + (e.message || e));
+      }
     };
   },
   async zakNowe(kod, ed) {   // ed – zgłoszenie do edycji (od 1.49.0, tylko rola biuro)
@@ -2076,7 +2161,7 @@ const Foto = {
     const p = await DB.getPhoto(fid); if (p) return { blob: p.blob, pelne: true };
     const m = await DB.getFile('mini:' + fid); if (m) return { blob: m.blob, pelne: !!m.pelne, pobrane: !!m.pelne };
     if (!navigator.onLine) throw new Error('Zdjęcie jest na Dysku – połącz się z siecią, aby je zobaczyć.');
-    const r = await API.foto(S.kod, fid);
+    const r = await API.fg('Pobieram zdjęcie', () => API.foto(S.kod, fid));
     const mini = await U.compress(U.b64ToBlob(r.b64, r.mime || 'image/jpeg'), 800, 0.6);   // pomniejszone – nie zapycha pamięci
     await DB.putFile('mini:' + fid, { blob: mini, mime: 'image/jpeg', name: fid + '.jpg' });
     return { blob: mini, pelne: false };
@@ -2139,7 +2224,7 @@ const Foto = {
       let blob = ((await DB.getPhoto(fid)) || {}).blob;
       if (!blob) {
         if (!navigator.onLine) { UI.toast('Połącz się z siecią, aby pobrać zdjęcie z Dysku'); return; }
-        UI.toast('Pobieram zdjęcie…'); const r = await API.foto(S.kod, fid); blob = U.b64ToBlob(r.b64, r.mime || 'image/jpeg');
+        UI.toast('Pobieram zdjęcie…'); const r = await API.fg('Pobieram zdjęcie', () => API.foto(S.kod, fid)); blob = U.b64ToBlob(r.b64, r.mime || 'image/jpeg');
         // od 1.54.2: pełna jakość zastępuje pomniejszony podgląd – w otwartym oknie i w pamięci tabletu
         await DB.putFile('mini:' + fid, { blob, mime: blob.type || 'image/jpeg', name: fid + '.jpg', pelne: 1 });
         if ($('#fotoView')) this.pokaz(blob, '· pełna jakość (pobrane)');
@@ -2356,7 +2441,7 @@ async function openFile(id) {
     const w = window.open('', '_blank');
     if (w) w.document.write('<p style="font:18px sans-serif;padding:24px">Pobieram plik…</p>');
     pobieranie = id; UI.toast('Pobieram plik…');
-    try { f = await pobierzPlik(id, (i, n) => UI.toast('Pobieram plik… ' + Math.round(i / n * 100) + '%')); }
+    try { f = await API.fg('Pobieram plik', () => pobierzPlik(id, (i, n) => UI.toast('Pobieram plik… ' + Math.round(i / n * 100) + '%'))); }
     catch (e) { if (w) w.close(); UI.toast('Nie udało się pobrać: ' + e.message); return; }
     finally { pobieranie = null; }
     if (UI.cur === 'budowa') UI.refresh();
@@ -2397,7 +2482,7 @@ function settings() {
 (async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
-  await API.load();
+  await API.load(); API.onWait = () => UI.czekaj();   // od 1.56.1: odliczanie oczekiwania na serwer
   // link podwykonawcy (od 1.43.0): …/elwis/#cfg=<adres serwera i klucz> – zapis konfiguracji i usunięcie z paska adresu
   try {
     const m = location.hash.match(/#cfg=([\w\-=]+)/);
