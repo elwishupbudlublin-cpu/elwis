@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.54.1 – 2026-11-20 (aplikacja)
+- Poprawka aktualizacji: przy instalacji nowej wersji pliki pobierane z pominięciem pamięci HTTP przeglądarki, zwykłe pobrania z rewalidacją (`no-cache`), pliki CSS / JS z numerem wersji w adresie – tablet nie składa już strony z plików dwóch wersji (objaw: stara wersja, brak logo, ścieżka na czarnym pasku, przyciski nagłówka przesunięte).
+
 ## 1.54.0 – 2026-11-20 (aplikacja)
 - Ścieżka (nr budowy › nazwa › ekran) przeniesiona do nagłówka: od przycisku wstecz do przycisku logowania, dół wyrównany z dołem tych przycisków; logo i przycisk synchronizacji nad ścieżką. Bez osobnego paska – nagłówek 68 px.
 
