@@ -17,9 +17,9 @@ const UI = {
   cur: 'home', par: {},
   toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(this._t); this._t = setTimeout(() => el.classList.remove('show'), 2600); },
   net() {
-    const n = $('#net'), t = $('#netText');
+    const n = $('#btnSync'), t = $('#netText');   // od 1.53.0: stan sieci i synchronizacja w jednym przycisku
     n.className = 'net' + (!navigator.onLine ? ' off' : S.syncErr ? ' err' : '') + (S.syncing ? ' sync' : '');
-    const p = S.pending ? ` · ${S.pending} do wysłania` : '';
+    const p = '';   // liczba do wysłania – czerwona plakietka na przycisku
     t.textContent = S.syncing ? (S.prog && S.prog.t ? S.prog.t : 'Synchronizuję…') + (S.prog ? ' · ' + Math.round(S.prog.p * 100) + '%' : '') : !navigator.onLine ? 'Offline' + p : S.syncErr ? 'Błąd sync' + p : (S.lastSync ? 'Zsynchr. ' + new Date(S.lastSync).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Online') + p;
     $('#btnSync .spinico').classList.toggle('spin', S.syncing);
     this.prog();
@@ -29,16 +29,28 @@ const UI = {
   /* pasek postępu pod nagłówkiem (od 1.7.0) */
   prog() {
     const on = !!(S.syncing && S.prog);
-    $('#syncStrip').hidden = !on || $('#top').hidden;
+    // od 1.53.0: postęp jako zielone tło przycisku synchronizacji (pasek pod nagłówkiem tylko, gdy nagłówek ukryty)
+    $('#btnSync').style.setProperty('--p', on ? Math.round(S.prog.p * 100) + '%' : '0%');
+    $('#syncStrip').hidden = true;
     if (!on) return;
     $('#syncFill').style.width = Math.round(S.prog.p * 100) + '%';
     // od 1.31.9: bieżąca czynność synchronizacji w polu stanu sieci (zamiast „Online”), bez osobnej plakietki
     $('#syncTxt').textContent = '';
     $('#netText').textContent = (S.prog.t || 'Synchronizuję…') + ' · ' + Math.round(S.prog.p * 100) + '%';
-    $('#net').classList.add('sync');
+    $('#btnSync').classList.add('sync');
   },
   header(sub, back) {
-    $('#top').hidden = false; $('#topSub').textContent = sub || '';
+    $('#top').hidden = false; $('#topSub').textContent = '';
+    // od 1.53.0: ścieżka pod nagłówkiem – nr budowy › nazwa › ekran; nr i nazwa wracają do ekranu budowy
+    const p = curProj(), s = String(sub || ''), cr = $('#crumb');
+    let parts;
+    if (p && s.startsWith(p.kod)) {
+      const naz = String(p.nazwa || '').replace(p.kod, '').trim(), reszta = s.slice(p.kod.length).replace(/^\s*·\s*/, '');
+      parts = [[p.kod, 1], ...(naz ? [[naz, 1]] : []), ...(reszta && reszta !== 'budowa' ? [[reszta.charAt(0).toUpperCase() + reszta.slice(1), 0]] : [])];
+    } else parts = s ? [[s.charAt(0).toUpperCase() + s.slice(1), 0]] : [];
+    cr.innerHTML = parts.map(([t, link], i) => (i ? '<span class="csep">›</span>' : '') + (link && i < parts.length - 1 ? `<button class="clink">${U.esc(t)}</button>` : `<span class="${i === parts.length - 1 ? 'ccur' : ''}">${U.esc(t)}</span>`)).join('');
+    cr.hidden = !parts.length;
+    cr.querySelectorAll('.clink').forEach(b => b.onclick = () => UI.go('budowa', {}));
     $('#btnBack').hidden = !back; $('#btnBack').onclick = back || null;
     $('#btnUser').textContent = S.user ? S.user.name : '';
   },
@@ -883,7 +895,7 @@ const Views = {
       <div class="row"><div class="tabs grow" style="margin:0"><button class="tab ${!showClosed ? 'on' : ''}" data-c="0">Otwarte</button><button class="tab ${showClosed ? 'on' : ''}" data-c="1">Zamknięte</button></div>
         <button class="btn bad" id="nb">+ Zgłoś brak</button></div>
       <div class="grid2" style="margin-top:12px">
-        <div class="stack"><h2>Braki z budowy (${br.length})</h2><label class="tsel ${fo ? 'on' : ''}" style="align-self:flex-start"><span hidden>Odpowiedzialny</span><select id="bOdp" aria-label="Odpowiedzialny">${[['', 'Odpowiedzialny: wszyscy'], ...odpLista().map(k => [k, k]), ...(br0.some(b => !b.odp) ? [['-', 'Bez odpowiedzialnego']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === fo ? 'selected' : ''}>${U.esc(l)} (${br0.filter(b => !k || (k === '-' ? !b.odp : b.odp === k)).length})</option>`).join('')}</select></label>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
+        <div class="stack"><div class="row" style="flex-wrap:wrap;gap:10px"><h2 style="margin:0">Braki z budowy (${br.length})</h2><label class="tsel ${fo ? 'on' : ''}"><span hidden>Odpowiedzialny</span><select id="bOdp" aria-label="Odpowiedzialny">${[['', 'Odpowiedzialny: wszyscy'], ...odpLista().map(k => [k, k]), ...(br0.some(b => !b.odp) ? [['-', 'Bez odpowiedzialnego']] : [])].map(([k, l]) => `<option value="${U.esc(k)}" ${k === fo ? 'selected' : ''}>${U.esc(l)} (${br0.filter(b => !k || (k === '-' ? !b.odp : b.odp === k)).length})</option>`).join('')}</select></label></div>${br.map(issueHtml).join('') || '<p class="mute">Brak.</p>'}</div>
         ${!Session.isBiuro() ? '' : `<div class="stack"><h2>Tematy do wyjaśnienia (${tem.length})</h2>${tem.map(t => `<div class="card"><div class="row"><b>${U.esc(t.urz || t.id)}</b><span class="chip">${U.esc(t.kat || 'Do wyjaśnienia')}</span></div><div>${U.esc(t.opis)}</div></div>`).join('') || '<p class="mute">Brak.</p>'}<p class="mute">Tematy widzi tylko biuro; prowadzone w liście urządzeń → Tematy.</p></div>`}
       </div>`;
     bindEtap();

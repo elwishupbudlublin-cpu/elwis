@@ -635,3 +635,34 @@ body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}
 .tykroki{display:flex;flex-wrap:wrap;gap:4px 6px;font-size:13px}.tykroki span{white-space:nowrap}
 .chip.odp{background:#E8EEF8;color:#1D4ED8;border-color:#C7D4EE}
 .cats.odp button.on{background:#1D4ED8;border-color:#1D4ED8}
+
+/* od 1.53.0: stan sieci + synchronizacja w jednym przycisku */
+#btnSync.net{border:0;color:#fff;height:44px;padding:0 10px 0 14px;gap:8px;font:inherit;font-size:13px;cursor:pointer}
+#btnSync.net:active{background:rgba(255,255,255,.28)}
+#btnSync.net .spinico{font-size:20px;line-height:1;opacity:.9;margin-left:2px}
+#btnSync.net.sync .dot{display:none}
+#btnSync.net .bn{top:-4px;right:-4px}
+#btnBack{width:86px;height:40px;font-size:25px}   /* od 1.53.0: o 10% mniejszy */
+#btnSync.net{--p:0%;background:linear-gradient(90deg,rgba(34,197,94,.55) 0 var(--p),rgba(255,255,255,.15) var(--p) 100%);transition:background .3s}
+#btnSync.net.sync{background:linear-gradient(90deg,rgba(34,197,94,.55) 0 var(--p),rgba(255,255,255,.12) var(--p) 100%)}
+/* od 1.53.0: ścieżka pod nagłówkiem */
+.crumb{position:sticky;top:64px;z-index:19;display:flex;align-items:center;gap:6px;padding:6px 16px;background:#1E293B;color:#CBD5E1;font-size:13px;white-space:nowrap;overflow-x:auto;scrollbar-width:none}
+.crumb[hidden]{display:none}
+.crumb .csep{opacity:.5}
+.crumb .clink{border:0;background:none;color:#93C5FD;font:inherit;padding:2px 0;cursor:pointer}
+.crumb .ccur{color:#fff;font-weight:600}
+#topSub{display:none}
+.crumb{height:30px;box-sizing:border-box}
+.ubar{top:94px}
+#bOdp{max-width:none}
+.crumb{height:22px;padding:0 16px;font-size:11.5px;gap:5px;line-height:22px}
+.crumb .clink{padding:0;line-height:22px}
+.ubar{top:86px}
+.top{height:56px;padding-top:4px;padding-bottom:0;align-items:center}
+.crumb{top:56px}
+.ubar{top:78px}
+.crumb{background:var(--navy);height:20px;line-height:16px;align-items:flex-start;padding:0 16px 4px}
+.crumb .clink{line-height:16px}
+.top{height:54px;padding-top:6px}
+.crumb{top:54px}
+.ubar{top:74px}

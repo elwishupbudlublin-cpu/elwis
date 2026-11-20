@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.53.0 – 2026-11-20 (aplikacja)
+- Nagłówek: stan sieci i synchronizacja w jednym przycisku (kropka, stan / czas synchronizacji, ⟳); dotknięcie uruchamia synchronizację; liczba wpisów do wysłania jako czerwona plakietka; postęp synchronizacji jako zielone tło przycisku (zamiast paska pod nagłówkiem).
+- Przycisk wstecz mniejszy o 10%; nagłówek niższy.
+- Ścieżka pod nagłówkiem (w kolorze nagłówka): nr budowy › nazwa › ekran; nr i nazwa przenoszą na ekran budowy; zastępuje tekst obok logo.
+- Braki: filtr „Odpowiedzialny” obok nagłówka „Braki z budowy”.
+
 ## 1.52.0 – 2026-11-20 (aplikacja i serwer, schemat 1.17)
 - Braki: pole „Odpowiedzialny” (Budowa / HupBud / AKPiA) – obowiązkowe przy zgłoszeniu i przy zapisie zmian w oknie braku; zmienia je każdy, kto może edytować brak (wpis w rejestrze zmian). Etykieta przy rodzaju braku na liście, filtr (lista rozwijana) w ekranie „Braki i tematy”; stare braki bez odpowiedzialnego – pozycja „Bez odpowiedzialnego”.
 - Serwer: Słowniki → kolumna B „Odpowiedzialny za brak” (`odpowiedzialni`); przy starszym serwerze aplikacja używa listy Budowa / HupBud / AKPiA.
