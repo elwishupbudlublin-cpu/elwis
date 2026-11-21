@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.0';
+const SCRIPT_VERSION = '1.58.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -2033,7 +2033,7 @@ function czasPrzetworz_(teraz) {
   const nbv = nb.getDataRange().getDisplayValues();
   Object.values(W).filter(w => w.nieob && w.stan === 'zastapiony' && w.korekta && nbJuz[w.wid]).forEach(w => { const i = nbv.findIndex(r => String(r[4] || '').indexOf('[' + w.wid + ']') >= 0);
     if (i > 0 && !/zastąpione/.test(nbv[i][4])) nb.getRange(i + 1, 5).setValue(nbv[i][4] + ' · zastąpione korektą biura (' + w.przez + ')'); });
-  const nbRows = Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !nbJuz[w.wid]).map(w => [w.osoba, w.data, w.dataDo || w.data, w.rodzaj === 'urlop' ? 'U' : 'N', (w.uwagi || '') + ' · zatwierdził ' + (w.zatw.auto ? 'auto' : w.zatw.kto) + ' [' + w.wid + ']']);
+  const nbRows = Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !nbJuz[w.wid]).map(w => [w.osoba, w.data, w.dataDo || w.data, w.rodzaj === 'urlop' ? 'U' : w.rodzaj === 'zwolnienie' ? 'L4' : 'N', (w.uwagi || '') + ' · zatwierdził ' + (w.zatw.auto ? 'auto' : w.zatw.kto) + ' [' + w.wid + ']']);
   if (nbRows.length) harmDopisz_('Nieobecności', nbRows);
   const rows = Object.values(W).filter(w => w.stan === 'zatw' && !w.nieob && !juz[w.wid]).map(w => [harmLicznik_('CP_N', 'CP-'), w.data, w.osoba, (L[w.osoba] || {}).ek || '', w.kod || '', w.faza || '', '', w.zad || '', w.nazwa || w.opis || '',
     w.od, w.do, String(godzH_(w.od, w.do)).replace('.', ','), ST_CZAS[w.st] || w.st, w.spoza ? 'tak' : 'nie', [w.opis, w.notatka].filter(String).join(' · ').slice(0, 2000),
@@ -2146,6 +2146,7 @@ function czasDokonczenie_(zid, t, prac, kod, faza, nowe) {
 }
 
 /** Urlop / nieobecność zatwierdzone przez biuro → zadanie w liście osoby (przestrzeń HUPBUD) – liczy się w obciążeniu jak dotąd (nazwa „Urlop…/Nieobecność…”) */
+function nbNazwa_(r) { return r === 'urlop' ? 'Urlop' : r === 'zwolnienie' ? 'Zwolnienie lekarskie' : 'Nieobecność'; }
 function czasNieobCU_(w) {
   const kl = 'nieob:' + w.wid; if (syncByl_(kl)) return;
   const team = cuTeam_(), sp = (cu_('get', 'team/' + team + '/space?archived=false').spaces || []).find(x => /hup\s*-?\s*bud/i.test(x.name) && !/proj/i.test(x.name));
@@ -2157,7 +2158,7 @@ function czasNieobCU_(w) {
     if (l) lid = l.id;
   }
   if (!lid) throw new Error('Nieobecność ' + w.osoba + ': brak listy osoby w przestrzeni HUPBUD (albo klucza cu_lista_nieobecnosci w Konfiguracji)');
-  const nazwa = (w.rodzaj === 'urlop' ? 'Urlop' : 'Nieobecność') + ' – ' + w.osoba;
+  const nazwa = nbNazwa_(w.rodzaj) + ' – ' + w.osoba;
   const nz = cu_('post', 'list/' + lid + '/task', { name: nazwa, assignees: cuIds_([w.osoba]), description: (w.uwagi || '') + '\nWpisane w ELWIS, zatwierdzone przez biuro.',
     start_date: msDnia_(w.data, '00:00'), start_date_time: false, due_date: msDnia_(w.dataDo || w.data, '23:00'), due_date_time: false, notify_all: false });
   cu_('post', 'task/' + nz.id + '/comment', { comment_text: 'ELWIS · ' + nazwa + ': ' + w.data + ' – ' + (w.dataDo || w.data) + ' (' + (w.dni || 1) + ' dni rob.) · wpisał(a) ' + w.kto + ' · zatwierdził ' + (w.zatw.auto ? 'automatycznie' : w.zatw.kto) + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16), notify_all: false });
@@ -2169,7 +2170,7 @@ function czasKorektaCU_(w, stary, W) {
   const kl = 'kor:' + w.wid; if (syncByl_(kl)) return;
   if (stary && stary.nieob) {   // urlop / nieobecność: stare zadanie „cancelled”, nowe wg poprawionych danych (osoba, rodzaj, daty)
     const id = syncByl_('nieob:' + stary.wid);
-    const txt = x => (x.rodzaj === 'urlop' ? 'Urlop' : 'Nieobecność') + ' ' + x.osoba + ' ' + x.data + ' – ' + (x.dataDo || x.data) + ' (' + (x.dni || 1) + ' dni rob.)';
+    const txt = x => nbNazwa_(x.rodzaj) + ' ' + x.osoba + ' ' + x.data + ' – ' + (x.dataDo || x.data) + ' (' + (x.dni || 1) + ' dni rob.)';
     if (id) { cu_('post', 'task/' + id + '/comment', { comment_text: 'ELWIS · korekta biura: ' + txt(stary) + ' → ' + txt(w) + ' · ' + w.zatw.kto + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16) + (w.zatw.powod ? ' · powód: ' + w.zatw.powod : ''), notify_all: false });
       try { cu_('put', 'task/' + id, { status: konfig_().cu_status_anulowane || 'cancelled' }); } catch (e) { Logger.log(e); } }
     if (w.nieob) czasNieobCU_(w);

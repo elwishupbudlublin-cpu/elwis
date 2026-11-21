@@ -934,3 +934,5 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .pblk.pnieob{background:#eef2ff;border-left:4px solid #6366f1}.pblk.pnieob.zamk{background:#ecfdf3;border-left-color:var(--ok)}.pblk.pnieob.odrz{background:#fff1f2;border-left-color:var(--bad);text-decoration:line-through}
 .pblk.pnieob .czchip{text-decoration:none}
 .pced{display:flex;flex-direction:column;gap:8px}.pced label{display:flex;flex-direction:column;gap:3px}.pced select,.pced input,.pced textarea{width:100%}
+.czst button.on.bad{border-color:var(--bad);background:#fff1f2;color:var(--bad)}
+.pblk.pnieob.l4{background:#fff7ed;border-left-color:#ea580c}

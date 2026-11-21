@@ -345,7 +345,7 @@ const Views = {
       const top = (s - h0 * 60) / 60 * PX, hgt = Math.max(30, (e - s) / 60 * PX - 3);
       const { st, kl } = poz(top, hgt, tor);
       if (x.cz && x.cz.nieob) { const w = x.cz;   // urlop / nieobecność
-        return `<button class="pblk${kl} pczas pnieob ${w.stan === 'zatw' ? 'zamk' : w.stan === 'odrzB' ? 'odrz' : ''}" data-cz="${U.esc(w.wid)}" style="${st}"><span class="pt">${U.esc(PC_dzien(w.data))}${w.dataDo && w.dataDo !== w.data ? ' – ' + U.esc(PC_dzien(w.dataDo)) : ''}</span><b>${U.esc(w.nazwa || CZ_ST_TXT[w.st] || '')}</b>${czChip(w)}</button>`; }
+        return `<button class="pblk${kl} pczas pnieob${w.rodzaj === 'zwolnienie' ? ' l4' : ''} ${w.stan === 'zatw' ? 'zamk' : w.stan === 'odrzB' ? 'odrz' : ''}" data-cz="${U.esc(w.wid)}" style="${st}"><span class="pt">${U.esc(PC_dzien(w.data))}${w.dataDo && w.dataDo !== w.data ? ' – ' + U.esc(PC_dzien(w.dataDo)) : ''}</span><b>${U.esc(w.nazwa || CZ_ST_TXT[w.st] || '')}</b>${czChip(w)}</button>`; }
       if (x.cz) { const w = x.cz, bp = proj.find(p => p.kod === w.kod);   // od 1.58.0: czas pracy z bazy
         return `<button class="pblk${kl} pczas ${w.stan === 'zatw' ? 'zamk' : ''}" data-cz="${U.esc(w.wid)}" style="${st}"><span class="pt">${U.esc(w.od)}–${U.esc(w.do)} · ${CZ.hTxt(CZ.h(w.od, w.do))}</span>${bp ? `<span class="pbud">${U.esc(bp.kod)}</span>` : ''}<b>${U.esc(w.nazwa || w.opis || '')}</b>${czChip(w)}</button>`; }
       const cw = CZW.find(w => w.zad === t.id && w.osoba === x.os);

@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.58.1 – 2026-11-21 (aplikacja i serwer)
+- Zwolnienie lekarskie jako trzeci rodzaj obok urlopu i nieobecności (tablet, przytrzymanie pustego pola, panel PC); w arkuszu „Nieobecności” jako L4, w ClickUp zadanie „Zwolnienie lekarskie – osoba” (obciążenie pokazuje L4).
+
 ## 1.58.0 – 2026-11-21 (aplikacja i serwer)
 - Czas pracy: po kliknięciu swojego zadania w planie – wykonane / do kontynuacji / niepodjęte. Godziny osobno dla każdej osoby (−/+ co 30 min, liczone dokładnie od–do); wpis za inną osobę to propozycja, potwierdzenie osoby ma pierwszeństwo. Do kontynuacji – wymagane godziny i proponowany termin dokończenia (zadanie kilkudniowe: najbliższy możliwy dzień).
 - „Co robiłem” (niepodjęte lub przytrzymanie pustego pola w planie): budowy z dnia zaznaczone, czas dzielony równo, min. 30 min między budowami, kontrola nakładania; pod budową faza, opis, osoby i notatka z dnia (przycisk „Notatka”). Licznik godzin dnia.
