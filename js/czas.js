@@ -13,7 +13,28 @@ const CZ = {
   dniFix(v) { const n = Math.round(parseFloat(String(v).replace(',', '.')) * 2) / 2; return isFinite(n) ? Math.max(0.5, Math.min(60, n)) : 1; },
   dniTxt(n) { n = n || 1; return String(n).replace('.', ',') + ' ' + (n === 1 ? 'dzień' : n < 1 || n % 1 ? 'dnia' : 'dni'); },
   dniPole(id, n) { return `<div class="tp tpn"><button type="button" data-dn="-1">−</button><input type="text" inputmode="decimal" id="${id}" value="${String(n).replace('.', ',')}"><button type="button" data-dn="1">+</button></div>`; },
-  FAZY: ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'],
+  /* lista do wyboru z filtrowaniem (od 1.58.4): po dotknięciu pola – wszystkie pozycje, wpisywane litery filtrują (kod, nazwa, imię) */
+  combo(inp, lista, wybierz) {
+    if (!inp) return;
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l');
+    const box = document.createElement('div'); box.className = 'nzpod cbx'; box.hidden = true;
+    inp.parentNode.classList.add('cbw'); inp.insertAdjacentElement('afterend', box); inp.autocomplete = 'off';
+    const pokaz = () => {
+      const q = norm(inp.value), L = lista().filter(x => !q || norm(x.t + ' ' + (x.s || '')).includes(q));
+      box.innerHTML = L.map((x, i) => `<button type="button" data-ci="${i}"><b>${U.esc(x.t)}</b>${x.s ? ' <span class="mute">' + U.esc(x.s) + '</span>' : ''}</button>`).join('') || '<div class="mute" style="padding:12px 14px">Nic nie pasuje</div>';
+      box.hidden = false;
+      box.querySelectorAll('[data-ci]').forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => { box.hidden = true; inp.value = ''; wybierz(L[+b.dataset.ci]); }; });
+    };
+    inp.addEventListener('focus', pokaz); inp.addEventListener('input', pokaz);
+    inp.addEventListener('blur', () => setTimeout(() => { box.hidden = true; }, 200));
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = box.querySelector('[data-ci]'); if (b) { e.preventDefault(); b.click(); } } });
+  },
+  /* wszystkie budowy: aktywne z tabletu + cała Baza projektów (gdy pobrana na tablet biura) */
+  budowy(baza) { const m = new Map(); ((S.boot && S.boot.projekty) || []).forEach(p => m.set(p.kod, p)); (baza || []).forEach(p => { if (!m.has(p.kod)) m.set(p.kod, p); });
+    return [...m.values()].sort((a, b) => natCmp(b.kod, a.kod)).map(p => ({ v: p.kod, p, t: p.kod, s: String(p.nazwa || '').replace(p.kod, '').trim() + (p.aktywna === false ? ' · poza ELWIS' : '') })); },
+  osoby(bez) { return ((S.boot && S.boot.pracownicy) || []).filter(p => p.cu && p.rola !== 'podwykonawca' && !(bez || []).includes(p.name)).map(p => ({ v: p.name, t: p.name, s: p.ekipa ? 'ekipa ' + p.ekipa : (p.rola === 'biuro' ? 'biuro' : '') })); },
+  /* fazy projektu – z Bazy → Słowniki, kolumna K (od 1.58.4, schemat 1.19); bez danych – lista domyślna */
+  get FAZY() { const f = S.boot && S.boot.slowniki && S.boot.slowniki.fazy; return f && f.length ? f : ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis']; },
   prac: n => ((S.boot && S.boot.pracownicy) || []).find(p => p.name === n),
   okno(n) { const p = CZ.prac(n); return p && String(p.ekipa) === '1' ? [480, 960] : [420, 900]; },
   dni(t) { const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null; const dB = b ? U.day(b) : U.day(a); return { dA: a ? U.day(a) : dB, dB }; },
@@ -49,7 +70,7 @@ const Czas = {
     const r = await API.czas({ op: 'push', zd: q });
     const ids = new Set(q.map(e => e.id));
     await DB.set('czasKolejka', (await this.kolejka()).filter(e => !ids.has(e.id)));
-    await DB.set('czasStan', { wpisy: r.wpisy || [], auto: !!r.auto, czas: r.czas, kto: S.user.name });
+    await DB.set('czasStan', { wpisy: r.wpisy || [], auto: !!r.auto, autoBiuro: !!r.autoBiuro, czas: r.czas, kto: S.user.name });
     S.czasErr = '';
     if (r.bledy && r.bledy.length && Session.isBiuro()) UI.toast('ClickUp: ' + r.bledy[0]);
   },
@@ -85,6 +106,7 @@ const Czas = {
     return (await this.dla(osoba, dzien)).filter(w => !(pomin && pomin(w)) && w.stan !== 'prop').reduce((s, w) => s + CZ.h(w.od, w.do), 0);
   },
   async auto() { const st = (await DB.get('czasStan')) || {}; return !!st.auto; },
+  async autoBiuro() { const st = (await DB.get('czasStan')) || {}; return !!st.autoBiuro; },
   async propozycje(osoba) { return (await this.lista()).filter(w => w.osoba === osoba && w.stan === 'prop' && w.kto !== osoba); },
   /* niezamknięte dni: zadania z planu (ostatnie 14 dni, bez dziś, dni robocze) bez wpisu tej osoby */
   async braki(osoba) {
@@ -197,7 +219,7 @@ Object.assign(Dialogs, {
             ${rows.map((r, i) => `<div class="czrow${kolizja(r) ? ' bad' : ''}"><button class="chk${r.on ? ' on' : ''}" data-on="${i}" ${i === 0 ? 'disabled' : ''}>${r.on ? '✓' : ''}</button>
               <span class="czn">${U.esc(r.n)}${i === 0 ? ' <span class="mute">(ja)</span>' : r.wlasny ? ' <span class="czchip c-gr">wpisał(a) sam(a)</span>' : r.on ? ' <span class="czchip c-pro">propozycja</span>' : ''}</span>
               ${r.wlasny ? `<span class="mute">${U.esc(r.istn.od)}–${U.esc(r.istn.do)}</span>` : `${CZ.tp('od' + i, r.od, !r.on)}<span>–</span>${CZ.tp('do' + i, r.do, !r.on)}`}<b class="czh">${r.on && !r.wlasny ? CZ.hTxt((r.do - r.od) / 60) : ''}</b></div>`).join('')}
-            <div class="row" style="gap:12px;margin-top:6px"><button class="btn sm" id="czDod">＋ dodaj osobę</button><button class="btn sm" id="czNot">Notatka${notatka ? ' ✎' : ''}</button><span class="grow"></span>${rows.some(kolizja) ? '<span class="bad">Godziny nachodzą na inne wpisy albo są krótsze niż 30 min</span>' : ''}</div></div>
+            <div class="row" style="gap:12px;margin-top:6px"><span><input type="text" id="czDod" class="cbin" placeholder="＋ dodaj osobę – wpisz lub wybierz"></span><button class="btn sm" id="czNot">Notatka${notatka ? ' ✎' : ''}</button><span class="grow"></span>${rows.some(kolizja) ? '<span class="bad">Godziny nachodzą na inne wpisy albo są krótsze niż 30 min</span>' : ''}</div></div>
           ${st === 'update required' ? `<div class="card"><div class="lbl">Dokończenie – propozycja terminu dla biura</div>
             <p class="mute" style="margin:4px 0 8px">Zostało ok. <b>${CZ.hTxt(reszta())}</b>${wielo ? ' (z pozostałymi dniami zadania)' : ''}. Pierwsze wolne terminy:</p>
             <div class="czterm">${terminy.map((x, i) => `<button class="${termin && termin.data === x.data && termin.od === x.od ? 'on' : ''}" data-tr="${i}"><b>${U.esc(PC_dzien(x.data))}</b><span>${x.od}–${x.do}</span></button>`).join('')}
@@ -215,11 +237,8 @@ Object.assign(Dialogs, {
       if ($('#czInny')) $('#czInny').onclick = () => { const d = prompt('Dzień dokończenia (rrrr-mm-dd):', termin ? termin.data : CZ.nastRob(dzien)); if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
         const g = prompt('Godzina rozpoczęcia (gg:mm):', '07:00'); if (!g || !/^\d{1,2}:\d{2}$/.test(g)) return;
         termin = { data: d, od: CZ.hm(CZ.min(g)), do: CZ.hm(Math.min(24 * 60, CZ.min(g) + Math.min(reszta(), 8) * 60)) }; draw(); };
-      $('#czDod').onclick = () => {
-        const wolni = ((S.boot && S.boot.pracownicy) || []).filter(p => p.cu && !rows.some(r => r.n === p.name) && p.rola !== 'podwykonawca').map(p => p.name);
-        if (!wolni.length) return UI.toast('Brak innych osób do dodania');
-        const n = prompt('Dodaj osobę – wpisz imię:\n' + wolni.join(', ')); const f = n && wolni.find(x => U.norm(x).startsWith(U.norm(n)));
-        if (!f) return; const [a, b] = CZ.planOkno(t, dzien, f); rows.push({ n: f, on: true, od: r0.od || a, do: r0.do || b }); inne[f] = W.filter(w => w.osoba === f && w.data === dzien && Czas.akt(w) && w.stan !== 'prop'); draw(); };
+      CZ.combo($('#czDod'), () => CZ.osoby(rows.map(r => r.n)), x => {
+        const f = x.v; const [a, b] = CZ.planOkno(t, dzien, f); rows.push({ n: f, on: true, od: r0.od || a, do: r0.do || b }); inne[f] = W.filter(w => w.osoba === f && w.data === dzien && Czas.akt(w) && w.stan !== 'prop'); draw(); });
       $('#czNot').onclick = () => this.czasNotatka(notatka, v => { notatka = v; notEd = true; draw(); });
       $('#czOk').onclick = async () => {
         if (rows.some(kolizja)) return UI.toast('Popraw godziny zaznaczone na czerwono');
@@ -248,7 +267,8 @@ Object.assign(Dialogs, {
 
   /* „Co robiłem?” – po „Zadanie niepodjęte” albo dotknięciu pustego miejsca w planie: budowy z dzisiejszych wpisów, podział czasu, min. 30 min */
   async coRobilem(dzien, opc = {}) {
-    const ja = S.user.name, W = await Czas.lista(), [o0, o1] = CZ.okno(ja);
+    const baza = (await DB.get('projektyBaza')) || [];
+    const ja = opc.osoba || S.user.name, W = await Czas.lista(), [o0, o1] = CZ.okno(ja);   // od 1.58.4: biuro może wpisać za inną osobę
     const dzisBud = await Czas.budowyDnia(ja, dzien);
     const B = dzisBud.map(b => ({ kod: b.kod, nazwa: b.nazwa, n: b.n, on: true, faza: 'Montaż i Wykonawstwo', opis: '', osoby: [], notatka: '' }));
     for (const b of B) b.notatka = await Czas.notatka(b.kod, ja, dzien);
@@ -269,40 +289,36 @@ Object.assign(Dialogs, {
     const draw = () => {
       const L = wyb(), sumaInne = inne.reduce((s, w) => s + CZ.h(w.od, w.do), 0), suma = L.length ? (pts[L.length] - pts[0]) / 60 : 0;
       let i = -1;
-      modal.innerHTML = `<div class="ov" id="ov"><div class="sheet czs wide"><div class="shead"><div class="grow"><div class="mute">${U.esc(opc.tytul || dzien)}</div><h3>Co robiłem${dzien === U.day(new Date()) ? ' dziś' : ' ' + U.esc(PC_dzien(dzien))}?</h3></div>
+      modal.innerHTML = `<div class="ov" id="ov"><div class="sheet czs wide"><div class="shead"><div class="grow"><div class="mute">${U.esc(opc.tytul || dzien)}</div><h3>${ja === S.user.name ? 'Co robiłem' : 'Co robił(a) ' + U.esc(ja)}${dzien === U.day(new Date()) ? ' dziś' : ' ' + U.esc(PC_dzien(dzien))}?</h3></div>
           <span class="czsum">Godziny dnia: <b>${CZ.hTxt(sumaInne + suma)}</b>${sumaInne ? `<small>w tym ${CZ.hTxt(sumaInne)} z innych wpisów</small>` : ''}</span></div>
         <div class="sbody">
-          <p class="mute">${B.length ? 'Zaznaczone są budowy, na których wpisywałeś zmiany tego dnia.' : 'Wybierz budowę.'} Czas dzieli się po równo – przesuwasz go −/+ co 30 min (każda budowa co najmniej 30 min).</p>
+          <p class="mute">${B.length ? 'Zaznaczone są budowy, na których ' + (ja === S.user.name ? 'wpisywałeś' : U.esc(ja) + ' wpisywał(a)') + ' zmiany tego dnia.' : 'Wybierz budowę.'} Czas dzieli się po równo – przesuwasz go −/+ co 30 min (każda budowa co najmniej 30 min).</p>
           ${L.length ? `<div class="row czstart"><span class="mute">Start</span>${CZ.tp('p0', pts[0])}</div>` : ''}
           ${B.map((b, bi) => { if (b.on) i++; const j = i;
             return `<div class="czbud${b.on ? ' on' : ''}${b.on && kol(j) ? ' kol' : ''}"><div class="row"><button class="chk${b.on ? ' on' : ''}" data-bo="${bi}">${b.on ? '✓' : ''}</button><b class="grow">${U.esc(b.nazwa || b.kod)}</b>${b.n ? `<span class="czchip c-pro">wpisy: ${b.n}</span>` : '<span class="czchip c-gr">wybrana ręcznie</span>'}</div>
               ${b.on ? `<div class="row czpola"><select data-bf="${bi}">${CZ.FAZY.map(f => `<option ${f === b.faza ? 'selected' : ''}>${f}</option>`).join('')}</select><input type="text" data-bp="${bi}" placeholder="opis prac (wymagany)" value="${U.esc(b.opis)}"></div>
-              <div class="row czos"><span class="mute">Osoby:</span><span class="czchip c-gr">${U.esc(ja)} (ja)</span>${b.osoby.map((o, k) => `<button class="czchip c-pro" data-bx="${bi}:${k}">${U.esc(o)} ✕</button>`).join('')}<button class="btn sm" data-bd="${bi}">＋ osoba</button><button class="btn sm" data-bn="${bi}">Notatka${b.notatka ? ' ✎' : ''}</button><span class="grow"></span><b>${CZ.hTxt((pts[j + 1] - pts[j]) / 60)}</b></div>
+              <div class="row czos"><span class="mute">Osoby:</span><span class="czchip c-gr">${U.esc(ja)}${ja === S.user.name ? ' (ja)' : ''}</span>${b.osoby.map((o, k) => `<button class="czchip c-pro" data-bx="${bi}:${k}">${U.esc(o)} ✕</button>`).join('')}<span><input type="text" class="cbin" data-bd="${bi}" placeholder="＋ osoba"></span><button class="btn sm" data-bn="${bi}">Notatka${b.notatka ? ' ✎' : ''}</button><span class="grow"></span><b>${CZ.hTxt((pts[j + 1] - pts[j]) / 60)}</b></div>
               ${j < L.length - 1 ? '' : ''}` : ''}</div>${b.on && j < L.length - 1 ? `<div class="row czmid"><span class="mute">koniec / start następnej</span>${CZ.tp('p' + (j + 1), pts[j + 1])}</div>` : ''}`; }).join('')}
           ${L.length ? `<div class="row czstart"><span class="mute">Koniec</span>${CZ.tp('p' + L.length, pts[L.length])}</div>` : ''}
-          <div class="row"><button class="btn sm" id="crInna">＋ inna budowa</button><span class="grow"></span>${L.some((_, k) => kol(k)) ? '<span class="bad">Czas nachodzi na inne Twoje wpisy</span>' : L.length ? '<span class="mute">czasy nie nachodzą na inne wpisy ✓</span>' : ''}</div>
+          <div class="row"><span class="grow"><input type="text" id="crInna" class="cbin" placeholder="＋ inna budowa – wpisz kod lub nazwę albo wybierz z listy"></span>${L.some((_, k) => kol(k)) ? '<span class="bad">Czas nachodzi na inne Twoje wpisy</span>' : L.length ? '<span class="mute">czasy nie nachodzą na inne wpisy ✓</span>' : ''}</div>
           <div class="czst" style="grid-template-columns:1fr 1fr"><button class="${st === 'spoza' ? 'on ok' : ''}" data-s="spoza">✓ Wykonano</button><button class="${st === 'update required' ? 'on wip' : ''}" data-s="update required">⏸ Do kontynuacji</button></div>
+          <div class="cznb"><span class="mute">Nie pracował${ja === S.user.name ? 'em' : '(a)'}? Wpisz od tego dnia:</span>${Object.keys(CZ.NB).map(k => `<button class="btn sm" data-nb="${k}">${U.esc(CZ.NB[k])}</button>`).join('')}</div>
         </div>
         <div class="sfoot"><button class="btn" id="crX">Anuluj</button><span class="grow"></span><button class="btn pri" id="crOk" ${L.length ? '' : 'disabled'}>Zapisz i wyślij do biura</button></div></div></div>`;
       $('#crX').onclick = UI.close;
+      modal.querySelectorAll('[data-nb]').forEach(b => b.onclick = () => this.nieobecnosc(dzien, b.dataset.nb, ja));
       modal.querySelectorAll('[data-bo]').forEach(b => b.onclick = () => { const x = B[+b.dataset.bo]; x.on = !x.on; dziel(); draw(); });
       modal.querySelectorAll('[data-bf]').forEach(s => s.onchange = e => { B[+s.dataset.bf].faza = e.target.value; });
       modal.querySelectorAll('[data-bp]').forEach(s => s.oninput = e => { B[+s.dataset.bp].opis = e.target.value; });
       modal.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st = b.dataset.s; draw(); });
       modal.querySelectorAll('[data-bx]').forEach(b => b.onclick = () => { const [x, k] = b.dataset.bx.split(':').map(Number); B[x].osoby.splice(k, 1); draw(); });
-      modal.querySelectorAll('[data-bd]').forEach(b => b.onclick = () => { const x = B[+b.dataset.bd];
-        const wolni = ((S.boot && S.boot.pracownicy) || []).filter(p => p.cu && p.name !== ja && !x.osoby.includes(p.name) && p.rola !== 'podwykonawca').map(p => p.name);
-        const n = prompt('Dodaj osobę – wpisz imię:\n' + wolni.join(', ')); const f = n && wolni.find(y => U.norm(y).startsWith(U.norm(n))); if (f) { x.osoby.push(f); draw(); } });
+      modal.querySelectorAll('[data-bd]').forEach(inp => { const x = B[+inp.dataset.bd]; CZ.combo(inp, () => CZ.osoby([ja, ...x.osoby]), o => { x.osoby.push(o.v); draw(); }); });
       modal.querySelectorAll('[data-bn]').forEach(b => b.onclick = () => { const x = B[+b.dataset.bn]; this.czasNotatka(x.notatka, v => { x.notatka = v; draw(); }); });
       CZ.tpBind(modal, (k, d) => { const i = +k.slice(1), n = pts.length - 1;
         const lo = i === 0 ? 0 : pts[i - 1] + 30, hi = i === n ? 24 * 60 : pts[i + 1] - 30;
         pts[i] = Math.max(lo, Math.min(hi, pts[i] + d)); draw(); });
-      $('#crInna').onclick = () => {
-        const all = ((S.boot && S.boot.projekty) || []).filter(p => !B.some(b => b.kod === p.kod));
-        const q = prompt('Budowa – wpisz kod lub początek nazwy:'); if (!q) return; const nq = U.norm(q);
-        const f = all.find(p => U.norm(p.kod).startsWith(nq)) || all.find(p => U.norm(p.nazwa).includes(nq));
-        if (!f) return UI.toast('Nie znaleziono budowy „' + q + '”');
-        B.push({ kod: f.kod, nazwa: f.nazwa, n: 0, on: true, faza: 'Montaż i Wykonawstwo', opis: '', osoby: [], notatka: '' }); dziel(); draw(); };
+      CZ.combo($('#crInna'), () => CZ.budowy(baza).filter(x => !B.some(b => b.kod === x.v)), x => { const f = x.p;
+        B.push({ kod: f.kod, nazwa: f.nazwa, n: 0, on: true, faza: 'Montaż i Wykonawstwo', opis: '', osoby: [], notatka: '' }); dziel(); draw(); });
       $('#crOk').onclick = async () => {
         const L2 = wyb();
         if (L2.some(b => !b.opis.trim())) return UI.toast('Wpisz opis prac przy każdej budowie');
@@ -366,24 +382,26 @@ Object.assign(Dialogs, {
   },
 
   /* menu po przytrzymaniu pustego miejsca w planie (kółko z zielonym postępem) */
-  planMenu(dzien, start) {
-    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czmenu"><div class="shead"><h3 class="grow">Dodaj – ${U.esc(PC_dzien(dzien))}${start != null ? ', ' + CZ.hm(start) : ''}</h3></div>
-      <div class="sbody"><button class="czmi" data-m="co"><b>Praca spoza planu</b><span>Co robiłem – budowy, godziny, opis</span></button>
+  planMenu(dzien, start, osoba) {
+    osoba = osoba || S.user.name; const inny = osoba !== S.user.name;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czmenu"><div class="shead"><h3 class="grow">Dodaj${inny ? ' dla: ' + U.esc(osoba) : ''} – ${U.esc(PC_dzien(dzien))}${start != null ? ', ' + CZ.hm(start) : ''}</h3></div>
+      <div class="sbody">${Session.isBiuro() ? `<button class="czmi" data-m="zad"><b>Nowe zadanie</b><span>to samo okno co „+ Nowe zadanie”, z wybraną osobą: ${U.esc(osoba)}</span></button>` : ''}<button class="czmi" data-m="co"><b>Praca spoza planu</b><span>Co robiłem – budowy, godziny, opis</span></button>
         <button class="czmi" data-m="urlop"><b>Urlop</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
         <button class="czmi" data-m="zwolnienie"><b>Zwolnienie lekarskie</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
         <button class="czmi" data-m="nieobecnosc"><b>Nieobecność</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
         <button class="czmi" data-m="inne"><b>Inne</b><span>np. szkolenie, badania, sprawy urzędowe – opis wymagany, do zatwierdzenia przez biuro</span></button></div>
       <div class="sfoot"><span class="grow"></span><button class="btn" id="pmX">Anuluj</button></div></div></div>`;
     $('#pmX').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
-    modal.querySelectorAll('[data-m]').forEach(b => b.onclick = () => b.dataset.m === 'co' ? this.coRobilem(dzien, { start }) : this.nieobecnosc(dzien, b.dataset.m));
+    modal.querySelectorAll('[data-m]').forEach(b => b.onclick = () => b.dataset.m === 'zad' ? this.noweZadanie('', dzien, null, [osoba]) : b.dataset.m === 'co' ? this.coRobilem(dzien, { start, osoba }) : this.nieobecnosc(dzien, b.dataset.m, osoba));
   },
 
   /* Urlop / nieobecność: data od i liczba dni roboczych (weekendy i święta pomijane) → do zatwierdzenia przez biuro */
-  nieobecnosc(dzien, rodzaj) {
+  nieobecnosc(dzien, rodzaj, osoba) {
+    osoba = osoba || S.user.name;
     let od = U.wolny(dzien) ? CZ.nastRob(dzien) : dzien, dni = 1, uw = '';
     const doDnia = () => { let d = od, n = 1; while (n < Math.ceil(dni)) { d = CZ.nastRob(d); n++; } return d; };
     const draw = () => {
-      modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czdlg"><div class="shead"><h3 class="grow">${CZ.NB[rodzaj]} – ${U.esc(S.user.name)}</h3></div>
+      modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czdlg"><div class="shead"><h3 class="grow">${CZ.NB[rodzaj]} – ${U.esc(osoba)}</h3></div>
         <div class="sbody">
           <div class="czst" style="grid-template-columns:repeat(4,1fr)">${Object.keys(CZ.NB).map(k => `<button class="${rodzaj === k ? CZ.NBKL[k] : ''}" data-r="${k}">${CZ.NB[k]}</button>`).join('')}</div>
           <div class="row" style="gap:12px;flex-wrap:wrap"><label class="grow"><span class="lbl">Od dnia</span><input type="date" id="nbOd" value="${od}"></label>
@@ -400,8 +418,8 @@ Object.assign(Dialogs, {
       $('#nbDni').onchange = e => { dni = CZ.dniFix(e.target.value); draw(); };
       $('#nbOk').onclick = async () => {
         if (rodzaj === 'inne' && !uw.trim()) return UI.toast('Wpisz, czego dotyczy nieobecność');
-        const [o0, o1] = CZ.okno(S.user.name);
-        await Czas.dodaj([Czas.zdarzenie('wpis', { wid: U.uid('w'), data: od, dataDo: doDnia(), dni, osoba: S.user.name, zad: '', nieob: true, rodzaj, st: rodzaj, nazwa: rodzaj === 'inne' ? 'Inne: ' + uw.trim() : CZ.NB[rodzaj], od: CZ.hm(o0), do: CZ.hm(o1), uwagi: uw.trim() })]);
+        const [o0, o1] = CZ.okno(osoba);
+        await Czas.dodaj([Czas.zdarzenie('wpis', { wid: U.uid('w'), data: od, dataDo: doDnia(), dni, osoba, zad: '', nieob: true, rodzaj, st: rodzaj, nazwa: rodzaj === 'inne' ? 'Inne: ' + uw.trim() : CZ.NB[rodzaj], od: CZ.hm(o0), do: CZ.hm(o1), uwagi: uw.trim() })]);
         UI.close(); UI.toast(CZ.NB[rodzaj] + ' – wysłane do biura'); UI.refresh();
       };
     };

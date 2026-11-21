@@ -469,11 +469,11 @@ const Views = {
       let tm = null, ring = null, x0 = 0, y0 = 0;
       const stop = () => { clearTimeout(tm); tm = null; if (ring) { ring.remove(); ring = null; } };
       c.addEventListener('pointerdown', e => {
-        if (e.target !== c || !kolumny[i] || !S.user || kolumny[i].o.name !== S.user.name) return;
+        if (e.target !== c || !kolumny[i] || !S.user || (kolumny[i].o.name !== S.user.name && !Session.isBiuro())) return;   // biuro – także w kolumnach innych osób
         x0 = e.clientX; y0 = e.clientY; const r = c.getBoundingClientRect(), y = e.clientY - r.top;
         ring = document.createElement('span'); ring.className = 'pring'; ring.style.left = (e.clientX - r.left) + 'px'; ring.style.top = y + 'px'; c.appendChild(ring);
         const m = h0 * 60 + Math.floor(y / PX * 2) * 30;
-        tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30); Dialogs.planMenu(dzien, m); }, 900);
+        tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30); Dialogs.coRobilem(dzien, { start: m, osoba: kolumny[i].o.name }); }, 2000);   // jak przytrzymanie kropki na rzucie
       });
       c.addEventListener('pointermove', e => { if (tm && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
       ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => c.addEventListener(ev, stop));
@@ -1603,19 +1603,19 @@ const Dialogs = {
 
   /* Nowe zapotrzebowanie (od 1.48.0) – każdy z tabletu HUP-BUD, offline; kod – budowa wpisana automatycznie, puste = zakupy ogólne (AKPiA) */
   /* Nowe zadanie do zaplanowania (od 1.56.0, rola biuro) – tylko podstawowe dane; termin dobiera Claude */
-  async noweZadanie(kod, dzien, zKolejki) {
+  async noweZadanie(kod, dzien, zKolejki, osobyStart) {
     if (!Session.isBiuro()) return;
     // projekty: aktywne z tabletu + wszystkie z Bazy (z listą ClickUp) – pobierane przy otwarciu, gdy jest sieć (od 1.56.0)
     let baza = (await DB.get('projektyBaza')) || [];   // od 1.56.1: okno od razu z danymi z tabletu, lista z Bazy doczytywana w tle
     const mapa = new Map(); ((S.boot && S.boot.projekty) || []).forEach(p => mapa.set(p.kod, p)); baza.forEach(p => { if (!mapa.has(p.kod)) mapa.set(p.kod, p); });
     const pr = [...mapa.values()].sort((a, b) => natCmp(b.kod, a.kod));
     const budTxt = p => p.nazwa && p.nazwa.indexOf(p.kod) === 0 ? p.nazwa : p.kod + ' ' + (p.nazwa || '');
-    const FAZY = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
+    const FAZY = CZ.FAZY;
     const EK = ['Dowolna', 'Ekipa 1', 'Ekipa 2', 'Ekipa 3'];
     const OSOBY = ((S.boot && S.boot.pracownicy) || []).filter(p => p.cu).map(p => p.name);   // od 1.56.1: osobne przyciski osób (także biuro)
     const zk = zKolejki || null;
-    let faza = zk ? zk.faza : 'Montaż i Wykonawstwo', ekipa = zk ? (zk.ekipa === 'Dowolna' ? 'Dowolna' : zk.ekipa === 'osoby' ? '' : 'Ekipa ' + zk.ekipa) : 'Dowolna';
-    let osoby = new Set(zk && zk.osoby ? zk.osoby : []);
+    let faza = zk ? zk.faza : 'Montaż i Wykonawstwo', ekipa = zk ? (zk.ekipa === 'Dowolna' ? 'Dowolna' : zk.ekipa === 'osoby' ? '' : 'Ekipa ' + zk.ekipa) : (osobyStart && osobyStart.length ? '' : 'Dowolna');
+    let osoby = new Set(zk && zk.osoby ? zk.osoby : osobyStart || []);   // od 1.58.4: z harmonogramu – osoba z przytrzymanej kolumny
     let wybKod = kod || '';   // wybrany projekt: kod, '+' = nowy, '' = brak
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg" role="dialog" aria-label="Nowe zadanie">
       <div class="shead"><h3>Nowe zadanie</h3><span class="mute">${U.esc(S.user.name)}</span></div>
@@ -1646,16 +1646,16 @@ const Dialogs = {
       if (m) { $('#nzPK').value = m[1]; if (m[2]) $('#nzPN').value = m[2]; } else if (x) $('#nzPN').value = x; ($('#nzPK').value ? $('#nzPN') : $('#nzPK')).focus(); };
     const podpowiedz = () => {
       const t = $('#nzB').value.trim(), q = norm(t); wybKod = ''; $('#nzP').hidden = true;
-      if (!q) { $('#nzBL').hidden = true; return; }
-      const traf = [...mapa.values()].filter(p => norm(p.kod).startsWith(q) || norm(budTxt(p)).includes(q)).sort((a, b) => natCmp(b.kod, a.kod)).slice(0, 8);
+      // od 1.58.4: puste pole = cała lista budów z Bazy, litery filtrują
+      const traf = [...mapa.values()].filter(p => !q || norm(p.kod).startsWith(q) || norm(budTxt(p)).includes(q)).sort((a, b) => natCmp(b.kod, a.kod));
       $('#nzBL').innerHTML = traf.map(p => `<button type="button" data-k="${U.esc(p.kod)}"><b class="m bkd">${U.esc(p.kod)}</b> ${U.esc(budTxt(p).replace(p.kod, '').trim())}${p.aktywna === false ? ' <span class="mute">poza ELWIS</span>' : ''}</button>`).join('')
-        + `<button type="button" class="nznowy" data-nowy="1">＋ ${traf.length ? 'Inny – utwórz nowy projekt' : 'Nie znaleziono – utworzyć nowy projekt'} „${U.esc(t)}”?</button>`;
+        + (t ? `<button type="button" class="nznowy" data-nowy="1">＋ ${traf.length ? 'Inny – utwórz nowy projekt' : 'Nie znaleziono – utworzyć nowy projekt'} „${U.esc(t)}”?</button>` : '');
       $('#nzBL').hidden = false;
       $('#nzBL').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { wybKod = b.dataset.k; $('#nzB').value = budTxt(mapa.get(wybKod)); $('#nzBL').hidden = true; });
-      $('#nzBL').querySelector('[data-nowy]').onclick = () => nowyZ(t);
+      if ($('#nzBL').querySelector('[data-nowy]')) $('#nzBL').querySelector('[data-nowy]').onclick = () => nowyZ(t);
     };
     $('#nzB').oninput = podpowiedz;
-    $('#nzB').onfocus = () => { if (!wybKod && $('#nzB').value.trim()) podpowiedz(); };
+    $('#nzB').onfocus = () => { if (!wybKod) podpowiedz(); };
     // od 1.56.1: w tle, gdy wypełniasz pola – lista projektów z Bazy i odświeżenie obciążenia ekip (z odliczaniem)
     const tok = this._nzTok = U.uid('nz'), ods = { start: Date.now(), done: !navigator.onLine, stan: '', err: navigator.onLine ? '' : 'brak sieci' };
     const sek = (t0, lim) => Math.round((Date.now() - t0) / 1000) + ' s (limit ' + lim + ' s)';

@@ -356,7 +356,7 @@ Object.assign(Views, {
     const odsw = async () => { if (navigator.onLine && API.ready()) try { await Czas.sync(); } catch (e) { UI.toast('Czas pracy: ' + e.message); } };
     if (!par._bez) await odsw();
     if (UI.cur !== 'pcCzas') return;
-    const W = await Czas.lista(), auto = await Czas.auto(), pl = await DB.get('plan');
+    const W = await Czas.lista(), auto = await Czas.auto(), autoB = await Czas.autoBiuro(), pl = await DB.get('plan'), bazaP = (await DB.get('projektyBaza')) || [];
     const prac = (S.boot && S.boot.pracownicy) || [], ek = n => String((prac.find(p => p.name === n) || {}).ekipa || '');
     const proj = (S.boot && S.boot.projekty) || [], budZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
     const dzis = U.day(new Date()), pon = PC.poniedzialek(dzis), zakres = f.tyg === 'ten' ? [pon, PC.plus(pon, 6)] : f.tyg === 'pop' ? [PC.plus(pon, -7), PC.plus(pon, -1)] : ['0000', '9999'];
@@ -387,6 +387,7 @@ Object.assign(Views, {
     const rys = () => {
       PC.widok(f.st === 'zatw' ? 'Zatwierdzone godziny' : 'Do zatwierdzenia',
         `<label class="cb"><input type="checkbox" id="czAuto" ${auto ? 'checked' : ''}> Auto-zatwierdzaj zgodne z planem</label>
+         <label class="cb" title="Wpisy roli biuro – własne i dodane za innych (także nieobecności) – zatwierdzane od razu"><input type="checkbox" id="czAutoB" ${autoB ? 'checked' : ''}> Wpisy biura bez zatwierdzania</label>
          <select id="czT"><option value="wsz"${f.tyg === 'wsz' ? ' selected' : ''}>Wszystkie dni</option><option value="ten"${f.tyg === 'ten' ? ' selected' : ''}>Ten tydzień</option><option value="pop"${f.tyg === 'pop' ? ' selected' : ''}>Poprzedni tydzień</option></select>
          <select id="czE"><option value="">Wszystkie ekipy</option>${['1', '2', '3'].map(x => `<option value="${x}"${f.ek === x ? ' selected' : ''}>Ekipa ${x}</option>`).join('')}</select>
          <button class="btn sm" id="czOdsw">Odśwież</button>`,
@@ -400,6 +401,7 @@ Object.assign(Views, {
           ${wyb.w ? detal() : ''}</div>`,
         f.st === 'zatw' ? `${lista.length} wpisów · ${CZ.hTxt(lista.reduce((a, w) => a + godz(w), 0))}` : '');
       $('#czAuto').onchange = async e => { try { await API.fg('Zapisuję ustawienie', () => API.czas({ op: 'ust', auto: e.target.checked })); await Czas.sync(); UI.toast(e.target.checked ? 'Auto-zatwierdzanie włączone' : 'Auto-zatwierdzanie wyłączone'); } catch (er) { UI.toast(er.message); e.target.checked = !e.target.checked; } };
+      $('#czAutoB').onchange = async e => { try { await API.fg('Zapisuję ustawienie', () => API.czas({ op: 'ust', autoBiuro: e.target.checked })); await Czas.sync(); UI.toast(e.target.checked ? 'Wpisy biura zatwierdzane od razu' : 'Wpisy biura – do zatwierdzenia'); } catch (er) { UI.toast(er.message); e.target.checked = !e.target.checked; } };
       $('#czT').onchange = e => { f.tyg = e.target.value; UI.par.f = Object.assign({}, f); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); };
       $('#czE').onchange = e => { f.ek = e.target.value; UI.par.f = Object.assign({}, f); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); };
       $('#czOdsw').onclick = () => Views.pcCzas(Object.assign({}, UI.par, { _bez: 0 }));
@@ -414,6 +416,8 @@ Object.assign(Views, {
         CZ.tpBind($('#view'), (k, d) => { if (k === 'od') wyb.od = Math.max(0, Math.min(wyb.do - 30, wyb.od + d)); else wyb.do = Math.min(1440, Math.max(wyb.od + 30, wyb.do + d)); rys(); });
         $('#czPw').oninput = e => { wyb.powod = e.target.value; };
         const v = $('#view'), E = wyb.e;
+        CZ.combo($('#czEO'), () => CZ.osoby([E.osoba]), x => { E.osoba = x.v; rys(); });
+        CZ.combo($('#czEB'), () => CZ.budowy(bazaP).filter(x => x.v !== E.kod), x => { E.kod = x.v; rys(); });
         v.querySelectorAll('[data-e]').forEach(el => el.onchange = ev => { E[el.dataset.e] = ev.target.value; if (['st', 'data'].includes(el.dataset.e)) rys(); });
         v.querySelectorAll('input[data-e],textarea[data-e]').forEach(el => el.oninput = ev => { E[el.dataset.e] = ev.target.value; });
         v.querySelectorAll('[data-er]').forEach(b => b.onclick = () => { E.rodzaj = b.dataset.er; rys(); });
@@ -444,7 +448,7 @@ Object.assign(Views, {
           <div><span class="lbl" style="display:block">Liczba dni roboczych</span>${CZ.dniPole('czDni', e.dni)} <span class="mute">do ${U.esc(PC_dzien(doDnia(e.data, e.dni)))}</span></div>
           <label><span class="lbl">Uwagi</span><input type="text" data-e="uwagi" value="${U.esc(e.uwagi)}"></label>`
         : `<label><span class="lbl">Dzień</span><input type="date" data-e="data" value="${e.data}"></label>
-          <label><span class="lbl">Budowa</span><select data-e="kod"><option value="">–</option>${opt(proj.map(p => [p.kod, String(p.nazwa || '').startsWith(p.kod) ? p.nazwa : p.kod + ' ' + p.nazwa]), e.kod)}</select></label>
+          <label><span class="lbl">Budowa</span><span class="cbsel"><b>${U.esc(e.kod ? (String((proj.find(p => p.kod === e.kod) || {}).nazwa || e.kod)) : '–')}</b><input type="text" id="czEB" class="cbin" placeholder="zmień – wpisz lub wybierz"></span></label>
           <label><span class="lbl">Faza</span><select data-e="faza"><option value="">–</option>${opt(CZ.FAZY.map(x => [x, x]), e.faza)}</select></label>
           <label><span class="lbl">Nazwa / opis</span><input type="text" data-e="nazwa" value="${U.esc(e.nazwa)}"></label>
           <label><span class="lbl">Status</span><select data-e="st">${opt(['complete', 'update required', 'on hold', 'dzien', 'spoza'].map(k => [k, CZ_ST_TXT[k]]), e.st)}</select></label>
@@ -452,7 +456,7 @@ Object.assign(Views, {
           ${e.st === 'update required' ? `<label><span class="lbl">Dokończenie – dzień</span><input type="date" data-e="terminData" value="${e.terminData}"></label>` : ''}
           <label><span class="lbl">Notatka</span><textarea data-e="notatka" rows="3">${U.esc(e.notatka)}</textarea></label>`;
       return `<div class="card pced"><div class="lbl">${zz ? '🔒 Zatwierdzone – korekta administratora' : w.brak ? 'Decyzja biura' : 'Edycja i zatwierdzenie'}</div>
-          <label><span class="lbl">Osoba</span><select data-e="osoba">${opt(prac.map(p => [p.name, p.name]), e.osoba)}</select></label>${pola}
+          <label><span class="lbl">Osoba</span><span class="cbsel"><b>${U.esc(e.osoba)}</b><input type="text" id="czEO" class="cbin" placeholder="zmień – wpisz lub wybierz"></span></label>${pola}
           <input type="text" id="czPw" placeholder="powód zmiany (wymagany przy zmianie)" value="${U.esc(wyb.powod)}"></div>
         <div class="row" style="gap:8px"><button class="btn ok grow" id="czDOk">${zz ? 'Zapisz korektę' : 'Zatwierdź' + (w.nieob ? '' : ' ' + CZ.hTxt((wyb.do - wyb.od) / 60))}</button>${zz ? '' : `<button class="btn" id="czDNo">${w.brak ? 'Nie pracował' : 'Odrzuć'}</button>`}</div>
         <p class="mute">${zz ? 'Korekta zastępuje zatwierdzony wpis; w ClickUp komentarz z powodem i nowe godziny.' : 'Po zatwierdzeniu: wpis zablokowany na tablecie, wiersz w arkuszu „ELWIS – Harmonogram”. Godziny różne od planu → w ClickUp pierwotne zadanie „cancelled” i nowe zadania wg faktycznych godzin.'}</p>`; };

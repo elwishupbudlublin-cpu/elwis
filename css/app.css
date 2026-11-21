@@ -924,10 +924,10 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .czhist>div.wlasne,.czhist>div.zatw{border-left-color:var(--ok)}.czhist>div.prop{border-left-color:#6366f1}
 .pct tr.sel1 td{background:#f5f8ff}
 .pcakc .cb{display:inline-flex;align-items:center;gap:6px;height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 10px;font-size:13.5px;font-weight:600}
-.pring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;pointer-events:none;z-index:6;
-  background:conic-gradient(#16a34a var(--pr,0%),rgba(37,99,235,.25) 0);-webkit-mask:radial-gradient(circle,transparent 22px,#000 23px);mask:radial-gradient(circle,transparent 22px,#000 23px);animation:pring .9s linear forwards}
-@property --pr{syntax:'<percentage>';inherits:false;initial-value:0%}
-@keyframes pring{to{--pr:100%}}
+.pring{position:absolute;width:0;height:0;border-radius:50%;pointer-events:none;z-index:6;transform:translate(-50%,-50%);
+  background:conic-gradient(#16a34a var(--pr),rgba(37,99,235,.85) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 6px));mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 6px));
+  animation:otoczkaRos .5s ease-out forwards,otoczkaZiel 1.5s linear .5s forwards}
 .pcol{position:relative;touch-action:pan-y}
 .czmenu{width:min(520px,94vw)}.czmi{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:12px 14px;margin-bottom:8px;text-align:left}
 .czmi span{color:var(--mute);font-size:13px}
@@ -938,3 +938,8 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .pblk.pnieob.l4{background:#fff7ed;border-left-color:#ea580c}
 .tp.tpn input{width:62px;height:100%;border:0;text-align:center;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;padding:0;background:#fff}
 .czst button{min-width:0;white-space:normal;line-height:1.15}
+
+.cbw{position:relative;display:inline-block}.cbin{min-width:220px;height:40px;border:1.5px dashed #93C5FD;border-radius:10px;padding:0 12px;font:inherit;background:#F8FAFF}
+.cbin:focus{border-style:solid;border-color:var(--pri);outline:0;background:#fff}.grow>.cbin,.cbsel .cbin{width:100%}
+.cbw .nzpod{min-width:280px}.cbsel{display:flex;flex-direction:column;gap:4px}.cbsel>b{font-weight:700}
+.cznb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}

@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.3';
+const SCRIPT_VERSION = '1.58.4';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -205,7 +205,8 @@ function slowniki_() {
     kategorie: v.map(r => txt_(r[0])).filter(String),
     odpowiedzialni: v.map(r => txt_(r[1])).filter(String),   // kolumna B (schemat 1.17): odpowiedzialny za brak
     typy: v.filter(r => txt_(r[2])).map(r => ({ prefix: txt_(r[2]).toUpperCase(), nazwa: txt_(r[3]), kroki: txt_(r[4]).split(';').map(s => s.trim()).filter(String), sn: tak_(r[5]), opis: txt_(r[9]) })),   // opis – kolumna J (schemat 1.16): kiedy stosować prefiks
-    rodzaje: v.filter(r => txt_(r[7])).map(r => ({ id: txt_(r[7]), opis: txt_(r[8]) }))
+    rodzaje: v.filter(r => txt_(r[7])).map(r => ({ id: txt_(r[7]), opis: txt_(r[8]) })),
+    fazy: v.map(r => txt_(r[10])).filter(String)   // kolumna K (schemat 1.19): fazy projektu w kolejności – jak etapy listy w ClickUp
   };
 }
 
@@ -1544,7 +1545,10 @@ function priorytety_(kto, odswiez) {
 
 /* ===================== Zadania z harmonogramu, Obciążenie, Powiadomienia (od 1.56.0) =====================
    Zasady: fundamenty pkt 2.8–2.9 i 6. Zapis w ClickUp tylko po „Zaplanuj” w aplikacji (rola biuro) – akceptacja zasady 1. */
-const FAZY_PROJ = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
+const FAZY_DOMYSLNE = ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'];
+/** od 1.58.4 (schemat 1.19): fazy projektu z Bazy → Słowniki, kolumna K; puste – lista domyślna */
+let FAZY_MEMO = null;
+function fazyProj_() { if (!FAZY_MEMO) { try { FAZY_MEMO = slowniki_().fazy; } catch (e) { FAZY_MEMO = []; } if (!FAZY_MEMO.length) FAZY_MEMO = FAZY_DOMYSLNE; } return FAZY_MEMO; }
 const ZASIEG_DOM = { 1: 2000, 2: 200, 3: 120 };   // km od Lublina w linii prostej – zasięg jednodniowy (Konfiguracja → zasieg_km)
 const LUBLIN = { lat: 51.2465, lon: 22.5684 };
 const TZ = 'Europe/Warsaw';
@@ -1604,7 +1608,7 @@ function zadaniaOsob_(ids, doMs) {
   zbierz('due_date_lt=' + dzis0);
   return Object.keys(out).map(k => out[k]);
 }
-function pomijaj_(t) { const n = txt_(t.name); return /^status$/i.test(n) || /^ELWIS –/.test(n) || FAZY_PROJ.some(f => f.toLowerCase() === n.toLowerCase()); }
+function pomijaj_(t) { const n = txt_(t.name); return /^status$/i.test(n) || /^ELWIS –/.test(n) || fazyProj_().some(f => f.toLowerCase() === n.toLowerCase()); }
 function nieob_(t) { return /urlop|nieobecn|zwolnienie|\bL4\b/i.test(txt_(t.name)); }
 function kodZListy_(n) { const m = txt_(n).match(/^(\d{2}[_p]\d{3})/); return m ? m[1] : ''; }
 
@@ -1748,7 +1752,7 @@ function nowyProjekt_(n, kto) {
   const pelna = kod + ' ' + nazwa, szablon = txt_(konfig_().clickup_szablon_listy);
   let lid = '';
   if (szablon) { const r = cu_('post', 'space/' + s.id + '/list_template/' + encodeURIComponent(szablon), { name: pelna, options: { return_immediately: false } }); lid = String(r.id || (r.list && r.list.id) || ''); }
-  if (!lid) { lid = String(cu_('post', 'space/' + s.id + '/list', { name: pelna }).id); FAZY_PROJ.forEach(f => cu_('post', 'list/' + lid + '/task', { name: f })); }
+  if (!lid) { lid = String(cu_('post', 'space/' + s.id + '/list', { name: pelna }).id); fazyProj_().forEach(f => cu_('post', 'list/' + lid + '/task', { name: f })); }
   const sh = baza_().getSheetByName('Projekty');
   sh.getRange(sh.getLastRow() + 1, 1, 1, 12).setNumberFormat(TEXT).setValues([[kod, pelna, txt_(n.miejsc).replace(/^[=+@-]/, ''), '', '', 'nie', '', 'Założone z ELWIS ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') + ' (' + kto + ') – do uzupełnienia skillem nowa-budowa', '', lid, '', '']]);
   CACHE.remove('aktywne');
@@ -1801,7 +1805,7 @@ function zadNowe_(b) {
   if (b.op === 'projekty') return { ok: true, projekty: projektyBaza_().filter(p => p.cu || p.aktywna).map(p => ({ kod: p.kod, nazwa: p.nazwa, aktywna: p.aktywna })) };
   const z = b.zgl || {}; if (!(Number(z.h) > 0)) throw new Error('Brak czasu pracy');
   z.kto = kto;   // od 1.56.1: ekipa „biuro” = zadanie dla zgłaszającego
-  if (!FAZY_PROJ.includes(txt_(z.faza))) z.faza = 'Montaż i Wykonawstwo';
+  if (!fazyProj_().includes(txt_(z.faza))) z.faza = 'Montaż i Wykonawstwo';
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   try {
     // od 1.56.1: warianty liczone na obciążeniu odświeżonym przy otwarciu okna (pamięć do 10 min); „Zaplanuj” zawsze na bieżącym
@@ -1919,6 +1923,7 @@ function harm_() {
     ss = SpreadsheetApp.create('ELWIS – Harmonogram');
     DriveApp.getFileById(ss.getId()).moveTo(fol);
     konfigUstaw_('harmonogram_id', ss.getId(), 'Arkusz „ELWIS – Harmonogram” (folder Harmonogram): czas pracy, zdarzenia czasu, przyszły harmonogram bez ClickUp');
+    if (!k.czas_auto_biuro) konfigUstaw_('czas_auto_biuro', 'nie', 'tak = wpisy roli biuro (własne i za innych) zatwierdzane od razu (przełącznik w panelu PC)');
     if (!k.czas_auto) konfigUstaw_('czas_auto', 'nie', 'tak = biuro zatwierdza automatycznie godziny zgodne z planem (przełącznik w panelu PC)');
     if (!k.cu_status_anulowane) konfigUstaw_('cu_status_anulowane', 'cancelled', 'Status ClickUp dla zadania zastąpionego faktycznymi godzinami');
   }
@@ -2000,13 +2005,14 @@ function czas_(b, tablet) {
       (b.lista || []).forEach(x => dodaj({ id: 'b-' + Utilities.getUuid().slice(0, 13), ts: teraz, kto: kto, d: x }, b.op));
     } else if (b.op === 'ust') {
       if (!biuro) throw new Error('Ustawienia – tylko rola biuro');
-      konfigUstaw_('czas_auto', b.auto ? 'tak' : 'nie');
+      if (b.auto !== undefined) konfigUstaw_('czas_auto', b.auto ? 'tak' : 'nie');
+      if (b.autoBiuro !== undefined) konfigUstaw_('czas_auto_biuro', b.autoBiuro ? 'tak' : 'nie', 'tak = wpisy roli biuro (własne i za innych) zatwierdzane od razu');
     }
     if (noweZ.length) harmDopisz_('Zdarzenia czasu', noweZ);
     const wyn = czasPrzetworz_(teraz);
     const odDnia = dodajDni_(dzienTz_(Date.now()), -21), W = czasStan_(czasZdarzenia_(odDnia));
     const wpisy = Object.values(W).filter(w => w.data >= odDnia && (biuro || w.osoba === kto || w.kto === kto));
-    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', bledy: wyn.bledy, czas: Date.now() };
+    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', autoBiuro: konfig_().czas_auto_biuro === 'tak', bledy: wyn.bledy, czas: Date.now() };
   } finally { lock.releaseLock(); }
 }
 
@@ -2019,6 +2025,12 @@ function czasPrzetworz_(teraz) {
     const auto = Object.values(W).filter(w => w.stan === 'wlasne' && zgodnyZPlanem_(w))
       .map(w => ['b-' + Utilities.getUuid().slice(0, 13), teraz, teraz, 'serwer', 'auto', 'zatw', w.osoba, JSON.stringify({ wid: w.wid, auto: true })]);
     if (auto.length) { harmDopisz_('Zdarzenia czasu', auto); evs = czasZdarzenia_(); W = czasStan_(evs); }
+  }
+  // od 1.58.4: wpisy wprowadzone przez rolę biuro (własne i za innych, także nieobecności) – bez zatwierdzania, gdy czas_auto_biuro = tak
+  if (konfig_().czas_auto_biuro === 'tak') {
+    const rb = rolaBiuro_(), ab = Object.values(W).filter(w => ['wlasne', 'prop'].indexOf(w.stan) >= 0 && rb[w.kto])
+      .map(w => ['b-' + Utilities.getUuid().slice(0, 13), teraz, teraz, 'serwer', w.kto, 'zatw', w.osoba, JSON.stringify({ wid: w.wid, wpisBiura: true })]);
+    if (ab.length) { harmDopisz_('Zdarzenia czasu', ab); evs = czasZdarzenia_(); W = czasStan_(evs); }
   }
   // wiersze „Czas pracy” dla nowych zatwierdzeń
   const cp = harmSh_('Czas pracy'), juz = {}; cp.getDataRange().getDisplayValues().slice(1).forEach(r => { String(r[23] || '').split(';').forEach(x => { if (x.trim()) juz[x.trim()] = 1; }); });

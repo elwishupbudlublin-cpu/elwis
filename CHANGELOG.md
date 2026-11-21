@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.58.4 – 2026-11-21 (aplikacja, serwer, schemat 1.19)
+- Listy wyboru z filtrowaniem: po dotknięciu pola – wszystkie budowy (aktywne + cała Baza, gdy pobrana na tablet biura) lub pracownicy, litery filtrują (kod, nazwa, imię); w „Co robiłem”, oknie czasu pracy, panelu PC (osoba, budowa) i „Nowe zadanie” (puste pole = cała lista).
+- Przytrzymanie pustego pola w harmonogramie: kółko jak przy przesuwaniu kropki na rzucie (2 s), potem od razu „Co robiłem” – we własnej kolumnie lub (rola biuro) w kolumnie innej osoby, w jej imieniu; na dole okna urlop / zwolnienie lekarskie / nieobecność / inne od tego dnia.
+- Panel PC: przełącznik „Wpisy biura bez zatwierdzania” (Konfiguracja `czas_auto_biuro`) – wpisy roli biuro, własne i za innych (także nieobecności), zatwierdzane od razu.
+- Schemat 1.19: fazy projektu w Bazie → Słowniki, kolumna K „Faza projektu (kolejno)”; aplikacja i serwer biorą fazy stamtąd (puste – lista domyślna).
+
 ## 1.58.3 – 2026-11-21 (serwer)
 - Urlopy, L4, nieobecności i „inne” zapisywane w ClickUp w przestrzeni HUPBUD w liście osoby „Imię Nazwisko” (dopasowanie: to samo imię, nazwisko zaczyna się od skrótu z konta, dokładnie jedna lista – inaczej błąd w „Sync ClickUp”); nazwa zadania jak dotąd: „Urlop”, „Zwolnienie lekarskie”, „Nieobecność”, „Nieobecność – inne: opis”.
 
