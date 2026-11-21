@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.2';
+const SCRIPT_VERSION = '1.58.3';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -2156,14 +2156,16 @@ function czasNieobCU_(w) {
   if (!lid && sp) {
     const imie = U_norm_(w.osoba), lists = (cu_('get', 'space/' + sp.id + '/list?archived=false').lists || []);
     (cu_('get', 'space/' + sp.id + '/folder?archived=false').folders || []).forEach(f => (f.lists || []).forEach(l => lists.push(l)));
-    const l = lists.find(x => U_norm_(x.name).indexOf(imie) >= 0) || lists.find(x => U_norm_(x.name).indexOf(imie.split(' ')[0]) >= 0);
-    if (l) lid = l.id;
+    // lista osoby „Imię Nazwisko” (np. „Michał Sadowski” dla konta „Michał Sa”): to samo imię, nazwisko zaczyna się od skrótu; musi być dokładnie jedna
+    const [im, sk] = imie.split(' '), pas = lists.filter(x => { const t = U_norm_(x.name).split(' '); return t.length >= 2 && t[0] === im && (!sk || t[1].indexOf(sk) === 0); });
+    if (pas.length === 1) lid = pas[0].id;
+    else if (pas.length > 1) throw new Error('Nieobecność ' + w.osoba + ': kilka pasujących list w HUPBUD (' + pas.map(x => x.name).join(', ') + ')');
   }
   if (!lid) throw new Error('Nieobecność ' + w.osoba + ': brak listy osoby w przestrzeni HUPBUD (albo klucza cu_lista_nieobecnosci w Konfiguracji)');
-  const nazwa = nbNazwa_(w.rodzaj, w.uwagi) + ' – ' + w.osoba;
+  const nazwa = nbNazwa_(w.rodzaj, w.uwagi);   // jak dotąd w listach osób: „Urlop”, „Zwolnienie lekarskie”, „Nieobecność…” (lista = osoba)
   const nz = cu_('post', 'list/' + lid + '/task', { name: nazwa, assignees: cuIds_([w.osoba]), description: (w.uwagi || '') + '\nWpisane w ELWIS, zatwierdzone przez biuro.',
     start_date: msDnia_(w.data, '00:00'), start_date_time: false, due_date: msDnia_(w.dataDo || w.data, '23:00'), due_date_time: false, notify_all: false });
-  cu_('post', 'task/' + nz.id + '/comment', { comment_text: 'ELWIS · ' + nazwa + ': ' + w.data + ' – ' + (w.dataDo || w.data) + ' (' + nbDni_(w.dni) + ' rob.) · wpisał(a) ' + w.kto + ' · zatwierdził ' + (w.zatw.auto ? 'automatycznie' : w.zatw.kto) + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16), notify_all: false });
+  cu_('post', 'task/' + nz.id + '/comment', { comment_text: 'ELWIS · ' + nazwa + ' – ' + w.osoba + ': ' + w.data + ' – ' + (w.dataDo || w.data) + ' (' + nbDni_(w.dni) + ' rob.) · wpisał(a) ' + w.kto + ' · zatwierdził ' + (w.zatw.auto ? 'automatycznie' : w.zatw.kto) + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16), notify_all: false });
   syncLog_('utwórz nieobecność', kl, nz.id, 'ok'); CACHE.remove('obc');
 }
 

@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.58.3 – 2026-11-21 (serwer)
+- Urlopy, L4, nieobecności i „inne” zapisywane w ClickUp w przestrzeni HUPBUD w liście osoby „Imię Nazwisko” (dopasowanie: to samo imię, nazwisko zaczyna się od skrótu z konta, dokładnie jedna lista – inaczej błąd w „Sync ClickUp”); nazwa zadania jak dotąd: „Urlop”, „Zwolnienie lekarskie”, „Nieobecność”, „Nieobecność – inne: opis”.
+
 ## 1.58.2 – 2026-11-21 (aplikacja i serwer)
 - Nieobecności: liczbę dni można wpisać ręcznie co 0,5 dnia (ostatni dzień – pół dnia), przyciski −/+ zmieniają o 1 dzień; nowy rodzaj „Inne” z wymaganym opisem (w arkuszu „Nieobecności” kod I, w ClickUp „Nieobecność – inne: opis – osoba”).
 
