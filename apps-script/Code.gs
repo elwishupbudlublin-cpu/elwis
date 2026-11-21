@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.56.2';
+const SCRIPT_VERSION = '1.57.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -73,7 +73,8 @@ function handle_(p, body) {
       case 'docx': return out_(docx_(body || {}));
       case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
       case 'zadNowe': return out_(zadNowe_(body || {}));   // od 1.56.0: warianty terminu, zaplanowanie, nowy projekt
-      case 'powiad': return out_(powiad_(String(p.kto || ''), p.since));   // od 1.56.0: powiadomienia (rola biuro)
+      case 'powiad': return out_(powiad_(String(p.kto || ''), p.since));
+      case 'pc': return out_(pc_(body || {}));   // od 1.57.0: panel biura na komputerze – obciążenie i dane administracyjne (tylko odczyt)   // od 1.56.0: powiadomienia (rola biuro)
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
   } catch (err) {
@@ -1760,6 +1761,24 @@ function faza_(lid, nazwa) {
 }
 
 /** Operacja `zadNowe` (od 1.56.0) – tylko rola biuro: projekty | warianty | zaplanuj */
+/* Panel biura na PC (od 1.57.0) – tylko rola biuro, tylko odczyt. Bez PIN-ów i kluczy tabletów. */
+function pc_(b) {
+  const kto = txt_(b.kto); if (!rolaBiuro_()[kto]) throw new Error('Panel PC – tylko rola biuro');
+  const ss = baza_(), wart = n => { const sh = ss.getSheetByName(n); return sh ? sh.getDataRange().getDisplayValues() : []; };
+  if (b.co === 'obciazenie') {
+    if (b.swieze) { const lk = LockService.getScriptLock(); lk.waitLock(25000); try { const O = obciazenie_(); obcZapamietaj_(O); obciazenieZapisz_(O); } finally { lk.releaseLock(); } }
+    return { ok: true, wiersze: wart('Obciążenie') };
+  }
+  if (b.co === 'admin') {
+    const bez = (w, kol) => w.map(r => r.filter((v, i) => kol.indexOf(i) < 0));
+    return { ok: true, czas: Date.now(),
+      pracownicy: bez(wart('Pracownicy'), [3]),          // bez kolumny PIN
+      tablety: bez(wart('Tablety'), [1]),                // bez klucza synchronizacji
+      slowniki: wart('Słowniki'), protokoly: wart('Protokoły'), konfiguracja: wart('Konfiguracja'),
+      baza: ss.getUrl() };
+  }
+  throw new Error('Nieznana operacja panelu PC');
+}
 /* Obciążenie w pamięci skryptu (od 1.56.1) – bez listy zadań (tylko do wariantów terminu) */
 function obcZapamietaj_(O) {
   try { const j = JSON.stringify({ ts: Date.now(), stan: O.stan, dzis: O.dzis, dni: O.dni, tyg: O.tyg, koniec: O.koniec, ludzie: O.ludzie, dzienne: O.dzienne, zaleg: O.zaleg });

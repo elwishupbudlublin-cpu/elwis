@@ -262,6 +262,8 @@ const Sync = {
       const kody = [...new Set([S.kod, ...recent.slice(0, ile)].filter(Boolean))].filter(k => b.projekty.some(p => p.kod === k));
       S.pomiar.budowy = kody.length;
       for (let j = 0; j < kody.length; j++) await this.pullProject(kody[j], full, (f, t) => this.prog(0.3 + 0.5 * (j + f) / kody.length, `Budowa ${j + 1}/${kody.length}` + (t ? ' · ' + t : '')));
+      // 4b. panel biura na komputerze (od 1.57.0): dane wszystkich aktywnych budów, bez plików; świeże pomijane
+      if (typeof PC !== 'undefined' && PC.on()) await PC.pobierz(PC.kodyAktywne().filter(k => !kody.includes(k)), false, (i, n) => this.prog(0.8, `Budowy panelu PC ${i}/${n}`));
       // 5. DTR wspólne dla wszystkich budów
       await this.pullTech(full, (f, t) => this.prog(0.8 + 0.18 * f, t));
       this.prog(0.99, 'Porządki w pamięci');
@@ -317,15 +319,15 @@ const Sync = {
     S.syncing = true; UI.net();
     try { await this.wyslijZmiany(kod); } finally { S.syncing = false; S.prog = null; await liczOczekujace(); UI.net(); }
   },
-  async pullProject(kod, full, onProg) {
+  async pullProject(kod, full, onProg, opc = {}) {
     const pr = onProg || (() => { });
     pr(0, 'dane');
     const p = await API.project(kod);
-    await DB.set('proj:' + kod, p);
+    await DB.set('proj:' + kod, p); await DB.set('projTs:' + kod, Date.now());
     // rzuty i dokumenty do wglądu – do pamięci tabletu (raz, potem z pamięci)
     const ids = [...new Set([...Object.values(p.rzuty || {}), ...(p.pliki || []).filter(f => f.size <= 60e6).map(f => f.id)])];
     const brak = [];
-    for (const id of ids) if (full || !(await DB.hasFile(id))) brak.push(id);
+    if (!opc.bezPlikow) for (const id of ids) if (full || !(await DB.hasFile(id))) brak.push(id);   // od 1.57.0: panel PC – bez plików (przy otwarciu budowy)
     const stan = brak.map(() => 0); let stop = false;
     const odswiez = () => { const g = stan.reduce((a, b) => a + b, 0); pr(0.05 + 0.85 * g / Math.max(1, brak.length), `pliki ${Math.floor(g)}/${brak.length}`); };
     await pula(brak.map((id, i) => async () => {
@@ -470,7 +472,7 @@ const Pamiec = {
     const recent = ((await DB.get('recent')) || []).slice(0, Math.min(PAMIEC_BUDOW, limit));
     // bieżąca budowa i budowy z niewysłanymi wpisami / zdjęciami zostają zawsze
     const niewyslane = new Set([...(await DB.unsynced()).map(e => e.kod), ...(await DB.unsentPhotos()).map(p => p.kod)]);
-    const keep = new Set([S.kod, ...recent, ...niewyslane].filter(Boolean));
+    const keep = new Set([S.kod, ...recent, ...niewyslane, ...(typeof PC !== 'undefined' && PC.on() ? PC.kodyAktywne() : [])].filter(Boolean));   // panel PC trzyma wszystkie aktywne
     const l = await this.lista();
     for (const kod of l.filter(k => !keep.has(k))) await this.usunDane(kod);
     await DB.set('offline', l.filter(k => keep.has(k)));

@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.56.2';
+const APP_VERSION = '1.57.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -10,7 +10,7 @@ const API = (() => {
      et = etykieta działania wywołanego przyciskiem (pasek „Czekam na serwer” z przyciskiem Przerwij);
      bez etykiety = praca w tle (odliczanie przy wskaźniku synchronizacji). */
   const LIMIT = { bootstrap: 45, project: 90, events: 60, plan: 60, powiad: 30, techniczne: 60, priorytety: 90, file: 90, foto: 60,
-    push: 120, zadNowe: 120, zadania: 90, zakupy: 90, docx: 120 };
+    push: 120, zadNowe: 120, pc: 120, zadania: 90, zakupy: 90, docx: 120 };
   const W = new Map(); let wid = 0, fgEt = null;
   async function req(action, url, opts) {
     const lim = LIMIT[action] || 60, ctrl = new AbortController(), id = ++wid;
@@ -63,6 +63,7 @@ const API = (() => {
     plan: (od, d) => get('plan', { od, do: d, kto: S.user ? S.user.name : '' }),
     powiad: (since) => get('powiad', { since: String(since || 0), kto: S.user ? S.user.name : '' }),
     zadNowe: (d) => post(Object.assign({ action: 'zadNowe', kto: S.user ? S.user.name : '' }, d)),   // od 1.56.0: warianty terminu / zaplanowanie zadania
+    pc: (d) => post(Object.assign({ action: 'pc', kto: S.user ? S.user.name : '' }, d)),   // od 1.57.0: panel biura na PC
     priorytety: (odswiez) => get('priorytety', Object.assign({ kto: S.user ? S.user.name : '' }, odswiez ? { odswiez: '1' } : {})),
     zadania: (zmiany) => post({ action: 'zadania', zmiany }),
     zakupy: (o) => post(Object.assign({ action: 'zakupy' }, o || {})),   // od 1.48.0: zapotrzebowania

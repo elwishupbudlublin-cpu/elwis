@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.57.0 – 2026-11-21 (aplikacja i serwer)
+- Panel biura na komputerze (Chrome, ekran ≥ 1200 px, rola biuro): ta sama aplikacja z menu bocznym; „Widok tabletu” przełącza z powrotem. Nowe ekrany: Harmonogram tygodnia (osoby × dni, statusy, zajętość z 8 h, weekendy i święta), Obciążenie ekip (zakładka z Bazy, „Przelicz teraz”), Budowy (tabela z licznikami i sortowaniem), Braki i Protokoły ze wszystkich budów (filtry, podsumowanie), Administracja – podgląd Pracowników (bez PIN), Tabletów (bez kluczy), Słowników, Protokołów, Konfiguracji.
+- Wszystkie ekrany tabletu dostępne na komputerze w wyglądzie panelu (jasne nagłówki, mniejsze przyciski i pola, kafelki budowy w 3 kolumnach); w budowie – jej ekrany w menu bocznym; Esc zamyka okno jak „Anuluj”.
+- Komputer trzyma dane wszystkich aktywnych budów bez rzutów i dokumentów (pobierane przy otwarciu budowy); budowy bez nowych wpisów pomijane przez 6 h.
+- Serwer: operacja `pc` (tylko rola biuro, tylko odczyt): `obciazenie` (wiersze zakładki, opcjonalnie przeliczenie), `admin` (zakładki Bazy bez PIN-ów i kluczy).
+
 ## 1.56.2 – 2026-11-21 (aplikacja i serwer)
 - Święta ustawowe w Polsce (stałe, Wigilia od 2025, Wielkanoc z poniedziałkiem, Zielone Świątki, Boże Ciało – liczone co roku): w planie weekendy i święta na czerwono, przy wybranym dniu wolnym – nazwa święta / „Weekend · dzień wolny”.
 - Serwer: święta nie są dniami roboczymi – „Znajdź termin” ich nie proponuje; zakładka „Obciążenie” pokazuje święto w dzień powszedni jako kolumnę „Ś” (dzień niedostępny do pracy), w tygodniach – godziny z dni roboczych bez świąt i dopisek „(Ś d.m)”.

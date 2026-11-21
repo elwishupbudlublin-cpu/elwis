@@ -110,11 +110,12 @@ const UI = {
       this.net(); return;
     }
     const f = Views[this.cur]; if (f) f(this.par); this.net(); this.bnav();
+    if (typeof PC !== 'undefined') PC.nav();   // od 1.57.0: panel biura na komputerze
   },
   close() { modal.innerHTML = ''; },
   /* dolny pasek: Plan · Budowy · Synchronizuj (od 1.12.0) */
   bnav() {
-    const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user;
+    const b = $('#bnav'); b.hidden = $('#top').hidden || !S.user || (typeof PC !== 'undefined' && PC.on());
     const dok = this.cur === 'dokumenty' && this.par.typ === 'tech';
     const prio = this.cur === 'priorytety' || this.cur === 'wydajnosc' || this.cur === 'zmiany' || this.cur === 'powiad';
     $('#nPrio').hidden = !Session.isBiuro(); b.classList.toggle('n4', Session.isBiuro());
@@ -2482,7 +2483,7 @@ function settings() {
 (async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
-  await API.load(); API.onWait = () => UI.czekaj();   // od 1.56.1: odliczanie oczekiwania na serwer
+  await API.load(); API.onWait = () => UI.czekaj(); if (typeof PC !== 'undefined') await PC.init();   // od 1.56.1: odliczanie oczekiwania na serwer
   // link podwykonawcy (od 1.43.0): …/elwis/#cfg=<adres serwera i klucz> – zapis konfiguracji i usunięcie z paska adresu
   try {
     const m = location.hash.match(/#cfg=([\w\-=]+)/);
