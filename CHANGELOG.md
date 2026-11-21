@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.58.7 – 2026-11-21 (serwer)
+- Synchronizacja harmonogramu z ClickUp tylko dla zadań dzisiejszych i przyszłych (45 dni) – przeszłe są już w arkuszu. Jednorazowy import od 1. dnia miesiąca do dziś: funkcja `harmImportMiesiac` (uruchamiana ręcznie).
+
 ## 1.58.6 – 2026-11-21 (aplikacja, serwer, schemat 1.20)
 - Czas pracy → ClickUp dopiero, gdy każdy dzień zadania jest rozstrzygnięty: każda osoba z harmonogramu ma zatwierdzony wpis lub decyzję biura i nikt nie czeka na potwierdzenie (wcześniej przy braku osób w planie – po pierwszym zatwierdzeniu); praca spoza planu – gdy cały dzień budowy rozstrzygnięty.
 - Okno zadania: propozycje innych osób z tego dnia – „Potwierdź” / „Wpisz swoje”; zatwierdzone zadanie otwiera pełne okno (kłódka, „Przejdź do budowy”); „Przejdź do budowy” także w oknie wpisu spoza planu.

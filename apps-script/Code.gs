@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.6';
+const SCRIPT_VERSION = '1.58.7';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -478,8 +478,9 @@ function kolejkaCU_() {
 
 /** ClickUp → arkusz „ELWIS – Harmonogram” → Zadania: bieżący miesiąc i 45 dni naprzód. Zadania z godzinami zatwierdzonymi
  *  przez biuro i zadania utworzone przez ELWIS są zablokowane – zmiana w ClickUp ich nie nadpisuje. */
-function harmImport_() {
-  const dz = dzienTz_(Date.now()), m1 = dz.slice(0, 8) + '01', d14 = dodajDni_(dz, -14), od = d14 < m1 ? d14 : m1, doD = dodajDni_(dz, 45);   // bieżący miesiąc (i 14 dni wstecz – plan tabletów) + 45 dni
+function harmImport_(odDnia, doDnia) {
+  // od 1.58.7: zwykła synchronizacja – tylko dziś i przyszłe (45 dni); przeszłe są już w arkuszu. Inny zakres – jednorazowo (harmImportMiesiac)
+  const dz = dzienTz_(Date.now()), od = odDnia || dz, doD = doDnia || dodajDni_(dz, 45);
   const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doD + 'T23:59:59').getTime();
   const L = {}; ludzie_().forEach(o => { L[o.id] = o; });
   const tasks = cuPobierz_(t0, t1, []);   // od 1.58.6: wszystkie zadania z okresu (statystyki), nie tylko osób z ELWIS – tablety dostają tylko swoje
@@ -547,6 +548,12 @@ function harmSync_() {
     const ts = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'); P.setProperty('HARM_SYNC', ts); P.setProperty('PLAN_VER', String(Date.now())); CACHE.remove('obc');
     w.czasSync = ts; return w;
   } finally { lock.releaseLock(); }
+}
+/** Jednorazowo (uruchom ręcznie w edytorze): zadania z ClickUp od 1. dnia bieżącego miesiąca do dziś – np. do raportu godzinowego. */
+function harmImportMiesiac() {
+  const lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try { harm_(); const dz = dzienTz_(Date.now()), w = harmImport_(dz.slice(0, 8) + '01', dz); P.setProperty('PLAN_VER', String(Date.now())); Logger.log(JSON.stringify(w)); return w; }
+  finally { lock.releaseLock(); }
 }
 function harmSyncCzas() { const h = Number(Utilities.formatDate(new Date(), TZ, 'H')); if (h < 6 || h >= 21) return; harmSync_(); }
 /** Uruchom raz: wyzwalacz co 30 min. */
@@ -2026,7 +2033,7 @@ function harm_() {
   HARM_SS = ss; return ss;
 }
 /** Uruchom raz w edytorze (albo samo przy pierwszym wpisie czasu): zakłada arkusz i klucze Konfiguracji. */
-function instalujHarmonogram() { const ss = harm_(); instalujSyncHarmonogramu(); Logger.log('ELWIS – Harmonogram: ' + ss.getUrl()); Logger.log(JSON.stringify(harmSync_())); }   // od 1.58.5: także wyzwalacz co 30 min i pierwsza kopia z ClickUp (bieżący miesiąc)
+function instalujHarmonogram() { const ss = harm_(); instalujSyncHarmonogramu(); Logger.log('ELWIS – Harmonogram: ' + ss.getUrl()); Logger.log(JSON.stringify(harmSync_())); }   // od 1.58.5: także wyzwalacz co 30 min i pierwsza kopia z ClickUp (od 1.58.7: dziś i przyszłe; bieżący miesiąc wstecz – harmImportMiesiac)
 function harmSh_(n) { return harm_().getSheetByName(n); }
 function harmDopisz_(n, rows) {
   if (!rows.length) return;
