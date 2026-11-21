@@ -758,3 +758,9 @@ body.mopen .dialog,body.mopen .sbody{overscroll-behavior:contain}
 #czeka .btn{background:#fff;color:#111827;border:0;min-height:44px}
 @keyframes czobr{to{transform:rotate(360deg)}}
 .nzobc{font-size:13px;text-align:center;padding:0 8px;line-height:1.3}.nzobc.ok{color:#15803d}
+/* 1.56.2: weekendy i święta ustawowe na kafelkach planu */
+.pday.wolne{background:rgba(248,113,113,.22)}
+.pday.wolne b{color:#fecaca}
+.pday.wolne.on{background:#fff}
+.pday.wolne.on b{color:#dc2626}
+.pchip.pwolne{background:rgba(248,113,113,.25);color:#fff}

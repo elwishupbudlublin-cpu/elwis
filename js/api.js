@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.56.1';
+const APP_VERSION = '1.56.2';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -88,6 +88,19 @@ const API = (() => {
 
 /* Pomocnicze */
 const U = {
+  /* Święto ustawowe w Polsce (od 1.56.2): nazwa albo '' – stałe daty, Wielkanoc (algorytm Gaussa / Meeusa) i święta ruchome; Wigilia od 2025 */
+  swieto: function(k) {
+    const y = +k.slice(0, 4), md = k.slice(5);
+    const st = { '01-01': 'Nowy Rok', '01-06': 'Trzech Króli', '05-01': 'Święto Pracy', '05-03': 'Święto Konstytucji 3 Maja', '08-15': 'Wniebowzięcie NMP', '11-01': 'Wszystkich Świętych', '11-11': 'Święto Niepodległości', '12-24': 'Wigilia', '12-25': 'Boże Narodzenie', '12-26': 'Boże Narodzenie (2. dzień)' };
+    if (md === '12-24' && y < 2025) return '';
+    if (st[md]) return st[md];
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+      h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), kk = c % 4, l = (32 + 2 * e + 2 * i - h - kk) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+      mies = Math.floor((h + l - 7 * m + 114) / 31), dz = ((h + l - 7 * m + 114) % 31) + 1, wlk = Date.UTC(y, mies - 1, dz);
+    const r = Math.round((Date.UTC(y, +md.slice(0, 2) - 1, +md.slice(3)) - wlk) / 864e5);
+    return { 0: 'Wielkanoc', 1: 'Poniedziałek Wielkanocny', 49: 'Zielone Świątki', 60: 'Boże Ciało' }[r] || '';
+  },
+  wolny: k => { const w = new Date(k + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6 || !!U.swieto(k); },
   // krok ze Słowników: „Podłączony [puszka HupBud | puszka b. el.]” → {n:'Podłączony', op:['puszka HupBud','puszka b. el.']} (od 1.22.0)
   krok(k) { const m = String(k || '').match(/^(.*?)\s*\[([^\]]*)\]\s*$/); if (!m) return { n: String(k || ''), op: [] }; const op = m[2].split('|').map(x => x.trim()).filter(Boolean); return op.length ? { n: m[1].trim(), op } : { n: String(k), op: [] }; },
   esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),

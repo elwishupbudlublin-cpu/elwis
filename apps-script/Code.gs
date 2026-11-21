@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.56.1';
+const SCRIPT_VERSION = '1.56.2';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -1560,7 +1560,20 @@ function msDnia_(dzien, hm) { const [h, m] = String(hm).split(':'); return Utili
 function dzienTz_(ms) { return Utilities.formatDate(new Date(ms), TZ, 'yyyy-MM-dd'); }
 function minTz_(ms) { const s = Utilities.formatDate(new Date(ms), TZ, 'HH:mm'); return Number(s.slice(0, 2)) * 60 + Number(s.slice(3)); }
 function hhmm_(m) { return Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2); }
-function robTz_(dzien) { const w = new Date(dzien + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6; }
+function robTz_(dzien) { const w = new Date(dzien + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6 && !swieto_(dzien); }   // od 1.56.2 bez świąt ustawowych
+/* Święto ustawowe w Polsce: nazwa albo '' (ta sama funkcja co U.swieto w aplikacji) */
+function swieto_(k) {
+  const y = +k.slice(0, 4), md = k.slice(5);
+  const st = { '01-01': 'Nowy Rok', '01-06': 'Trzech Króli', '05-01': 'Święto Pracy', '05-03': 'Święto Konstytucji 3 Maja', '08-15': 'Wniebowzięcie NMP', '11-01': 'Wszystkich Świętych', '11-11': 'Święto Niepodległości', '12-24': 'Wigilia', '12-25': 'Boże Narodzenie', '12-26': 'Boże Narodzenie (2. dzień)' };
+  if (md === '12-24' && y < 2025) return '';
+  if (st[md]) return st[md];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), kk = c % 4, l = (32 + 2 * e + 2 * i - h - kk) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mies = Math.floor((h + l - 7 * m + 114) / 31), dz = ((h + l - 7 * m + 114) % 31) + 1, wlk = Date.UTC(y, mies - 1, dz);
+  const r = Math.round((Date.UTC(y, +md.slice(0, 2) - 1, +md.slice(3)) - wlk) / 864e5);
+  return { 0: 'Wielkanoc', 1: 'Poniedziałek Wielkanocny', 49: 'Zielone Świątki', 60: 'Boże Ciało' }[r] || '';
+}
+
 function dodajDni_(dzien, n) { return new Date(new Date(dzien + 'T12:00:00Z').getTime() + n * DZIEN).toISOString().slice(0, 10); }
 function dniRobocze_(od, ile) { const o = []; let d = od; while (o.length < ile) { if (robTz_(d)) o.push(d); d = dodajDni_(d, 1); } return o; }
 const DNI_TYG = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
@@ -1638,20 +1651,23 @@ function przetnij_(A, B) { const o = []; A.forEach(([a, b]) => B.forEach(([c, d]
 function obciazenieZapisz_(O) {
   O = O || obciazenie_();
   const ss = baza_(); let sh = ss.getSheetByName('Obciążenie'); if (!sh) sh = ss.insertSheet('Obciążenie');
-  const dniL = dniRobocze_(O.dzis, O.dni), pozaDni = [], start = dodajDni_(dniL[dniL.length - 1], 1);
+  const dniR = dniRobocze_(O.dzis, O.dni), pozaDni = [], start = dodajDni_(dniR[dniR.length - 1], 1);
+  // od 1.56.2: święta ustawowe w dni powszednie – osobna kolumna „Ś” (dzień niedostępny do pracy), nie wliczane do dni roboczych
+  const dniL = []; for (let d = O.dzis; d <= dniR[dniR.length - 1]; d = dodajDni_(d, 1)) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) dniL.push(d); }
+  const swW = {}; for (let d = start; d <= O.koniec; d = dodajDni_(d, 1)) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6 && swieto_(d)) (swW[poniedzialek_(d)] = swW[poniedzialek_(d)] || []).push(dzTxt_(d).split(' ')[1]); }
   for (let d = start; d <= O.koniec; d = dodajDni_(d, 1)) if (robTz_(d)) pozaDni.push(d);
   const tygodnie = {}; pozaDni.forEach(d => { const k = poniedzialek_(d); (tygodnie[k] = tygodnie[k] || []).push(d); });
   const tk = Object.keys(tygodnie).sort();
-  const nagl = ['Osoba', 'Ekipa', 'Godz. pracy'].concat(dniL.map(dzTxt_), tk.map(k => 'tydz. ' + dzTxt_(k).split(' ')[1]), ['Zaległe (h)']);
+  const nagl = ['Osoba', 'Ekipa', 'Godz. pracy'].concat(dniL.map(d => dzTxt_(d) + (swieto_(d) ? ' Ś ' + swieto_(d) : '')), tk.map(k => 'tydz. ' + dzTxt_(k).split(' ')[1] + (swW[k] ? ' (Ś ' + swW[k].join(', ') + ')' : '')), ['Zaległe (h)']);
   const ws = O.ludzie.slice().sort((a, b) => (a.ek + a.name < b.ek + b.name ? -1 : 1)).map(o => [o.name, o.ek, hhmm_(o.okno[0]) + '–' + hhmm_(o.okno[1])]
-    .concat(dniL.map(d => zajete_(O, o, d)), tk.map(k => { let h = 0, u = 0; tygodnie[k].forEach(d => { const z = zajete_(O, o, d); if (/^[A-Z]/.test(z)) u++; else h += Number(String(z).replace('?', '').replace(',', '.')); }); return h + '/' + tygodnie[k].length * 8 + (u ? ' · U:' + u : ''); }),
+    .concat(dniL.map(d => swieto_(d) ? 'Ś' : zajete_(O, o, d)), tk.map(k => { let h = 0, u = 0; tygodnie[k].forEach(d => { const z = zajete_(O, o, d); if (/^[A-Z]/.test(z)) u++; else h += Number(String(z).replace('?', '').replace(',', '.')); }); return h + '/' + tygodnie[k].length * 8 + (u ? ' · U:' + u : ''); }),
       [O.zaleg[o.id] ? String(Math.round(O.zaleg[o.id] * 2) / 2).replace('.', ',') : '']));
   const imie = {}; O.ludzie.forEach(o => { imie[o.id] = o.name; });
   const zl = O.lista.sort((a, b) => Number(a.t.due_date) - Number(b.t.due_date)).map(x => [kodZListy_(x.t.list && x.t.list.name), txt_(x.t.name).slice(0, 60), x.osoby.map(i => imie[i]).join(', '),
     x.t.start_date ? Utilities.formatDate(new Date(Number(x.t.start_date)), TZ, x.t.start_date_time ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd') : '', Utilities.formatDate(new Date(Number(x.t.due_date)), TZ, x.t.due_date_time ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd'),
     x.t.time_estimate ? String(Math.round(Number(x.t.time_estimate) / 18e5) / 2).replace('.', ',') : '', (x.zal ? 'ZALEGŁE · ' : '') + txt_(x.t.status && x.t.status.status), txt_(x.t.url)]);
   const szer = Math.max(nagl.length, 8), pad = r => r.concat(Array(szer - r.length).fill(''));
-  const wiersze = [pad(['Stan na', O.stan, 'Zajęte godziny z dnia pracy (8 h); U – urlop / nieobecność, L4 – zwolnienie, ? – zadanie bez szacowanego czasu (liczone jako cały dzień). Arkusz liczy serwer ELWIS – nie edytować.']), pad([]), pad(nagl)]
+  const wiersze = [pad(['Stan na', O.stan, 'Zajęte godziny z dnia pracy (8 h); U – urlop / nieobecność, L4 – zwolnienie, Ś – święto ustawowe (dzień niedostępny do pracy; w tygodniach: godziny / dni robocze bez świąt), ? – zadanie bez szacowanego czasu (liczone jako cały dzień). Arkusz liczy serwer ELWIS – nie edytować.']), pad([]), pad(nagl)]
     .concat(ws.map(pad), [pad([]), pad(['Kod', 'Zadanie', 'Osoby', 'Start', 'Termin', 'Szac. h', 'Status', 'Link'])], zl.map(pad));
   sh.clear(); sh.getRange(1, 1, wiersze.length, szer).setNumberFormat(TEXT).setValues(wiersze.map(r => r.map(v => String(v).replace(/^[=+@-]/, "'$&"))));
   sh.setFrozenRows(3); sh.getRange(3, 1, 1, szer).setFontWeight('bold'); sh.getRange(4 + ws.length + 1, 1, 1, 8).setFontWeight('bold');

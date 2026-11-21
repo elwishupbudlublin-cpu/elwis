@@ -1,5 +1,9 @@
 # Zmiany
 
+## 1.56.2 – 2026-11-21 (aplikacja i serwer)
+- Święta ustawowe w Polsce (stałe, Wigilia od 2025, Wielkanoc z poniedziałkiem, Zielone Świątki, Boże Ciało – liczone co roku): w planie weekendy i święta na czerwono, przy wybranym dniu wolnym – nazwa święta / „Weekend · dzień wolny”.
+- Serwer: święta nie są dniami roboczymi – „Znajdź termin” ich nie proponuje; zakładka „Obciążenie” pokazuje święto w dzień powszedni jako kolumnę „Ś” (dzień niedostępny do pracy), w tygodniach – godziny z dni roboczych bez świąt i dopisek „(Ś d.m)”.
+
 ## 1.56.1 – 2026-11-21 (aplikacja i serwer)
 - Harmonogram: nie wraca do poprzedniego dnia (wyścig odświeżania), pokazuje zadania wielodniowe (start przed końcem okna). Przycisk „Nowe zadanie” tej samej wysokości co pozostałe, na środku nagłówka.
 - Nowe zadanie: okno otwiera się od razu; lista projektów i obciążenie ekip wczytywane w tle z licznikiem (serwer `zadNowe` op `odswiez`, pamięć obciążenia do 10 min dla wariantów; „Zaplanuj” zawsze na bieżącym). Pole projektu z podpowiedziami po wpisaniu kodu lub nazwy, „nie znaleziono – utworzyć nowy projekt?”. Osobny przycisk dla każdej osoby (także zgłaszającego) – wspólny wolny czas wybranych osób (`ekipa: 'osoby'`). Pola liczbowe tej samej wysokości co pozostałe.
