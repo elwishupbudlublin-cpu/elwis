@@ -1,5 +1,10 @@
 # Zmiany
 
+## 1.58.5 – 2026-11-21 (aplikacja i serwer)
+- Tablety nie łączą się z ClickUp: plan dnia z arkusza „ELWIS – Harmonogram” → Zadania; status zadania z tabletu → arkusz (Historia zmian, Komentarze) + „Kolejka ClickUp”.
+- Synchronizacja harmonogramu na serwerze co 30 min (6–21, `harmSyncCzas`) i przyciskiem „⟳ Sync harmonogram” (rola biuro): kolejka → ClickUp, zatwierdzony czas → ClickUp, ClickUp → Zadania (bieżący miesiąc, 14 dni wstecz, 45 dni naprzód). Zadania z zatwierdzonymi godzinami i utworzone przez ELWIS – zablokowane (zmiana w ClickUp ich nie nadpisuje). Nowe kolumny Zadań: ID listy ClickUp, Lista ClickUp, Link; nowa zakładka „Kolejka ClickUp”.
+- Panel PC „Do zatwierdzenia”: ekran od razu z danych komputera, serwer w tle (co 30 s), zaznaczenia zostają po odświeżeniu; serwer przy samym pobraniu stanu nie przelicza, „Sync ClickUp” czytana raz.
+
 ## 1.58.4 – 2026-11-21 (aplikacja, serwer, schemat 1.19)
 - Listy wyboru z filtrowaniem: po dotknięciu pola – wszystkie budowy (aktywne + cała Baza, gdy pobrana na tablet biura) lub pracownicy, litery filtrują (kod, nazwa, imię); w „Co robiłem”, oknie czasu pracy, panelu PC (osoba, budowa) i „Nowe zadanie” (puste pole = cała lista).
 - Przytrzymanie pustego pola w harmonogramie: kółko jak przy przesuwaniu kropki na rzucie (2 s), potem od razu „Co robiłem” – we własnej kolumnie lub (rola biuro) w kolumnie innej osoby, w jej imieniu; na dole okna urlop / zwolnienie lekarskie / nieobecność / inne od tego dnia.

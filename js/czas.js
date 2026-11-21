@@ -339,7 +339,7 @@ Object.assign(Dialogs, {
     const ja = S.user.name, P = await Czas.propozycje(ja), Bk = await Czas.braki(ja);
     if (!P.length && !Bk.length) { if (wymus) UI.toast('Nic do uzupełnienia'); return; }
     const pl = await DB.get('plan'), zadania = (pl && pl.zadania) || [], proj = (S.boot && S.boot.projekty) || [];
-    const budZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    const budZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
     modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czdlg"><div class="shead"><h3 class="grow">Do uzupełnienia</h3>${P.length ? `<span class="czchip c-pro">${P.length} ${odm(P.length, 'propozycja', 'propozycje', 'propozycji')}</span>` : ''}${Bk.length ? `<span class="czchip c-wip">${Bk.length} bez godzin</span>` : ''}</div>
       <div class="sbody">
         ${P.length ? `<div class="lbl">Godziny wpisane za Ciebie</div>${P.map((w, i) => `<div class="card czp"><div class="row"><div class="grow"><b>${U.esc(PC_dzien(w.data))} · ${U.esc(w.nazwa || w.opis || '')}</b><div class="mute">${U.esc(w.kod || '')} · wpisał(a) ${U.esc(w.kto)} · ${U.esc((CZ_ST_TXT[w.st] || w.st))}</div></div><b class="czbig">${U.esc(w.od)}–${U.esc(w.do)} · ${CZ.hTxt(CZ.h(w.od, w.do))}</b></div>

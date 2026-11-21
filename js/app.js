@@ -265,7 +265,7 @@ const Views = {
     const mojeZad = t => !wszyscy ? (ja && t.osoby.includes(String(ja.cu))) : osoby.some(o => t.osoby.includes(String(o.cu)));
     const zad = wszystkieZad.filter(t => naDzien(t, dzien));
     const proj = (S.boot && S.boot.projekty) || [];
-    const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    const budowaZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
     // miejsce prognozy: budowa z lokalizacją, na której zalogowany ma zadania tego dnia; inaczej Lublin
     const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(lokBudowy(b))); return b2 ? { klucz: wspolrzedne(lokBudowy(b2)).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
@@ -381,7 +381,7 @@ const Views = {
       <section class="phero">
         <div class="phtop">
           <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
-          ${Session.isBiuro() ? `<button class="btn sm pnz" id="pNZ">${ic('plus')} Nowe zadanie<span class="bn" id="pNZn" hidden></span></button>` : ''}
+          ${Session.isBiuro() ? `<button class="btn sm pnz" id="pNZ">${ic('plus')} Nowe zadanie<span class="bn" id="pNZn" hidden></span></button><button class="btn sm pnz psh" id="pSH" title="Pobierz zmiany z ClickUp do harmonogramu i wyślij zaległe zapisy">⟳</button>` : ''}
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
@@ -390,7 +390,7 @@ const Views = {
         <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(h => h ? `<span class="pchip">Moje godziny: ${CZ.hTxt(h)}</span>` : '')(CZW.filter(w => S.user && w.osoba === S.user.name && w.stan !== 'prop').reduce((a, w) => a + CZ.h(w.od, w.do), 0))}${BKD.has(dzien) ? '<span class="pchip pwolne">brak godzin</span>' : ''}${U.wolny(dzien) ? `<span class="pchip pwolne">${U.swieto(dzien) ? U.esc(U.swieto(dzien)) : 'Weekend'} · dzień wolny</span>` : ''}${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}"><span class="pchipico">${w.ikona}</span> 7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
-      ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
+      ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z harmonogramu: ${U.esc(planWiek(pl.pobrano))}${pl.sync ? ' · ClickUp → harmonogram: ' + U.esc(pl.sync.slice(8, 10) + '.' + pl.sync.slice(5, 7) + ' ' + pl.sync.slice(11)) : ''}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
       ${!ja && !wszyscy ? '<p class="mute">Twoje konto nie ma wpisanego ID ClickUp – poproś biuro o uzupełnienie.</p>' : ''}
       ${wszyscy ? `<div class="ppeople">${kolejnosc.map(o => { const n = zad.filter(t => t.osoby.includes(String(o.cu))).length; return `<button class="pperson ${ukryci.has(o.name) ? '' : 'on'}" data-who="${U.esc(o.name)}"><span class="av">${U.esc(inicjaly(o.name))}</span>${U.esc(o.name)}${o === ja ? ' (ty)' : ''}<span class="pn">${n}</span></button>`; }).join('')}</div>` : ''}
       <div class="ptime" style="--n:${kolumny.length || 1}">
@@ -454,6 +454,7 @@ const Views = {
     const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
     if ($('#pNZ')) { $('#pNZ').onclick = async () => { const q = (await DB.get('zadNoweKolejka')) || []; if (q.length) Dialogs.zadKolejka(); else Dialogs.noweZadanie(null, dzien); }; planNZ(); }
+    if ($('#pSH')) $('#pSH').onclick = () => harmSyncTeraz();
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
     { const pp = view.querySelector('.ppeople'); if (pp && ppScroll) pp.scrollLeft = ppScroll; }   // 1.23.2: pasek osób zostaje w miejscu po wyborze osoby
     view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { ppScroll = b.closest('.ppeople').scrollLeft; const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
@@ -2083,6 +2084,15 @@ function kondArkusza(ark, lista) {
   return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || '';
 }
 // sortowanie naturalne: H2 < H10, Wk2 < Wk10
+/* od 1.58.5: plan z arkusza „ELWIS – Harmonogram”; ClickUp → harmonogram co 30 min na serwerze, przycisk tylko dla roli biuro */
+async function harmSyncTeraz() {
+  if (!navigator.onLine) return UI.toast('Synchronizacja wymaga internetu');
+  try { const r = await API.fg('Synchronizuję harmonogram z ClickUp', () => API.czas({ op: 'syncHarm' }));
+    const i = (r.sync && r.sync.import) || {}, k = (r.sync && r.sync.kolejka) || {};
+    UI.toast(`Harmonogram: nowe ${i.nowe || 0}, zmienione ${i.zmienione || 0}, zablokowane ${i.zablokowane || 0}${i.usuniete ? ', usunięte ' + i.usuniete : ''}${k.wyslane ? ' · do ClickUp ' + k.wyslane : ''}${k.bledy ? ' · błędy ' + k.bledy : ''}`);
+    await Sync.pullPlan(); await Czas.sync(); UI.refresh(); }
+  catch (e) { UI.toast(/Nieznana operacja/.test(e.message) ? 'Wymaga serwera ELWIS 1.58.5' : 'Nie udało się: ' + e.message); }
+}
 const natCmp = (a, b) => String(a).localeCompare(String(b), 'pl', { numeric: true, sensitivity: 'base' });
 
 /* ---------- Pinezka GPS budowy (od 1.12.0) ---------- */

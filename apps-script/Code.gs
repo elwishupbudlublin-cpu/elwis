@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.4';
+const SCRIPT_VERSION = '1.58.5';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -321,52 +321,52 @@ function planDla_(res, kto) {
   const zad = res.zadania.map(t => Object.assign({}, t, { osoby: (t.osoby || []).filter(i => biuroIds.indexOf(i) < 0) })).filter(t => t.osoby.length);
   return Object.assign({}, res, { zadania: zad });
 }
-function plan_(od, doDnia) {
+/** ClickUp → lista zadań osób z ELWIS (od 1.58.5 używane tylko przez synchronizację harmonogramu, nie przez tablety). */
+function cuPobierz_(t0, t1, ids) {
   const token = P.getProperty('CLICKUP_TOKEN');
-  if (!token) return { ok: true, zadania: [], brakKlucza: true };
-  const re = /^\d{4}-\d{2}-\d{2}$/;
-  if (!re.test(od) || !re.test(doDnia)) throw new Error('Zły zakres dat');
-  const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doDnia + 'T23:59:59').getTime();
-  if (t1 < t0 || t1 - t0 > 31 * 864e5) throw new Error('Zakres dat do 31 dni');
-  const cacheKey = 'plan:' + (P.getProperty('PLAN_VER') || '0') + ':' + od + ':' + doDnia;   // PLAN_VER rośnie po zmianie statusu z tabletu (1.12.0)
-  const cache = CacheService.getScriptCache();
-  const hit = cache.get(cacheKey);
-  if (hit) return JSON.parse(hit);
-  const ids = rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => tak_(r[4]) && txt_(r[5])).map(r => txt_(r[5]));
-  if (!ids.length) return { ok: true, zadania: [] };
+  if (!token) throw new Error('Brak klucza ClickUp na serwerze');
   const H = { headers: { Authorization: token }, muteHttpExceptions: true };
-  let team = P.getProperty('CLICKUP_TEAM');
-  if (!team) {
-    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team', H);
-    if (r.getResponseCode() !== 200) throw new Error('ClickUp: zły klucz API (' + r.getResponseCode() + ')');
-    team = String(JSON.parse(r.getContentText()).teams[0].id); P.setProperty('CLICKUP_TEAM', team);
-  }
-  const out = [], seen = {};
-  for (let page = 0; page < 20; page++) {
-    // od 1.56.1: także zadania wielodniowe, które trwają w zakresie, a termin mają później (start ≤ koniec zakresu) – do 90 dni po zakresie
+  const team = cuTeam_(), out = [], seen = {};
+  for (let page = 0; page < 30; page++) {
     const q = ['page=' + page, 'include_closed=true', 'subtasks=true', 'due_date_gt=' + (t0 - 1), 'due_date_lt=' + (t1 + 90 * 864e5)]
       .concat(ids.map(i => 'assignees[]=' + encodeURIComponent(i))).join('&');
     const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team/' + team + '/task?' + q, H);
     if (r.getResponseCode() !== 200) throw new Error('ClickUp: błąd ' + r.getResponseCode());
     const d = JSON.parse(r.getContentText());
-    (d.tasks || []).forEach(t => {
-      if (seen[t.id]) return; seen[t.id] = true;
-      if (Number(t.due_date) > t1 && !(t.start_date && Number(t.start_date) <= t1)) return;   // termin po zakresie i start też po – nie dotyczy tych dni
-      out.push({
-        id: t.id, nazwa: t.name, status: t.status && t.status.status, zamk: !!(t.status && /closed|done/.test(t.status.type)),
-        lista: t.list && t.list.id, listaNazwa: t.list && t.list.name,
-        start: t.start_date ? Number(t.start_date) : null, koniec: t.due_date ? Number(t.due_date) : null,
-        godzStart: !!t.start_date_time, godzKoniec: !!t.due_date_time,
-        osoby: (t.assignees || []).map(a => String(a.id)).filter(i => ids.indexOf(i) >= 0), url: t.url,
-        est: t.time_estimate ? Number(t.time_estimate) : 0,   // „Estimated Time” w ms (od 1.10.0)
-        opis: txt_(t.text_content).slice(0, 1500)   // opis zadania do okienka na tablecie (od 1.12.0)
-      });
-    });
+    (d.tasks || []).forEach(t => { if (!seen[t.id]) { seen[t.id] = 1; out.push(t); } });
     if (d.last_page || !(d.tasks || []).length) break;
   }
-  const res = { ok: true, zadania: out, pobrano: Date.now() };
-  const json = JSON.stringify(res);
-  if (json.length < 90000) cache.put(cacheKey, json, 300);   // 5 min – nie odpytujemy ClickUp przy każdym tablecie
+  return out;
+}
+
+/** Plan dnia dla tabletów – od 1.58.5 wyłącznie z arkusza „ELWIS – Harmonogram” → Zadania (tablety nie łączą się z ClickUp). */
+function plan_(od, doDnia) {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (!re.test(od) || !re.test(doDnia)) throw new Error('Zły zakres dat');
+  const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doDnia + 'T23:59:59').getTime();
+  if (t1 < t0 || t1 - t0 > 31 * 864e5) throw new Error('Zakres dat do 31 dni');
+  const cacheKey = 'planH:' + (P.getProperty('PLAN_VER') || '0') + ':' + od + ':' + doDnia;
+  const cache = CacheService.getScriptCache(), hit = cache.get(cacheKey);
+  if (hit) return JSON.parse(hit);
+  const CU = {}; rowsT_(baza_().getSheetByName('Pracownicy')).filter(r => tak_(r[4]) && txt_(r[5])).forEach(r => { CU[txt_(r[0])] = txt_(r[5]); });
+  const v = harmSh_('Zadania').getDataRange().getDisplayValues(); v.shift();
+  const Z = {}, kol = [];   // kilka wierszy jednego zadania (wpisy ELWIS) – późniejsze niepuste pola wygrywają
+  v.forEach(r => { const k = txt_(r[1]) || txt_(r[0]); if (!k) return; if (!Z[k]) { Z[k] = r.slice(); kol.push(k); } else r.forEach((x, c) => { if (txt_(x) !== '') Z[k][c] = x; }); });
+  const czas = (s, kon) => { s = txt_(s); if (!s) return [null, false];
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})(?: (\d{1,2}:\d{2}))?$/); if (!m) return [null, false];
+    return [Utilities.parseDate(m[1] + ' ' + (m[2] || (kon ? '23:00' : '00:00')), TZ, 'yyyy-MM-dd HH:mm').getTime(), !!m[2]]; };
+  const out = [];
+  kol.forEach(k => { const r = Z[k]; if (txt_(r[31])) return;   // usunięte / poza ClickUp
+    const [s, gs] = czas(r[10], false), [e, ge] = czas(r[11], true); if (!s && !e) return;
+    const a = s || e, b = e || s; if (b < t0 || a > t1 || b > t1 + 90 * 864e5) return;
+    const st = txt_(r[8]).toLowerCase();
+    out.push({ id: k, nazwa: txt_(r[5]), status: st, zamk: /^(complete|closed|done|cancelled|zamkni)/.test(st),
+      lista: txt_(r[32]), listaNazwa: txt_(r[33]), kod: txt_(r[2]), start: s, koniec: e, godzStart: gs, godzKoniec: ge,
+      osoby: txt_(r[14]).split(';').map(x => CU[x.trim()]).filter(Boolean), url: txt_(r[34]),
+      est: Math.round(Number(txt_(r[13]).replace(',', '.') || 0) * 36e5), opis: txt_(r[6]).slice(0, 1500), zrodlo: txt_(r[24]) });
+  });
+  const res = { ok: true, zadania: out, pobrano: Date.now(), zrodlo: 'harmonogram', sync: P.getProperty('HARM_SYNC') || '' };
+  const json = JSON.stringify(res); if (json.length < 90000) cache.put(cacheKey, json, 300);
   return res;
 }
 
@@ -439,30 +439,102 @@ const TYPY_ZDARZEN = ['krok', 'nr', 'foto', 'brak', 'brak_zamk', 'notatka', 'pro
 /* Status zadania z tabletu (od 1.12.0): Wykonane → complete, Do kontynuacji → update required, Zadanie niepodjęte → on hold.
    Powód / komentarz trafia do zadania jako komentarz. Tylko te trzy statusy – nic innego tablet w ClickUp nie zmienia. */
 const STATUSY_TABLETU = { 'complete': 'Wykonane', 'update required': 'Do kontynuacji', 'on hold': 'Zadanie niepodjęte' };
-function zadania_(b, tablet) {
-  const token = P.getProperty('CLICKUP_TOKEN');
-  if (!token) throw new Error('Brak klucza ClickUp na serwerze');
-  const wyniki = {};
+function zadania_(b, tablet) {   // od 1.58.5: status z tabletu → arkusz „ELWIS – Harmonogram”; do ClickUp przenosi go synchronizacja w tle
+  const wyniki = {}, sh = harmSh_('Zadania'), v = sh.getDataRange().getDisplayValues();
+  const teraz = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), hist = [], kom = [], kol = [];
   (b.zmiany || []).slice(0, 50).forEach(z => {
     const id = txt_(z && z.id); if (!id) return;
     const task = txt_(z.task), st = txt_(z.status).toLowerCase();
     if (!/^[\w-]{4,20}$/.test(task) || !STATUSY_TABLETU[st]) { wyniki[id] = { ok: false, blad: 'Nieprawidłowe dane' }; return; }
-    const H = { headers: { Authorization: token, 'Content-Type': 'application/json' }, muteHttpExceptions: true };
-    const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/task/' + task, Object.assign({ method: 'put', payload: JSON.stringify({ status: st }) }, H));
-    if (r.getResponseCode() !== 200) {
-      const m = r.getContentText();
-      wyniki[id] = { ok: false, blad: /status/i.test(m) ? 'Lista w ClickUp nie ma statusu „' + st + '”' : 'ClickUp: błąd ' + r.getResponseCode() };
-      return;
-    }
+    let i = -1; for (let k = v.length - 1; k > 0; k--) if (v[k][1] === task || v[k][0] === task) { i = k; break; }
+    if (i > 0) { sh.getRange(i + 1, 9).setNumberFormat(TEXT).setValue(st); sh.getRange(i + 1, 28, 1, 2).setNumberFormat(TEXT).setValues([[txt_(z.kto), teraz]]);
+      if (st === 'complete') sh.getRange(i + 1, 30).setNumberFormat(TEXT).setValue(teraz);
+      hist.push([harmLicznik_('HZ_N', 'H-'), v[i][0], teraz, txt_(z.kto), 'Status', v[i][8], st, 'tablet ' + tablet]); v[i][8] = st; }
     const linie = ['ELWIS · ' + txt_(z.kto).slice(0, 60) + ' (' + tablet + '): ' + STATUSY_TABLETU[st]];
     if (txt_(z.powod)) linie.push('Powód: ' + txt_(z.powod).slice(0, 200));
     if (txt_(z.komentarz)) linie.push(txt_(z.komentarz).slice(0, 2000));
-    if (linie.length > 1 || st !== 'complete')
-      UrlFetchApp.fetch('https://api.clickup.com/api/v2/task/' + task + '/comment', Object.assign({ method: 'post', payload: JSON.stringify({ comment_text: linie.join('\n'), notify_all: false }) }, H));
+    if (linie.length > 1 || st !== 'complete') kom.push([harmLicznik_('KZ_N', 'K-'), i > 0 ? v[i][0] : task, teraz, txt_(z.kto), linie.join('\n'), '']);
+    kol.push([id, teraz, 'status', task, JSON.stringify({ status: st, komentarz: linie.length > 1 || st !== 'complete' ? linie.join('\n') : '' }), 'czeka', '']);
     wyniki[id] = { ok: true };
   });
+  harmDopisz_('Historia zmian', hist); harmDopisz_('Komentarze', kom); harmDopisz_('Kolejka ClickUp', kol);
   P.setProperty('PLAN_VER', String(Date.now()));   // tablety pobiorą świeży plan
   return { ok: true, wyniki: wyniki };
+}
+
+/** Kolejka zapisów do ClickUp (statusy z tabletów) – wykonywana przez synchronizację w tle. */
+function kolejkaCU_() {
+  const sh = harmSh_('Kolejka ClickUp'), v = sh.getDataRange().getDisplayValues(); let n = 0, bl = 0;
+  for (let i = 1; i < v.length; i++) { if (v[i][5] !== 'czeka') continue;
+    let d = {}; try { d = JSON.parse(v[i][4] || '{}'); } catch (e) { }
+    try { if (v[i][2] === 'status') { cu_('put', 'task/' + v[i][3], { status: d.status }); if (d.komentarz) cu_('post', 'task/' + v[i][3] + '/comment', { comment_text: d.komentarz, notify_all: false }); }
+      sh.getRange(i + 1, 6, 1, 2).setValues([['ok', '']]); n++; }
+    catch (e) { sh.getRange(i + 1, 6, 1, 2).setValues([['błąd', String(e.message || e).slice(0, 300)]]); bl++; }
+  }
+  return { wyslane: n, bledy: bl };
+}
+
+/** ClickUp → arkusz „ELWIS – Harmonogram” → Zadania: bieżący miesiąc i 45 dni naprzód. Zadania z godzinami zatwierdzonymi
+ *  przez biuro i zadania utworzone przez ELWIS są zablokowane – zmiana w ClickUp ich nie nadpisuje. */
+function harmImport_() {
+  const dz = dzienTz_(Date.now()), m1 = dz.slice(0, 8) + '01', d14 = dodajDni_(dz, -14), od = d14 < m1 ? d14 : m1, doD = dodajDni_(dz, 45);   // bieżący miesiąc (i 14 dni wstecz – plan tabletów) + 45 dni
+  const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doD + 'T23:59:59').getTime();
+  const L = {}; ludzie_().forEach(o => { L[o.id] = o; });
+  const tasks = cuPobierz_(t0, t1, Object.keys(L));
+  const sh = harmSh_('Zadania'), N = HARM_TABS['Zadania'].length;
+  if (sh.getLastColumn() < N) sh.getRange(1, 1, 1, N).setValues([HARM_TABS['Zadania']]).setFontWeight('bold');
+  const v = sh.getDataRange().getDisplayValues();
+  const idx = {}, elwis = {}, zatw = {};
+  for (let i = 1; i < v.length; i++) { const cu = txt_(v[i][1]); if (!cu) continue; if (v[i][24] === 'ELWIS') elwis[cu] = 1; else idx[cu] = i; }
+  harmSh_('Czas pracy').getDataRange().getDisplayValues().slice(1).forEach(r => { if (txt_(r[7])) zatw[txt_(r[7])] = 1; });
+  const fmt = (ms, g) => ms ? Utilities.formatDate(new Date(Number(ms)), TZ, g ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd') : '';
+  const teraz = fmt(Date.now(), true), nazwy = {}; tasks.forEach(t => { nazwy[t.id] = t.name; });
+  const c = x => String(x == null ? '' : x).replace(/^[=+@-]/, "'$&");
+  const nowe = [], hist = [], seen = {}; let zm = 0, pom = 0, us = 0;
+  const POLA = [[5, 'Nazwa'], [8, 'Status'], [10, 'Start'], [11, 'Termin'], [13, 'Szac. czas (h)'], [14, 'Osoby']];
+  tasks.forEach(t => { seen[t.id] = 1;
+    if (elwis[t.id] || zatw[t.id]) { pom++; return; }
+    const os = (t.assignees || []).map(a => L[String(a.id)]).filter(Boolean);
+    const r = new Array(N).fill('');
+    r[0] = 'CU-' + t.id; r[1] = t.id; r[2] = (txt_(t.list && t.list.name).match(/^(\d{2}[_p][\w]{3})/) || [])[1] || ''; r[3] = t.parent ? (nazwy[t.parent] || '') : '';
+    r[4] = t.parent || ''; r[5] = t.name; r[6] = txt_(t.text_content).slice(0, 1500); r[7] = t.parent ? 'podzadanie' : 'zadanie';
+    r[8] = txt_(t.status && t.status.status); r[9] = txt_(t.priority && t.priority.priority); r[10] = fmt(t.start_date, t.start_date_time); r[11] = fmt(t.due_date, t.due_date_time);
+    r[12] = !t.start_date_time && !t.due_date_time ? 'tak' : 'nie'; r[13] = t.time_estimate ? String(Math.round(Number(t.time_estimate) / 36e4) / 10).replace('.', ',') : '';
+    r[14] = os.map(o => o.name).join('; '); r[15] = [...new Set(os.map(o => o.ek).filter(Boolean))].join('; '); r[18] = (t.tags || []).map(x => x.name).join('; ');
+    r[24] = 'ClickUp'; r[25] = 'sync'; r[26] = teraz; r[27] = 'sync'; r[28] = teraz; r[29] = t.date_closed ? fmt(t.date_closed, true) : '';
+    r[32] = txt_(t.list && t.list.id); r[33] = txt_(t.list && t.list.name); r[34] = txt_(t.url);
+    const i = idx[t.id];
+    if (i == null) { nowe.push(r); return; }
+    const st = v[i], rozn = POLA.filter(([k]) => txt_(st[k]) !== txt_(r[k])).concat([[3], [6], [32], [33], [31]].filter(([k]) => txt_(st[k]) !== txt_(r[k])));
+    if (!rozn.length) return;
+    r[0] = st[0]; r[25] = st[25]; r[26] = st[26];
+    sh.getRange(i + 1, 1, 1, N).setNumberFormat(TEXT).setValues([r.map(c)]); zm++;
+    POLA.forEach(([k, n]) => { if (txt_(st[k]) !== txt_(r[k])) hist.push([harmLicznik_('HZ_N', 'H-'), st[0], teraz, 'sync', n, st[k], r[k], 'ClickUp']); });
+  });
+  // w zakresie, a ClickUp już go nie zwraca (usunięte, przeniesione poza zakres albo bez osób z ELWIS)
+  Object.keys(idx).forEach(cu => { if (seen[cu]) return; const r = v[idx[cu]]; if (txt_(r[31])) return;
+    const d = txt_(r[11]) || txt_(r[10]); if (!d || d.slice(0, 10) < od || d.slice(0, 10) > doD) return;
+    sh.getRange(idx[cu] + 1, 32).setNumberFormat(TEXT).setValue('brak w ClickUp ' + teraz); us++; });
+  harmDopisz_('Zadania', nowe); harmDopisz_('Historia zmian', hist);
+  return { od: od, do: doD, clickup: tasks.length, nowe: nowe.length, zmienione: zm, zablokowane: pom, usuniete: us };
+}
+
+/** Synchronizacja harmonogramu z ClickUp: kolejka zapisów → ClickUp, zatwierdzony czas → ClickUp, ClickUp → arkusz. Co 30 min (6–21) i przyciskiem biura. */
+function harmSync_() {
+  const lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try {
+    harm_(); const w = { kolejka: kolejkaCU_() };
+    w.czas = czasPrzetworz_().bledy.length;
+    w.import = harmImport_();
+    const ts = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'); P.setProperty('HARM_SYNC', ts); P.setProperty('PLAN_VER', String(Date.now())); CACHE.remove('obc');
+    w.czasSync = ts; return w;
+  } finally { lock.releaseLock(); }
+}
+function harmSyncCzas() { const h = Number(Utilities.formatDate(new Date(), TZ, 'H')); if (h < 6 || h >= 21) return; harmSync_(); }
+/** Uruchom raz: wyzwalacz co 30 min. */
+function instalujSyncHarmonogramu() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'harmSyncCzas').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('harmSyncCzas').timeBased().everyMinutes(30).create();
 }
 
 /* Pinezka GPS budowy z tabletu (od 1.12.0) → Projekty, kolumna D „Pinezka GPS (lat,lon)”.
@@ -1894,7 +1966,8 @@ function powPorzadki_() {
 const HARM_TABS = {
   'Czas pracy': ['ID wpisu', 'Data', 'Osoba', 'Ekipa', 'Kod', 'Faza', 'ID zadania', 'ID ClickUp', 'Zadanie', 'Od', 'Do', 'Godziny', 'Status zadania', 'Spoza planu', 'Opis / notatka', 'Wpisał', 'Źródło', 'Zatwierdził', 'Zatwierdzono', 'Auto', 'Zgodne z planem', 'Korekta biura', 'Tablet', 'ID zdarzeń'],
   'Zdarzenia czasu': ['ID zdarzenia', 'Czas tabletu', 'Czas serwera', 'Tablet', 'Kto', 'Typ', 'Dotyczy osoby', 'Dane (JSON)'],
-  'Zadania': ['ID', 'ID ClickUp', 'Kod', 'Faza', 'ID nadrzędnego', 'Nazwa', 'Opis', 'Typ', 'Status', 'Priorytet', 'Start', 'Termin', 'Cały dzień', 'Szac. czas (h)', 'Osoby', 'Ekipa', 'Zależy od', 'Blokuje', 'Tagi', 'Cykliczność', 'Przypomnienie', 'Kwota netto', 'Data zapytania', 'Kolejność', 'Źródło', 'Utworzył', 'Utworzono', 'Zmienił', 'Zmieniono', 'Zamknięto', 'Zastąpione przez', 'Usunięte'],
+  'Zadania': ['ID', 'ID ClickUp', 'Kod', 'Faza', 'ID nadrzędnego', 'Nazwa', 'Opis', 'Typ', 'Status', 'Priorytet', 'Start', 'Termin', 'Cały dzień', 'Szac. czas (h)', 'Osoby', 'Ekipa', 'Zależy od', 'Blokuje', 'Tagi', 'Cykliczność', 'Przypomnienie', 'Kwota netto', 'Data zapytania', 'Kolejność', 'Źródło', 'Utworzył', 'Utworzono', 'Zmienił', 'Zmieniono', 'Zamknięto', 'Zastąpione przez', 'Usunięte', 'ID listy ClickUp', 'Lista ClickUp', 'Link'],
+  'Kolejka ClickUp': ['ID', 'Czas', 'Operacja', 'ID ClickUp', 'Dane (JSON)', 'Stan', 'Błąd'],
   'Komentarze': ['ID', 'ID zadania', 'Czas', 'Kto', 'Treść', 'Załączniki'],
   'Historia zmian': ['ID', 'ID zadania', 'Czas', 'Kto', 'Pole', 'Było', 'Jest', 'Źródło'],
   'Szablony': ['Szablon', 'Faza', 'Kolejność', 'Nazwa zadania', 'Szac. czas (h)', 'Zależność', 'Opis'],
@@ -1935,7 +2008,7 @@ function harm_() {
   HARM_SS = ss; return ss;
 }
 /** Uruchom raz w edytorze (albo samo przy pierwszym wpisie czasu): zakłada arkusz i klucze Konfiguracji. */
-function instalujHarmonogram() { const ss = harm_(); Logger.log('ELWIS – Harmonogram: ' + ss.getUrl()); }
+function instalujHarmonogram() { const ss = harm_(); instalujSyncHarmonogramu(); Logger.log('ELWIS – Harmonogram: ' + ss.getUrl()); Logger.log(JSON.stringify(harmSync_())); }   // od 1.58.5: także wyzwalacz co 30 min i pierwsza kopia z ClickUp (bieżący miesiąc)
 function harmSh_(n) { return harm_().getSheetByName(n); }
 function harmDopisz_(n, rows) {
   if (!rows.length) return;
@@ -1989,6 +2062,7 @@ function zgodnyZPlanem_(w) { return !!(w.zad && w.plan && w.od === w.plan.od && 
 /** Operacja `czas` (od 1.58.0): push (tablety), stan, zatw / odrzB / ust (tylko rola biuro). */
 function czas_(b, tablet) {
   const kto = txt_(b.kto), biuro = !!rolaBiuro_()[kto];
+  if (b.op === 'syncHarm') { if (!biuro) throw new Error('Synchronizacja harmonogramu – tylko rola biuro'); return { ok: true, sync: harmSync_() }; }   // od 1.58.5: przycisk „Sync harmonogram”
   const lock = LockService.getScriptLock(); lock.waitLock(25000);
   try {
     harm_();
@@ -2009,15 +2083,16 @@ function czas_(b, tablet) {
       if (b.autoBiuro !== undefined) konfigUstaw_('czas_auto_biuro', b.autoBiuro ? 'tak' : 'nie', 'tak = wpisy roli biuro (własne i za innych) zatwierdzane od razu');
     }
     if (noweZ.length) harmDopisz_('Zdarzenia czasu', noweZ);
-    const wyn = czasPrzetworz_(teraz);
+    // od 1.58.5: przetwarzanie (arkusz, ClickUp) tylko gdy coś przyszło lub biuro zdecydowało; samo pobranie stanu – szybko (zaległe ponawia noc)
+    const wyn = noweZ.length || b.op !== 'push' ? czasPrzetworz_(teraz, true) : { bledy: [] };
     const odDnia = dodajDni_(dzienTz_(Date.now()), -21), W = czasStan_(czasZdarzenia_(odDnia));
     const wpisy = Object.values(W).filter(w => w.data >= odDnia && (biuro || w.osoba === kto || w.kto === kto));
-    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', autoBiuro: konfig_().czas_auto_biuro === 'tak', bledy: wyn.bledy, czas: Date.now() };
+    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', autoBiuro: konfig_().czas_auto_biuro === 'tak', harmSync: P.getProperty('HARM_SYNC') || '', bledy: wyn.bledy, czas: Date.now() };
   } finally { lock.releaseLock(); }
 }
 
 /** Auto-zatwierdzanie, wiersze „Czas pracy”, operacje ClickUp. Wywoływane po każdej zmianie i w nocy. */
-function czasPrzetworz_(teraz) {
+function czasPrzetworz_(teraz, bezCU) {   // bezCU – zapytania tabletów i PC: tylko arkusz; ClickUp robi synchronizacja w tle (od 1.58.5)
   teraz = teraz || Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd'T'HH:mm:ss");
   let evs = czasZdarzenia_(), W = czasStan_(evs);
   const bledy = [];
@@ -2053,7 +2128,7 @@ function czasPrzetworz_(teraz) {
     w.zatw.auto ? 'tak' : 'nie', w.spoza ? '–' : zgodnyZPlanem_(w) ? 'tak' : 'nie', w.zatw.korekta, w.tablet || '', [w.wid].concat(w.eid).join('; ')]);
   if (rows.length) harmDopisz_('Czas pracy', rows);
   // ClickUp
-  if (P.getProperty('CLICKUP_TOKEN')) {
+  if (!bezCU && P.getProperty('CLICKUP_TOKEN')) {
     const zadania = {}; Object.values(W).filter(w => w.zad && !w.korOf).forEach(w => { (zadania[w.zad] = zadania[w.zad] || []).push(w); });
     Object.keys(zadania).forEach(zid => { try { czasZadanieCU_(zid, zadania[zid]); } catch (e) { bledy.push(e.message); syncLog_('zadanie', 'zad:' + zid, zid, 'błąd', e.message); } });
     Object.values(W).filter(w => !w.zad && w.spoza && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasSpozaCU_(w); } catch (e) { bledy.push(e.message); syncLog_('spoza', 'spoza:' + w.wid, '', 'błąd', e.message); } });
@@ -2064,8 +2139,11 @@ function czasPrzetworz_(teraz) {
 }
 
 /* --- ClickUp: dziennik operacji (punkty kontrolne – ponowienie nie tworzy duplikatów) --- */
-function syncLog_(op, klucz, cuId, wynik, blad) { harmDopisz_('Sync ClickUp', [[harmLicznik_('SY_N', 'S-'), Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), op, klucz, cuId || '', wynik, String(blad || '').slice(0, 300)]]); }
-function syncByl_(klucz) { const v = harmSh_('Sync ClickUp').getDataRange().getDisplayValues(); for (let i = v.length - 1; i > 0; i--) if (v[i][3] === klucz && v[i][5] === 'ok') return v[i][4] || 'ok'; return null; }
+// od 1.58.5: zakładka „Sync ClickUp” czytana raz na wywołanie (wcześniej przy każdym zadaniu – wolne odświeżanie panelu PC)
+let SYNC_MEMO = null;
+function syncMapa_() { if (!SYNC_MEMO) { SYNC_MEMO = {}; harmSh_('Sync ClickUp').getDataRange().getDisplayValues().slice(1).forEach(r => { if (r[5] === 'ok') SYNC_MEMO[r[3]] = r[4] || 'ok'; }); } return SYNC_MEMO; }
+function syncLog_(op, klucz, cuId, wynik, blad) { harmDopisz_('Sync ClickUp', [[harmLicznik_('SY_N', 'S-'), Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), op, klucz, cuId || '', wynik, String(blad || '').slice(0, 300)]]); if (wynik === 'ok') syncMapa_()[klucz] = cuId || 'ok'; }
+function syncByl_(klucz) { return syncMapa_()[klucz] || null; }
 function czasKomentarz_(ws, naglowek) {
   const f = t => { if (!t) return ''; const s = String(t); return /[zZ]$|[+-]\d\d:?\d\d$/.test(s) && !isNaN(new Date(s)) ? Utilities.formatDate(new Date(s), TZ, 'yyyy-MM-dd HH:mm') : s.replace('T', ' ').slice(0, 16); };
   return ['ELWIS · ' + naglowek].concat(ws.map(w => '• ' + w.osoba + ' – ' + (w.data !== ws[0].data ? w.data + ' ' : '') + w.od + '–' + w.do + ' (' + String(godzH_(w.od, w.do)).replace('.', ',') + ' h, ' + (ST_CZAS[w.st] || w.st) + ')' +

@@ -360,7 +360,7 @@ const Sync = {
   async pullPlan() {
     if (S.boot && S.boot.dostep) return;   // dostęp podwykonawcy – bez planu dnia (od 1.43.0)
     const od = U.day(new Date(Date.now() - 14 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));   // od 1.58.0: 14 dni wstecz – niezamknięte dni
-    try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
+    try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now(), sync: r.sync || '' }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
     // priorytety budów i wydajność ekip – tylko rola biuro (od 1.17.0); wynik gotowy z serwera, bez przeliczania
     if (Session.isBiuro()) { try { const r = await API.priorytety(false); if (r && r.czas) await DB.set('prio', r); } catch (e) { console.warn('priorytety', e); } }
@@ -372,7 +372,7 @@ const Sync = {
     try {
       const pl = (await DB.get('plan')) || { zadania: [] }; const proj = (S.boot && S.boot.projekty) || [];
       const miejsca = new Map([[POGODA_DOM.klucz, POGODA_DOM]]);
-      pl.zadania.forEach(t => { const b = proj.find(p => p.listaCU && p.listaCU === t.lista); const w = b && wspolrzedne(lokBudowy(b)); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
+      pl.zadania.forEach(t => { const b = proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod)); const w = b && wspolrzedne(lokBudowy(b)); if (w && miejsca.size < 8) miejsca.set(w.klucz, w); });
       const wynik = {};
       for (const [klucz, w] of miejsca) {
         const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&hourly=temperature_2m,precipitation,precipitation_probability,weather_code&timezone=Europe%2FWarsaw&past_days=7&forecast_days=16`);

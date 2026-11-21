@@ -138,7 +138,7 @@ Object.assign(Views, {
     const zad = ((pl && pl.zadania) || []).map(t => { const q = kol.filter(z => z.task === t.id).pop(); return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
     const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu).slice().sort((a, b) => (String(a.ekipa || 'z') + a.name).localeCompare(String(b.ekipa || 'z') + b.name, 'pl'));
     const proj = (S.boot && S.boot.projekty) || [];
-    const budowaZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    const budowaZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
     const kodZ = t => { const b = budowaZ(t); return b ? b.kod : String(t.listaNazwa || '').split(' ')[0]; };
     const godz = d => { const x = new Date(d); return x.getHours() + (x.getMinutes() ? ':' + String(x.getMinutes()).padStart(2, '0') : ''); };
     const hDnia = (t, k) => {
@@ -171,8 +171,8 @@ Object.assign(Views, {
       return gr + `<tr><td class="pcos"><b>${U.esc(o.name)}</b>${S.user && o.name === S.user.name ? ' <small>(ja)</small>' : ''}</td>${kom}<td class="pcsum">${String(Math.round(suma * 2) / 2).replace('.', ',')} h${nieokr ? '<small> + ?</small>' : ''}</td></tr>`;
     }).join('');
     PC.widok('Harmonogram tygodnia',
-      `<button class="btn sm" id="tP">‹ Poprzedni</button><button class="btn sm" id="tD">Ten tydzień</button><button class="btn sm" id="tN">Następny ›</button><button class="btn sm pri" id="tNZ">${ic('plus')} Nowe zadanie</button>`,
-      `${zakres || poza ? `<p class="pcinfo">${zakres || 'Plan z ClickUp obejmuje 7 dni wstecz i 7 dni naprzód od dziś – dalsze dni mogą być niepełne.'}</p>` : ''}
+      `<button class="btn sm" id="tP">‹ Poprzedni</button><button class="btn sm" id="tD">Ten tydzień</button><button class="btn sm" id="tN">Następny ›</button><button class="btn sm" id="tSH" title="Pobierz zmiany z ClickUp do harmonogramu">⟳ Sync harmonogram</button><button class="btn sm pri" id="tNZ">${ic('plus')} Nowe zadanie</button>`,
+      `${zakres || poza ? `<p class="pcinfo">${zakres || 'Plan z harmonogramu obejmuje 14 dni wstecz i 7 dni naprzód od dziś – dalsze dni mogą być niepełne.'}</p>` : ''}
        <div class="pctw"><table class="pct pctyd"><thead>${naglowek}</thead><tbody>${wiersze}</tbody></table></div>
        <p class="mute pcleg"><span class="pczd st-ok">wykonane</span> <span class="pczd st-update">do kontynuacji</span> <span class="pczd st-hold">niepodjęte</span> · pasek – zajęte godziny z 8 h · dzień tygodnia otwiera plan dnia</p>`,
       `${PC.dm(dni[0])} – ${PC.dm(dni[6])}.${dni[6].slice(0, 4)}`);
@@ -180,6 +180,7 @@ Object.assign(Views, {
     $('#tN').onclick = () => UI.go('pcTydz', { t: PC.plus(pon, 7) }, { zastap: true });
     $('#tD').onclick = () => UI.go('pcTydz', {}, { zastap: true });
     $('#tNZ').onclick = () => Dialogs.noweZadanie(null, dni.includes(dzis) ? dzis : pon);
+    if ($('#tSH')) $('#tSH').onclick = () => harmSyncTeraz();
     $('#view').querySelectorAll('[data-d]').forEach(b => b.onclick = () => UI.go('plan', { d: b.dataset.d, all: true }));
     $('#view').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []), b.dataset.dz); });
   },
@@ -354,11 +355,12 @@ Object.assign(Views, {
     const f = Object.assign({ st: par.st || 'dec', ek: '', tyg: 'wsz' }, par.f || {});
     PC.widok(f.st === 'zatw' ? 'Zatwierdzone godziny' : 'Do zatwierdzenia', '', '<p class="mute">Wczytuję czas pracy…</p>');
     const odsw = async () => { if (navigator.onLine && API.ready()) try { await Czas.sync(); } catch (e) { UI.toast('Czas pracy: ' + e.message); } };
-    if (!par._bez) await odsw();
-    if (UI.cur !== 'pcCzas') return;
+    // od 1.58.5: ekran od razu z danych na komputerze; serwer w tle (najwyżej co 30 s, „Odśwież” – zawsze), potem ponowne narysowanie z zachowaniem zaznaczeń
+    if (!par._bez && Date.now() - (PC._czT || 0) > 30000) { PC._czT = Date.now();
+      odsw().then(() => { if (UI.cur === 'pcCzas') Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }); }
     const W = await Czas.lista(), auto = await Czas.auto(), autoB = await Czas.autoBiuro(), pl = await DB.get('plan'), bazaP = (await DB.get('projektyBaza')) || [];
     const prac = (S.boot && S.boot.pracownicy) || [], ek = n => String((prac.find(p => p.name === n) || {}).ekipa || '');
-    const proj = (S.boot && S.boot.projekty) || [], budZ = t => proj.find(p => p.listaCU && p.listaCU === t.lista);
+    const proj = (S.boot && S.boot.projekty) || [], budZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
     const dzis = U.day(new Date()), pon = PC.poniedzialek(dzis), zakres = f.tyg === 'ten' ? [pon, PC.plus(pon, 6)] : f.tyg === 'pop' ? [PC.plus(pon, -7), PC.plus(pon, -1)] : ['0000', '9999'];
     const wZak = d => d >= zakres[0] && d <= zakres[1];
     const akt = W.filter(w => Czas.akt(w));
@@ -379,11 +381,13 @@ Object.assign(Views, {
     PC._czN = dec.length; PC.plakietki();
     let lista = (f.st === 'zatw' ? akt.filter(w => w.stan === 'zatw') : dec).filter(w => wZak(w.data) && (!f.ek || ek(w.osoba) === f.ek))
       .sort((a, b) => (a.data + a.osoba + a.od < b.data + b.osoba + b.od ? -1 : 1));
-    const sel = new Set(), auto7 = akt.filter(w => w.stan === 'zatw' && w.zatw && w.zatw.auto && w.data >= PC.plus(dzis, -7)).length;
+    const sel = PC._czSel || (PC._czSel = new Set()), auto7 = akt.filter(w => w.stan === 'zatw' && w.zatw && w.zatw.auto && w.data >= PC.plus(dzis, -7)).length;
     const zrodlo = w => w.brak ? '<span class="czchip c-gr">nic nie wpisano</span>' : w.stan === 'prop' ? `<span class="czchip c-pro">propozycja ${U.esc(w.kto)}</span>` : w.kto === w.osoba ? '<span class="czchip c-ok">własne</span>' : '<span class="czchip c-ok">potwierdzona</span>';
     const stat = w => w.brak ? '<span class="czchip c-bad">decyzja biura</span>' : nak(w) ? '<span class="czchip c-bad">nakładanie godzin</span>' : w.stan === 'zatw' ? `<span class="czchip c-lock">🔒 ${w.zatw && w.zatw.auto ? 'auto' : U.esc((w.zatw || {}).kto || '')}</span>` : w.stan === 'prop' ? '<span class="czchip c-bad">brak potwierdzenia</span>' : '';
     const plTxt = w => w.plan ? `${U.esc(w.plan.od)}–${U.esc(w.plan.do)} · ${CZ.hTxt(CZ.h(w.plan.od, w.plan.do))}` : '–';
-    const wyb = { w: null, od: 0, do: 0, powod: '', termin: null };
+    const wyb = PC._czWyb || (PC._czWyb = { w: null, od: 0, do: 0, powod: '', termin: null });   // zaznaczenia i otwarty wpis zostają po odświeżeniu
+    if (wyb.w) { const wid = wyb.w.wid; wyb.w = lista.find(w => w.wid === wid) || null; }
+    [...sel].forEach(wid => { if (!lista.some(w => w.wid === wid)) sel.delete(wid); });
     const rys = () => {
       PC.widok(f.st === 'zatw' ? 'Zatwierdzone godziny' : 'Do zatwierdzenia',
         `<label class="cb"><input type="checkbox" id="czAuto" ${auto ? 'checked' : ''}> Auto-zatwierdzaj zgodne z planem</label>
@@ -393,7 +397,7 @@ Object.assign(Views, {
          <button class="btn sm" id="czOdsw">Odśwież</button>`,
         `${f.st === 'zatw' ? '' : `<div class="pcsum4"><div><b>${dec.length}</b><span>do decyzji</span></div><div><b>${dec.filter(w => w.stan === 'prop').length}</b><span>bez potwierdzenia osoby</span></div><div><b>${braki.length}</b><span>nic nie wpisano</span></div><div><b>${dec.filter(w => !w.brak && nak(w)).length}</b><span>nakładanie godzin</span></div><div><b>${auto7}</b><span>zatw. auto (7 dni)</span></div></div>`}
          <div class="pcczas"><div class="grow">${!lista.length ? '<p class="mute">Brak wpisów dla wybranych filtrów.</p>' : `<div class="pctw"><table class="pct"><thead><tr>${f.st === 'zatw' ? '' : '<th></th>'}<th>Dzień</th><th>Osoba</th><th>Budowa · zadanie</th><th>Plan</th><th>Zgłoszone</th><th>Źródło</th><th>Status</th>${f.st === 'zatw' ? '' : '<th></th>'}</tr></thead><tbody>
-          ${lista.map((w, i) => `<tr class="pcrow${wyb.w === w ? ' sel1' : ''}" data-i="${i}">${f.st === 'zatw' ? '' : `<td><input type="checkbox" data-s="${i}" ${sel.has(i) ? 'checked' : ''} ${w.brak ? 'disabled' : ''}></td>`}<td>${U.esc(PC_dzien(w.data))}</td><td><b>${U.esc(w.osoba)}</b></td>
+          ${lista.map((w, i) => `<tr class="pcrow${wyb.w === w ? ' sel1' : ''}" data-i="${i}">${f.st === 'zatw' ? '' : `<td><input type="checkbox" data-s="${i}" ${sel.has(w.wid) ? 'checked' : ''} ${w.brak ? 'disabled' : ''}></td>`}<td>${U.esc(PC_dzien(w.data))}</td><td><b>${U.esc(w.osoba)}</b></td>
             <td>${w.nieob ? `<b>${nbTxt(w)}</b>${w.uwagi ? '<br><small>' + U.esc(w.uwagi) + '</small>' : ''}` : `${U.esc(w.kod || '')} · ${w.zad ? '' : '<i>spoza planu:</i> '}${U.esc(w.nazwa || w.opis || '')}`}${w.notatka ? `<br><small>${U.esc(String(w.notatka).slice(0, 90))}</small>` : ''}</td><td>${plTxt(w)}</td>
             <td class="${w.plan && !w.brak && !zgodny(w) ? 'o-badt' : ''}">${w.nieob ? 'cały dzień' : w.brak ? '–' : `${U.esc(w.od)}–${U.esc(w.do)} · ${CZ.hTxt(CZ.h(w.od, w.do))}`}<br><small>${w.brak ? '' : U.esc(CZ_ST_TXT[w.st] || '')}${w.termin ? ' · dokończenie ' + U.esc(PC_dzien(w.termin.data) + ' ' + w.termin.od + '–' + w.termin.do) : ''}</small></td>
             <td>${zrodlo(w)}</td><td>${stat(w)}</td>${f.st === 'zatw' ? '' : `<td>${w.brak ? `<button class="btn sm" data-wp="${i}">Wg planu</button>` : `<button class="btn sm ok" data-ok="${i}">Zatwierdź</button>`}</td>`}</tr>`).join('')}</tbody></table></div>`}
@@ -404,14 +408,14 @@ Object.assign(Views, {
       $('#czAutoB').onchange = async e => { try { await API.fg('Zapisuję ustawienie', () => API.czas({ op: 'ust', autoBiuro: e.target.checked })); await Czas.sync(); UI.toast(e.target.checked ? 'Wpisy biura zatwierdzane od razu' : 'Wpisy biura – do zatwierdzenia'); } catch (er) { UI.toast(er.message); e.target.checked = !e.target.checked; } };
       $('#czT').onchange = e => { f.tyg = e.target.value; UI.par.f = Object.assign({}, f); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); };
       $('#czE').onchange = e => { f.ek = e.target.value; UI.par.f = Object.assign({}, f); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); };
-      $('#czOdsw').onclick = () => Views.pcCzas(Object.assign({}, UI.par, { _bez: 0 }));
-      $('#view').querySelectorAll('[data-s]').forEach(c => c.onclick = e => { e.stopPropagation(); const i = +c.dataset.s; c.checked ? sel.add(i) : sel.delete(i); rys(); });
+      $('#czOdsw').onclick = () => { PC._czT = 0; Views.pcCzas(Object.assign({}, UI.par, { _bez: 0 })); };
+      $('#view').querySelectorAll('[data-s]').forEach(c => c.onclick = e => { e.stopPropagation(); const w = lista[+c.dataset.s]; c.checked ? sel.add(w.wid) : sel.delete(w.wid); rys(); });
       $('#view').querySelectorAll('[data-i]').forEach(r => r.onclick = e => { if (e.target.closest('button,input')) return; const w = lista[+r.dataset.i]; wyb.w = w; wyb.od = CZ.min(w.od); wyb.do = CZ.min(w.do); wyb.powod = ''; wyb.termin = w.termin || null;
         wyb.e = { data: w.data, osoba: w.osoba, kod: w.kod || '', faza: w.faza || '', nazwa: w.nazwa || w.opis || '', st: w.st || 'complete', notatka: w.notatka || '', rodzaj: w.rodzaj || 'urlop', dni: w.dni || 1, uwagi: w.uwagi || '', terminData: (w.termin || {}).data || '' }; rys(); });
       $('#view').querySelectorAll('[data-ok]').forEach(b => b.onclick = () => wyslij([{ w: lista[+b.dataset.ok] }]));
       $('#view').querySelectorAll('[data-wp]').forEach(b => b.onclick = () => wyslij([{ w: lista[+b.dataset.wp] }]));
-      if ($('#czZg')) $('#czZg').onclick = () => { lista.forEach((w, i) => { if (!w.brak && zgodny(w) && !nak(w)) sel.add(i); }); rys(); };
-      if ($('#czZz')) $('#czZz').onclick = () => { if (!sel.size) return UI.toast('Nic nie zaznaczono'); wyslij([...sel].map(i => ({ w: lista[i] }))); };
+      if ($('#czZg')) $('#czZg').onclick = () => { lista.forEach(w => { if (!w.brak && zgodny(w) && !nak(w)) sel.add(w.wid); }); rys(); };
+      if ($('#czZz')) $('#czZz').onclick = () => { if (!sel.size) return UI.toast('Nic nie zaznaczono'); wyslij(lista.filter(w => sel.has(w.wid)).map(w => ({ w }))); };
       if (wyb.w) {
         CZ.tpBind($('#view'), (k, d) => { if (k === 'od') wyb.od = Math.max(0, Math.min(wyb.do - 30, wyb.od + d)); else wyb.do = Math.min(1440, Math.max(wyb.od + 30, wyb.do + d)); rys(); });
         $('#czPw').oninput = e => { wyb.powod = e.target.value; };
@@ -477,7 +481,7 @@ Object.assign(Views, {
       const wpisy = [], l = [];
       pozycje.forEach(({ w, od, do: dd, powod }) => { if (w.brak) { const e = nowyWpis(w, { od, do: dd }); wpisy.push(e); l.push({ wid: e.d.wid, powod: 'decyzja biura' + (powod ? ': ' + powod : '') }); }
         else l.push(Object.assign({ wid: w.wid }, od ? { od, do: dd, powod } : {}, w.termin ? { termin: w.termin } : {})); });
-      try { await API.fg('Zatwierdzam godziny i zapisuję w ClickUp', () => API.czas({ op: 'zatw', wpisy, lista: l })); await Czas.sync(); UI.toast('Zatwierdzono: ' + l.length); wyb.w = null; Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }
+      try { await API.fg('Zatwierdzam godziny i zapisuję w ClickUp', () => API.czas({ op: 'zatw', wpisy, lista: l })); await Czas.sync(); UI.toast('Zatwierdzono: ' + l.length); wyb.w = null; sel.clear(); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }
       catch (e) { UI.toast('Nie udało się: ' + e.message); }
     };
     const odrzuc = async (w, pw) => {

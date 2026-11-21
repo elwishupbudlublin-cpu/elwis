@@ -943,3 +943,5 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .cbin:focus{border-style:solid;border-color:var(--pri);outline:0;background:#fff}.grow>.cbin,.cbsel .cbin{width:100%}
 .cbw .nzpod{min-width:280px}.cbsel{display:flex;flex-direction:column;gap:4px}.cbsel>b{font-weight:700}
 .cznb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.phtop .pnz.psh{left:calc(50% + 120px);width:50px;padding:0;font-size:22px;justify-content:center}
+@media (max-width:700px){.phtop .pnz.psh{left:auto}}
