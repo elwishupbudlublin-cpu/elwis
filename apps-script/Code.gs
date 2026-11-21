@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.57.0';
+const SCRIPT_VERSION = '1.58.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -74,7 +74,8 @@ function handle_(p, body) {
       case 'priorytety': return out_(priorytety_(String(p.kto || ''), p.odswiez === '1'));
       case 'zadNowe': return out_(zadNowe_(body || {}));   // od 1.56.0: warianty terminu, zaplanowanie, nowy projekt
       case 'powiad': return out_(powiad_(String(p.kto || ''), p.since));
-      case 'pc': return out_(pc_(body || {}));   // od 1.57.0: panel biura na komputerze – obciążenie i dane administracyjne (tylko odczyt)   // od 1.56.0: powiadomienia (rola biuro)
+      case 'pc': return out_(pc_(body || {}));
+      case 'czas': return out_(czas_(body || {}, tablet));   // od 1.58.0: czas pracy – wpisy, potwierdzenia, zatwierdzanie   // od 1.57.0: panel biura na komputerze – obciążenie i dane administracyjne (tylko odczyt)   // od 1.56.0: powiadomienia (rola biuro)
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
   } catch (err) {
@@ -1206,6 +1207,7 @@ function archiwizuj() {
   kopia(P.getProperty('BAZA_ID'));
   rowsT_(baza_().getSheetByName('Projekty')).forEach(r => { const id = idFromUrl_(r[10]); if (id) try { kopia(id); } catch (e) { Logger.log(e); } });
   if (k.zakupy_arkusz_id) try { kopia(k.zakupy_arkusz_id); } catch (e) { Logger.log(e); }   // od 1.48.0: arkusz zapotrzebowań
+  if (k.harmonogram_id) try { kopia(k.harmonogram_id); } catch (e) { Logger.log(e); }   // od 1.58.0: ELWIS – Harmonogram
   try { const w = wolneMiejsce_(); porzadkiArchiwum_(arch, w != null && w < ARCH_PROG_WOLNE); } catch (e) { Logger.log('porządki: ' + e); }
   P.setProperty('ARCH_FOLD_START', String(Date.now()));   // początek nowej kopii folderów
   archiwizujFoldery();
@@ -1294,6 +1296,7 @@ function codziennie() {
   try { kontrolaMiejsca_(); } catch (e) { Logger.log('miejsce: ' + e); }
   try { obciazenieZapisz_(); } catch (e) { Logger.log('obciążenie: ' + e); }   // od 1.56.0
   try { powPorzadki_(); } catch (e) { Logger.log('powiadomienia: ' + e); }
+  try { czasNoc_(); } catch (e) { Logger.log('czas pracy: ' + e); }   // od 1.58.0
 }
 const DZIEN = 864e5;
 function dzien_(t) { return Utilities.formatDate(new Date(t), 'Europe/Warsaw', 'yyyy-MM-dd'); }
@@ -1875,4 +1878,354 @@ function powPorzadki_() {
   const gr = Date.now() - POW_DNI * DZIEN, v = sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues();
   let n = 0; while (n < v.length && Number(v[n][0]) < gr) n++;
   if (n) sh.deleteRows(2, n);
+}
+
+/* ===================== Czas pracy (od 1.58.0) =====================
+ * Arkusz „ELWIS – Harmonogram” (folder „Harmonogram” na Dysku ELWIS): zatwierdzone godziny (Czas pracy), wszystkie zdarzenia
+ * czasu z tabletów i decyzje biura (Zdarzenia czasu, tylko dopisywane) oraz zakładki pod przyszły harmonogram bez ClickUp.
+ * Zasady: każda osoba ma własny wpis; wpis za kogoś = propozycja; własny wpis / potwierdzenie ma pierwszeństwo; biuro zatwierdza
+ * (automatycznie zgodne z planem, gdy w Konfiguracji czas_auto = tak); po zatwierdzeniu wpis zablokowany.
+ * ClickUp (dopóki używany): zgodne z planem → status; różne godziny → zadanie „cancelled” + nowe zadania wg faktycznych godzin
+ * (te same godziny i status = jedno wspólne zadanie), szacowany czas = koniec − start, komentarz: kto potwierdził i kiedy biuro zatwierdziło. */
+const HARM_TABS = {
+  'Czas pracy': ['ID wpisu', 'Data', 'Osoba', 'Ekipa', 'Kod', 'Faza', 'ID zadania', 'ID ClickUp', 'Zadanie', 'Od', 'Do', 'Godziny', 'Status zadania', 'Spoza planu', 'Opis / notatka', 'Wpisał', 'Źródło', 'Zatwierdził', 'Zatwierdzono', 'Auto', 'Zgodne z planem', 'Korekta biura', 'Tablet', 'ID zdarzeń'],
+  'Zdarzenia czasu': ['ID zdarzenia', 'Czas tabletu', 'Czas serwera', 'Tablet', 'Kto', 'Typ', 'Dotyczy osoby', 'Dane (JSON)'],
+  'Zadania': ['ID', 'ID ClickUp', 'Kod', 'Faza', 'ID nadrzędnego', 'Nazwa', 'Opis', 'Typ', 'Status', 'Priorytet', 'Start', 'Termin', 'Cały dzień', 'Szac. czas (h)', 'Osoby', 'Ekipa', 'Zależy od', 'Blokuje', 'Tagi', 'Cykliczność', 'Przypomnienie', 'Kwota netto', 'Data zapytania', 'Kolejność', 'Źródło', 'Utworzył', 'Utworzono', 'Zmienił', 'Zmieniono', 'Zamknięto', 'Zastąpione przez', 'Usunięte'],
+  'Komentarze': ['ID', 'ID zadania', 'Czas', 'Kto', 'Treść', 'Załączniki'],
+  'Historia zmian': ['ID', 'ID zadania', 'Czas', 'Kto', 'Pole', 'Było', 'Jest', 'Źródło'],
+  'Szablony': ['Szablon', 'Faza', 'Kolejność', 'Nazwa zadania', 'Szac. czas (h)', 'Zależność', 'Opis'],
+  'Statusy': ['Status', 'Typ', 'Kolor', 'Kolejność'],
+  'Nieobecności': ['Osoba', 'Od', 'Do', 'Rodzaj', 'Uwagi'],
+  'Kalendarz': ['ID zadania', 'Kalendarz', 'ID wydarzenia'],
+  'Sync ClickUp': ['ID operacji', 'Czas', 'Operacja', 'Klucz', 'ID ClickUp', 'Wynik', 'Błąd']
+};
+const ST_CZAS = { 'complete': 'wykonane', 'update required': 'do kontynuacji', 'on hold': 'niepodjęte', 'dzien': 'dzień pracy (w toku)', 'spoza': 'wykonane' };
+function konfigUstaw_(klucz, wartosc, opis) {
+  const sh = baza_().getSheetByName('Konfiguracja'), v = sh.getDataRange().getDisplayValues();
+  const i = v.findIndex(r => txt_(r[0]) === klucz);
+  if (i >= 0) sh.getRange(i + 1, 2).setNumberFormat(TEXT).setValue(String(wartosc));
+  else sh.getRange(v.length + 1, 1, 1, 3).setNumberFormat(TEXT).setValues([[klucz, String(wartosc), opis || '']]);
+  CACHE.remove('konfig');
+}
+/** Arkusz „ELWIS – Harmonogram”: otwiera albo zakłada (folder „Harmonogram” na Dysku ELWIS, zakładki z nagłówkami). */
+let HARM_SS = null;   // jedno otwarcie arkusza na wywołanie skryptu
+function harm_() {
+  if (HARM_SS) return HARM_SS;
+  const k = konfig_();
+  let ss = null;
+  if (k.harmonogram_id) try { ss = SpreadsheetApp.openById(k.harmonogram_id); } catch (e) { Logger.log('harmonogram: ' + e); }
+  if (!ss) {
+    const it = DriveApp.getRootFolder().getFoldersByName('Harmonogram'), fol = it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder('Harmonogram');
+    ss = SpreadsheetApp.create('ELWIS – Harmonogram');
+    DriveApp.getFileById(ss.getId()).moveTo(fol);
+    konfigUstaw_('harmonogram_id', ss.getId(), 'Arkusz „ELWIS – Harmonogram” (folder Harmonogram): czas pracy, zdarzenia czasu, przyszły harmonogram bez ClickUp');
+    if (!k.czas_auto) konfigUstaw_('czas_auto', 'nie', 'tak = biuro zatwierdza automatycznie godziny zgodne z planem (przełącznik w panelu PC)');
+    if (!k.cu_status_anulowane) konfigUstaw_('cu_status_anulowane', 'cancelled', 'Status ClickUp dla zadania zastąpionego faktycznymi godzinami');
+  }
+  Object.keys(HARM_TABS).forEach((n, i) => {
+    let sh = ss.getSheetByName(n);
+    if (!sh) { sh = i === 0 && ss.getSheets().length === 1 && ss.getSheets()[0].getLastRow() === 0 ? ss.getSheets()[0].setName(n) : ss.insertSheet(n); }
+    if (sh.getLastRow() === 0) { sh.getRange(1, 1, 1, HARM_TABS[n].length).setValues([HARM_TABS[n]]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  });
+  HARM_SS = ss; return ss;
+}
+/** Uruchom raz w edytorze (albo samo przy pierwszym wpisie czasu): zakłada arkusz i klucze Konfiguracji. */
+function instalujHarmonogram() { const ss = harm_(); Logger.log('ELWIS – Harmonogram: ' + ss.getUrl()); }
+function harmSh_(n) { return harm_().getSheetByName(n); }
+function harmDopisz_(n, rows) {
+  if (!rows.length) return;
+  const sh = harmSh_(n), c = v => String(v == null ? '' : v).replace(/^[=+@-]/, "'$&");
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setNumberFormat(TEXT).setValues(rows.map(r => r.map(c)));
+}
+function harmLicznik_(k, pref) { const n = Number(P.getProperty(k) || '0') + 1; P.setProperty(k, String(n)); return pref + ('00000' + n).slice(-6); }
+const minOfH_ = s => { const [h, m] = String(s || '0:0').split(':'); return Number(h) * 60 + Number(m || 0); };
+const godzH_ = (od, d) => Math.round((minOfH_(d) - minOfH_(od)) / 30) / 2;
+
+/* --- zdarzenia czasu → stan wpisów --- */
+function czasZdarzenia_(odDnia) {
+  const sh = harmSh_('Zdarzenia czasu'), v = sh.getDataRange().getDisplayValues(); v.shift();
+  return v.filter(r => txt_(r[0])).map(r => { let d = {}; try { d = JSON.parse(r[7] || '{}'); } catch (e) { }
+    return { id: r[0], ts: r[1], srv: r[2], tablet: r[3], kto: r[4], typ: r[5], osoba: r[6], d: d }; })
+    .filter(e => !odDnia || e.typ !== 'wpis' || (e.d.data || '') >= odDnia);
+}
+function czasStan_(evs) {
+  const W = {}, klucz = w => w.osoba + '|' + (w.zad ? w.zad + '|' + w.data : 'spoza|' + w.wid);
+  const aktywne = k => Object.values(W).filter(x => klucz(x) === k && ['wlasne', 'prop', 'zatw'].indexOf(x.stan) >= 0);
+  evs.slice().sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.srv < b.srv ? -1 : 1)).forEach(e => {
+    const d = e.d || {};
+    if (e.typ === 'wpis') {
+      const w = Object.assign({}, d, { kto: e.kto, ts: e.ts, tablet: e.tablet, eid: [e.id], stan: e.kto === d.osoba ? 'wlasne' : 'prop' });
+      if (W[w.wid]) return;
+      if (d.kor && W[d.kor]) { const st = W[d.kor], poZ = st.stan === 'zatw'; st.stan = 'zastapiony'; st.przez = w.wid; if (poZ) { st.korekta = true; w.korOf = d.kor; } w.stan = 'prop'; W[w.wid] = w; return; }   // edycja biura: przed zatwierdzeniem – zwykłe zastąpienie, po zatwierdzeniu – korekta (ClickUp: komentarz + godziny)
+      const k = klucz(w), inne = aktywne(k);
+      if (inne.some(x => x.stan === 'zatw')) { w.stan = 'po_zatw'; W[w.wid] = w; return; }
+      if (w.stan === 'prop' && inne.some(x => x.stan === 'wlasne')) { w.stan = 'zignorowany'; W[w.wid] = w; return; }
+      inne.forEach(x => { x.stan = 'zastapiony'; x.przez = w.wid; });
+      W[w.wid] = w;
+    } else if (e.typ === 'potw' || e.typ === 'odrz') {
+      const w = W[d.ref]; if (!w || w.stan !== 'prop' || e.kto !== w.osoba) return;
+      w.eid.push(e.id);
+      if (e.typ === 'potw') { w.stan = 'wlasne'; w.potw = e.ts; aktywne(klucz(w)).forEach(x => { if (x !== w && x.stan === 'prop') x.stan = 'zastapiony'; }); }
+      else { w.stan = 'odrzucone'; w.odrz = e.ts; }
+    } else if (e.typ === 'zatw') {
+      const w = W[d.wid]; if (!w || ['wlasne', 'prop'].indexOf(w.stan) < 0) return;
+      w.eid.push(e.id); w.stan = 'zatw';
+      w.zatw = { kto: e.kto, ts: e.srv || e.ts, auto: !!d.auto, powod: d.powod || '', korekta: (d.od && d.od !== w.od) || (d.do && d.do !== w.do) ? (w.od + '–' + w.do + ' → ' + d.od + '–' + d.do + (d.powod ? ' (' + d.powod + ')' : '')) : '' };
+      if (d.od) w.od = d.od; if (d.do) w.do = d.do; if (d.termin !== undefined) w.termin = d.termin;
+    } else if (e.typ === 'odrzB') {
+      const w = W[d.wid]; if (!w || ['wlasne', 'prop'].indexOf(w.stan) < 0) return;
+      w.eid.push(e.id); w.stan = 'odrzB'; w.odrzB = { kto: e.kto, ts: e.srv || e.ts, powod: d.powod || '' };
+    }
+  });
+  return W;
+}
+function zgodnyZPlanem_(w) { return !!(w.zad && w.plan && w.od === w.plan.od && w.do === w.plan.do && (w.st === 'complete' || w.st === 'dzien')); }
+
+/** Operacja `czas` (od 1.58.0): push (tablety), stan, zatw / odrzB / ust (tylko rola biuro). */
+function czas_(b, tablet) {
+  const kto = txt_(b.kto), biuro = !!rolaBiuro_()[kto];
+  const lock = LockService.getScriptLock(); lock.waitLock(25000);
+  try {
+    harm_();
+    const teraz = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd'T'HH:mm:ss"), noweZ = [];
+    const istn = {}; czasZdarzenia_().forEach(e => { istn[e.id] = 1; });
+    const dodaj = (e, typ) => { if (!e.id || istn[e.id]) return; istn[e.id] = 1;
+      noweZ.push([e.id, txt_(e.ts) || teraz, teraz, tablet, txt_(e.kto) || kto, typ, txt_((e.d || {}).osoba || e.osoba || ''), JSON.stringify(e.d || {}).slice(0, 45000)]); };
+    const osobyOk = {}; ludzie_().forEach(o => { osobyOk[o.name] = 1; });   // tablet współdzielony: kolejka może mieć wpisy kilku osób
+    if (b.op === 'push') (b.zd || []).forEach(e => { if (['wpis', 'potw', 'odrz'].indexOf(e.typ) >= 0 && osobyOk[txt_(e.kto)]) { if (e.d) delete e.d.kor; dodaj(e, e.typ); } });
+    else if (b.op === 'zatw' || b.op === 'odrzB') {
+      if (!biuro) throw new Error('Zatwierdzanie godzin – tylko rola biuro');
+      const przed = Utilities.formatDate(new Date(Date.now() - 1000), TZ, "yyyy-MM-dd'T'HH:mm:ss");   // wpis biura: czas serwera, tuż przed decyzją (zegar komputera bywa przesunięty)
+      (b.wpisy || []).forEach(w => { if (w.typ === 'wpis') dodaj(Object.assign({}, w, { kto: w.kto || kto, ts: przed }), 'wpis'); });   // biuro decyduje za osobę bez wpisu / edytuje wpis
+      (b.lista || []).forEach(x => dodaj({ id: 'b-' + Utilities.getUuid().slice(0, 13), ts: teraz, kto: kto, d: x }, b.op));
+    } else if (b.op === 'ust') {
+      if (!biuro) throw new Error('Ustawienia – tylko rola biuro');
+      konfigUstaw_('czas_auto', b.auto ? 'tak' : 'nie');
+    }
+    if (noweZ.length) harmDopisz_('Zdarzenia czasu', noweZ);
+    const wyn = czasPrzetworz_(teraz);
+    const odDnia = dodajDni_(dzienTz_(Date.now()), -21), W = czasStan_(czasZdarzenia_(odDnia));
+    const wpisy = Object.values(W).filter(w => w.data >= odDnia && (biuro || w.osoba === kto || w.kto === kto));
+    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', bledy: wyn.bledy, czas: Date.now() };
+  } finally { lock.releaseLock(); }
+}
+
+/** Auto-zatwierdzanie, wiersze „Czas pracy”, operacje ClickUp. Wywoływane po każdej zmianie i w nocy. */
+function czasPrzetworz_(teraz) {
+  teraz = teraz || Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd'T'HH:mm:ss");
+  let evs = czasZdarzenia_(), W = czasStan_(evs);
+  const bledy = [];
+  if (konfig_().czas_auto === 'tak') {
+    const auto = Object.values(W).filter(w => w.stan === 'wlasne' && zgodnyZPlanem_(w))
+      .map(w => ['b-' + Utilities.getUuid().slice(0, 13), teraz, teraz, 'serwer', 'auto', 'zatw', w.osoba, JSON.stringify({ wid: w.wid, auto: true })]);
+    if (auto.length) { harmDopisz_('Zdarzenia czasu', auto); evs = czasZdarzenia_(); W = czasStan_(evs); }
+  }
+  // wiersze „Czas pracy” dla nowych zatwierdzeń
+  const cp = harmSh_('Czas pracy'), juz = {}; cp.getDataRange().getDisplayValues().slice(1).forEach(r => { String(r[23] || '').split(';').forEach(x => { if (x.trim()) juz[x.trim()] = 1; }); });
+  const L = {}; ludzie_().forEach(o => { L[o.name] = o; });
+  // korekty biura po zatwierdzeniu: stary wiersz oznaczony „zastąpiony”
+  const cpv = cp.getDataRange().getDisplayValues();
+  Object.values(W).filter(w => w.stan === 'zastapiony' && w.korekta && juz[w.wid]).forEach(w => {
+    const i = cpv.findIndex(r => String(r[23] || '').split(';').map(x => x.trim()).indexOf(w.wid) >= 0);
+    if (i > 0 && !/zastąpiony/.test(cpv[i][21])) cp.getRange(i + 1, 22).setValue('zastąpiony korektą biura (' + w.przez + ')');
+  });
+  const nb = harmSh_('Nieobecności'), nbJuz = {}; nb.getDataRange().getDisplayValues().slice(1).forEach(r => { const m = String(r[4] || '').match(/\[(w[^\]]+)\]/); if (m) nbJuz[m[1]] = 1; });
+  const nbv = nb.getDataRange().getDisplayValues();
+  Object.values(W).filter(w => w.nieob && w.stan === 'zastapiony' && w.korekta && nbJuz[w.wid]).forEach(w => { const i = nbv.findIndex(r => String(r[4] || '').indexOf('[' + w.wid + ']') >= 0);
+    if (i > 0 && !/zastąpione/.test(nbv[i][4])) nb.getRange(i + 1, 5).setValue(nbv[i][4] + ' · zastąpione korektą biura (' + w.przez + ')'); });
+  const nbRows = Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !nbJuz[w.wid]).map(w => [w.osoba, w.data, w.dataDo || w.data, w.rodzaj === 'urlop' ? 'U' : 'N', (w.uwagi || '') + ' · zatwierdził ' + (w.zatw.auto ? 'auto' : w.zatw.kto) + ' [' + w.wid + ']']);
+  if (nbRows.length) harmDopisz_('Nieobecności', nbRows);
+  const rows = Object.values(W).filter(w => w.stan === 'zatw' && !w.nieob && !juz[w.wid]).map(w => [harmLicznik_('CP_N', 'CP-'), w.data, w.osoba, (L[w.osoba] || {}).ek || '', w.kod || '', w.faza || '', '', w.zad || '', w.nazwa || w.opis || '',
+    w.od, w.do, String(godzH_(w.od, w.do)).replace('.', ','), ST_CZAS[w.st] || w.st, w.spoza ? 'tak' : 'nie', [w.opis, w.notatka].filter(String).join(' · ').slice(0, 2000),
+    w.kto, w.kto === w.osoba ? (w.potw ? 'propozycja → potwierdzona' : 'własne') : 'propozycja / decyzja biura', w.zatw.auto ? 'auto' : w.zatw.kto, w.zatw.ts.replace('T', ' ').slice(0, 16),
+    w.zatw.auto ? 'tak' : 'nie', w.spoza ? '–' : zgodnyZPlanem_(w) ? 'tak' : 'nie', w.zatw.korekta, w.tablet || '', [w.wid].concat(w.eid).join('; ')]);
+  if (rows.length) harmDopisz_('Czas pracy', rows);
+  // ClickUp
+  if (P.getProperty('CLICKUP_TOKEN')) {
+    const zadania = {}; Object.values(W).filter(w => w.zad && !w.korOf).forEach(w => { (zadania[w.zad] = zadania[w.zad] || []).push(w); });
+    Object.keys(zadania).forEach(zid => { try { czasZadanieCU_(zid, zadania[zid]); } catch (e) { bledy.push(e.message); syncLog_('zadanie', 'zad:' + zid, zid, 'błąd', e.message); } });
+    Object.values(W).filter(w => !w.zad && w.spoza && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasSpozaCU_(w); } catch (e) { bledy.push(e.message); syncLog_('spoza', 'spoza:' + w.wid, '', 'błąd', e.message); } });
+    Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasNieobCU_(w); } catch (e) { bledy.push(e.message); syncLog_('nieobecność', 'nieob:' + w.wid, '', 'błąd', e.message); } });
+    Object.values(W).filter(w => w.korOf && w.stan === 'zatw').forEach(w => { try { czasKorektaCU_(w, W[w.korOf], W); } catch (e) { bledy.push(e.message); syncLog_('korekta', 'kor:' + w.wid, '', 'błąd', e.message); } });
+  }
+  return { bledy: bledy };
+}
+
+/* --- ClickUp: dziennik operacji (punkty kontrolne – ponowienie nie tworzy duplikatów) --- */
+function syncLog_(op, klucz, cuId, wynik, blad) { harmDopisz_('Sync ClickUp', [[harmLicznik_('SY_N', 'S-'), Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), op, klucz, cuId || '', wynik, String(blad || '').slice(0, 300)]]); }
+function syncByl_(klucz) { const v = harmSh_('Sync ClickUp').getDataRange().getDisplayValues(); for (let i = v.length - 1; i > 0; i--) if (v[i][3] === klucz && v[i][5] === 'ok') return v[i][4] || 'ok'; return null; }
+function czasKomentarz_(ws, naglowek) {
+  const f = t => { if (!t) return ''; const s = String(t); return /[zZ]$|[+-]\d\d:?\d\d$/.test(s) && !isNaN(new Date(s)) ? Utilities.formatDate(new Date(s), TZ, 'yyyy-MM-dd HH:mm') : s.replace('T', ' ').slice(0, 16); };
+  return ['ELWIS · ' + naglowek].concat(ws.map(w => '• ' + w.osoba + ' – ' + (w.data !== ws[0].data ? w.data + ' ' : '') + w.od + '–' + w.do + ' (' + String(godzH_(w.od, w.do)).replace('.', ',') + ' h, ' + (ST_CZAS[w.st] || w.st) + ')' +
+    ' – ' + (w.kto === w.osoba ? 'potwierdził(a) sam(a) ' + f(w.ts) : w.potw ? 'propozycja: ' + w.kto + ' ' + f(w.ts) + ', potwierdził(a) ' + f(w.potw) : 'wpisał(a) ' + w.kto + ' ' + f(w.ts) + ', bez potwierdzenia osoby') +
+    ' · zatwierdził ' + (w.zatw.auto ? 'automatycznie (zgodne z planem)' : w.zatw.kto) + ' ' + f(w.zatw.ts) + (w.zatw.korekta ? ' · korekta: ' + w.zatw.korekta : '') +
+    (w.notatka ? '\n   ' + String(w.notatka).slice(0, 600) : ''))).join('\n');
+}
+function harmZadanie_(o) {
+  harmDopisz_('Zadania', [[harmLicznik_('ZH_N', 'Z-'), o.cu || '', o.kod || '', o.faza || '', o.parent || '', o.nazwa || '', String(o.opis || '').slice(0, 2000), 'zadanie', o.status || '', 'normalny',
+    o.start || '', o.termin || '', 'nie', o.h == null ? '' : String(o.h).replace('.', ','), (o.osoby || []).join('; '), o.ekipa || '', '', '', '', '', '', '', '', '', 'ELWIS', o.kto || 'serwer',
+    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), '', '', o.status === 'complete' || o.status === 'cancelled' ? Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') : '', o.zastapione || '', '']]);
+}
+function cuIds_(osoby) { const L = {}; ludzie_().forEach(o => { L[o.name] = Number(o.id); }); return osoby.map(n => L[n]).filter(Boolean); }
+
+/** Zadanie z planu: gdy wszystkie osoby z planu mają rozstrzygnięty dzień końcowy – status albo anulowanie + nowe zadania. */
+function czasZadanieCU_(zid, ws) {
+  if (syncByl_('zad:' + zid)) return;
+  const plan = (ws.find(w => w.plan) || {}).plan || {};
+  const osobyPlanu = plan.osoby || [];
+  const kon = ws.filter(w => w.stan === 'zatw' && (w.st === 'complete' || w.st === 'update required'));
+  if (!kon.length) return;   // brak zatwierdzonego dnia końcowego
+  const dzienK = kon.map(w => w.data).sort().pop();
+  const naDzien = ws.filter(w => w.data === dzienK);
+  const rozstrz = n => naDzien.some(w => w.osoba === n && ['zatw', 'odrzucone', 'odrzB'].indexOf(w.stan) >= 0);
+  if (!osobyPlanu.every(rozstrz)) return;   // czekamy na pozostałe osoby
+  const prac = ws.filter(w => w.stan === 'zatw').sort((a, b) => (a.data + a.od < b.data + b.od ? -1 : 1));
+  const t = cu_('get', 'task/' + zid);
+  const wszyscyZgodni = prac.every(w => zgodnyZPlanem_(w) || (w.st === 'dzien' && w.od === (w.plan || {}).od && w.do === (w.plan || {}).do))
+    && osobyPlanu.every(n => prac.some(w => w.osoba === n)) && prac.every(w => osobyPlanu.indexOf(w.osoba) >= 0) && kon.every(w => w.st === 'complete');
+  const kod = (prac[0] || {}).kod || '', faza = (prac[0] || {}).faza || '';
+  // zadanie bez godzin w ClickUp (od 1.58.0): ci sami ludzie i te same godziny → uzupełnienie godzin i szacowanego czasu zamiast nowych zadań
+  const bezGodz = !(t.start_date && t.due_date && t.start_date_time && t.due_date_time) || !!plan.bezGodz;
+  const jedenDzien = prac.every(w => w.data === dzienK), takieSame = prac.every(w => w.od === prac[0].od && w.do === prac[0].do && w.st === prac[0].st);
+  const ciSami = osobyPlanu.every(n => prac.some(w => w.osoba === n)) && prac.every(w => osobyPlanu.indexOf(w.osoba) >= 0);
+  if (bezGodz && jedenDzien && takieSame && ciSami && prac.length) {
+    const w0 = prac[0], st = w0.st === 'update required' ? 'update required' : 'complete';
+    cu_('put', 'task/' + zid, { start_date: msDnia_(w0.data, w0.od), start_date_time: true, due_date: msDnia_(w0.data, w0.do), due_date_time: true, time_estimate: Math.round((minOfH_(w0.do) - minOfH_(w0.od)) * 6e4) * (st === 'complete' ? 1 : 1), status: st });
+    cu_('post', 'task/' + zid + '/comment', { comment_text: czasKomentarz_(prac, 'uzupełniono godziny zadania (w ClickUp nie było godzin)'), notify_all: false });
+    harmZadanie_({ cu: zid, kod, faza, parent: t.parent || '', nazwa: t.name, status: st, start: w0.data + ' ' + w0.od, termin: w0.data + ' ' + w0.do, h: godzH_(w0.od, w0.do), osoby: prac.map(w => w.osoba) });
+    syncLog_('uzupełnij godziny', 'zad:' + zid, zid, 'ok');
+    if (st === 'update required') czasDokonczenie_(zid, t, prac, kod, faza, []);
+    P.setProperty('PLAN_VER', String(Date.now())); return;
+  }
+  if (wszyscyZgodni) {
+    const dop = !t.time_estimate ? { time_estimate: Math.round(prac.filter(w => w.osoba === prac[0].osoba).reduce((a, w) => a + minOfH_(w.do) - minOfH_(w.od), 0) * 6e4) } : {};
+    cu_('put', 'task/' + zid, Object.assign({ status: 'complete' }, dop));
+    cu_('post', 'task/' + zid + '/comment', { comment_text: czasKomentarz_(prac, 'czas pracy zgodny z planem'), notify_all: false });
+    harmZadanie_({ cu: zid, kod, faza, parent: t.parent || '', nazwa: t.name, status: 'complete', h: prac.reduce((s, w) => s + godzH_(w.od, w.do), 0), osoby: [...new Set(prac.map(w => w.osoba))] });
+    syncLog_('status complete', 'zad:' + zid, zid, 'ok'); P.setProperty('PLAN_VER', String(Date.now())); return;
+  }
+  // różne godziny → nowe zadania wg faktycznych godzin (grupy: dzień + od + do + status), potem anulowanie pierwotnego
+  const grupy = {}; prac.forEach(w => { const k = [w.data, w.od, w.do, w.st].join('|'); (grupy[k] = grupy[k] || []).push(w); });
+  const nowe = [], lid = t.list && t.list.id, wielo = Object.keys(grupy).some(k => k.split('|')[0] !== dzienK) || !!plan.wielodniowy;
+  Object.keys(grupy).forEach(k => {
+    const g = grupy[k], w0 = g[0], kl = 'zadnowe:' + zid + ':' + k;
+    let id = syncByl_(kl);
+    if (!id) {
+      const st = w0.st === 'update required' ? 'update required' : 'complete';
+      const nz = cu_('post', 'list/' + lid + '/task', { name: txt_(t.name).slice(0, 160) + (wielo ? ' – ' + dzTxt_(w0.data) : '') + (st === 'update required' ? ' (częściowo)' : ''), parent: t.parent || undefined,
+        assignees: cuIds_(g.map(w => w.osoba)), description: 'Faktyczny czas pracy z ELWIS – zastępuje zadanie „' + txt_(t.name).slice(0, 120) + '” (' + t.url + ').\n' + g.map(w => w.notatka || '').filter(String).join('\n').slice(0, 1500),
+        start_date: msDnia_(w0.data, w0.od), start_date_time: true, due_date: msDnia_(w0.data, w0.do), due_date_time: true, time_estimate: Math.round((minOfH_(w0.do) - minOfH_(w0.od)) * 6e4), notify_all: false });
+      id = nz.id;
+      try { cu_('put', 'task/' + id, { status: st }); } catch (e) { Logger.log('status nowego: ' + e); }
+      cu_('post', 'task/' + id + '/comment', { comment_text: czasKomentarz_(g, 'czas pracy'), notify_all: false });
+      syncLog_('utwórz zadanie', kl, id, 'ok');
+      harmZadanie_({ cu: id, kod, faza, parent: t.parent || '', nazwa: t.name, opis: 'Zastępuje ' + zid, status: st, start: w0.data + ' ' + w0.od, termin: w0.data + ' ' + w0.do, h: godzH_(w0.od, w0.do), osoby: g.map(w => w.osoba) });
+    }
+    nowe.push(id);
+  });
+  czasDokonczenie_(zid, t, prac, kod, faza, nowe);
+  const odrz = ws.filter(w => w.data === dzienK && (w.stan === 'odrzucone' || w.stan === 'odrzB')).map(w => w.osoba);
+  const stAn = konfig_().cu_status_anulowane || 'cancelled';
+  cu_('post', 'task/' + zid + '/comment', { comment_text: czasKomentarz_(prac, 'zadanie zastąpione faktycznym czasem pracy') + (odrz.length ? '\nNie pracowali przy zadaniu (odłączeni): ' + odrz.join(', ') : '') + '\nNowe zadania: ' + nowe.join(', '), notify_all: false });
+  try { cu_('put', 'task/' + zid, { status: stAn }); } catch (e) { cu_('post', 'task/' + zid + '/comment', { comment_text: 'ELWIS: lista nie ma statusu „' + stAn + '” – oznacz zadanie ręcznie jako anulowane.', notify_all: false }); }
+  harmZadanie_({ cu: zid, kod, faza, parent: t.parent || '', nazwa: t.name, status: 'cancelled', osoby: osobyPlanu, zastapione: nowe.join('; ') });
+  syncLog_('anuluj', 'zad:' + zid, zid, 'ok'); P.setProperty('PLAN_VER', String(Date.now()));
+}
+
+/** Dokończenie (Do kontynuacji): jedno zadanie dla wszystkich osób, które przerwały, w terminie zatwierdzonym przez biuro */
+function czasDokonczenie_(zid, t, prac, kod, faza, nowe) {
+  const lid = t.list && t.list.id;
+  const przerw = prac.filter(w => w.st === 'update required'), tr = (przerw.find(w => w.termin && w.termin.data) || {}).termin;
+  if (!przerw.length || !tr || syncByl_('dokonczenie:' + zid)) return;
+  const os = [...new Set(przerw.map(w => w.osoba))], pw = (przerw.find(w => w.powod) || {}).powod;
+  const dk = cu_('post', 'list/' + lid + '/task', { name: txt_(t.name).slice(0, 160) + ' – dokończenie', parent: t.parent || undefined, assignees: cuIds_(os),
+    description: 'Dokończenie po przerwaniu ' + dzTxt_(przerw[0].data) + (pw ? ' – powód: ' + pw : '') + '. Termin zaproponowany w ELWIS, zatwierdzony przez biuro.',
+    start_date: msDnia_(tr.data, tr.od), start_date_time: true, due_date: msDnia_(tr.data, tr.do), due_date_time: true, time_estimate: Math.round((minOfH_(tr.do) - minOfH_(tr.od)) * 6e4), notify_all: false });
+  syncLog_('utwórz dokończenie', 'dokonczenie:' + zid, dk.id, 'ok'); nowe.push(dk.id);
+  harmZadanie_({ cu: dk.id, kod, faza, parent: t.parent || '', nazwa: t.name + ' – dokończenie', status: 'to do', start: tr.data + ' ' + tr.od, termin: tr.data + ' ' + tr.do, h: godzH_(tr.od, tr.do), osoby: os });
+}
+
+/** Urlop / nieobecność zatwierdzone przez biuro → zadanie w liście osoby (przestrzeń HUPBUD) – liczy się w obciążeniu jak dotąd (nazwa „Urlop…/Nieobecność…”) */
+function czasNieobCU_(w) {
+  const kl = 'nieob:' + w.wid; if (syncByl_(kl)) return;
+  const team = cuTeam_(), sp = (cu_('get', 'team/' + team + '/space?archived=false').spaces || []).find(x => /hup\s*-?\s*bud/i.test(x.name) && !/proj/i.test(x.name));
+  let lid = konfig_().cu_lista_nieobecnosci || '';
+  if (!lid && sp) {
+    const imie = U_norm_(w.osoba), lists = (cu_('get', 'space/' + sp.id + '/list?archived=false').lists || []);
+    (cu_('get', 'space/' + sp.id + '/folder?archived=false').folders || []).forEach(f => (f.lists || []).forEach(l => lists.push(l)));
+    const l = lists.find(x => U_norm_(x.name).indexOf(imie) >= 0) || lists.find(x => U_norm_(x.name).indexOf(imie.split(' ')[0]) >= 0);
+    if (l) lid = l.id;
+  }
+  if (!lid) throw new Error('Nieobecność ' + w.osoba + ': brak listy osoby w przestrzeni HUPBUD (albo klucza cu_lista_nieobecnosci w Konfiguracji)');
+  const nazwa = (w.rodzaj === 'urlop' ? 'Urlop' : 'Nieobecność') + ' – ' + w.osoba;
+  const nz = cu_('post', 'list/' + lid + '/task', { name: nazwa, assignees: cuIds_([w.osoba]), description: (w.uwagi || '') + '\nWpisane w ELWIS, zatwierdzone przez biuro.',
+    start_date: msDnia_(w.data, '00:00'), start_date_time: false, due_date: msDnia_(w.dataDo || w.data, '23:00'), due_date_time: false, notify_all: false });
+  cu_('post', 'task/' + nz.id + '/comment', { comment_text: 'ELWIS · ' + nazwa + ': ' + w.data + ' – ' + (w.dataDo || w.data) + ' (' + (w.dni || 1) + ' dni rob.) · wpisał(a) ' + w.kto + ' · zatwierdził ' + (w.zatw.auto ? 'automatycznie' : w.zatw.kto) + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16), notify_all: false });
+  syncLog_('utwórz nieobecność', kl, nz.id, 'ok'); CACHE.remove('obc');
+}
+
+/** Korekta biura (także po zatwierdzeniu): komentarz w ClickUp, a gdy zadanie z faktycznymi godzinami jest tylko tej osoby – nowe godziny i szacowany czas */
+function czasKorektaCU_(w, stary, W) {
+  const kl = 'kor:' + w.wid; if (syncByl_(kl)) return;
+  if (stary && stary.nieob) {   // urlop / nieobecność: stare zadanie „cancelled”, nowe wg poprawionych danych (osoba, rodzaj, daty)
+    const id = syncByl_('nieob:' + stary.wid);
+    const txt = x => (x.rodzaj === 'urlop' ? 'Urlop' : 'Nieobecność') + ' ' + x.osoba + ' ' + x.data + ' – ' + (x.dataDo || x.data) + ' (' + (x.dni || 1) + ' dni rob.)';
+    if (id) { cu_('post', 'task/' + id + '/comment', { comment_text: 'ELWIS · korekta biura: ' + txt(stary) + ' → ' + txt(w) + ' · ' + w.zatw.kto + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16) + (w.zatw.powod ? ' · powód: ' + w.zatw.powod : ''), notify_all: false });
+      try { cu_('put', 'task/' + id, { status: konfig_().cu_status_anulowane || 'cancelled' }); } catch (e) { Logger.log(e); } }
+    if (w.nieob) czasNieobCU_(w);
+    syncLog_('korekta', kl, id || '', 'ok'); CACHE.remove('obc'); return;
+  }
+  const opis = 'ELWIS · korekta biura: ' + w.osoba + ' ' + (stary ? stary.data + ' ' + stary.od + '–' + stary.do + ' → ' : '') + w.data + ' ' + w.od + '–' + w.do + ' (' + String(godzH_(w.od, w.do)).replace('.', ',') + ' h) · ' + w.zatw.kto + ' ' + String(w.zatw.ts).replace('T', ' ').slice(0, 16) + (w.zatw.korekta ? ' · ' + w.zatw.korekta : '') + (w.zatw.powod ? ' · powód: ' + w.zatw.powod : '');
+  let cel = '';
+  if (stary && stary.zad) {
+    const v = harmSh_('Sync ClickUp').getDataRange().getDisplayValues().slice(1).filter(r => r[5] === 'ok');
+    const k = 'zadnowe:' + stary.zad + ':' + [stary.data, stary.od, stary.do, stary.st].join('|'), r = v.find(x => x[3] === k);
+    cel = r ? r[4] : stary.zad;
+  } else if (stary && stary.spoza) { const id = syncByl_('spoza:' + stary.wid); if (id) cel = id; }
+  else if (stary && stary.nieob) { const id = syncByl_('nieob:' + stary.wid); if (id) cel = id; }
+  if (cel) {
+    const wspolne = stary && W && Object.values(W).some(x => x !== stary && x.stan === 'zatw' && !x.korOf && (stary.zad ? x.zad === stary.zad && [x.data, x.od, x.do, x.st].join('|') === [stary.data, stary.od, stary.do, stary.st].join('|') : x.spoza && syncByl_('spoza:' + x.wid) === cel));
+    try { if (stary && !stary.nieob && cel !== stary.zad && !wspolne) cu_('put', 'task/' + cel, { start_date: msDnia_(w.data, w.od), start_date_time: true, due_date: msDnia_(w.data, w.do), due_date_time: true, time_estimate: Math.round((minOfH_(w.do) - minOfH_(w.od)) * 6e4) }); } catch (e) { Logger.log(e); }
+    cu_('post', 'task/' + cel + '/comment', { comment_text: opis, notify_all: false });
+  }
+  if (stary && stary.spoza) syncLog_('spoza planu', 'spoza:' + w.wid, cel, 'ok');
+  if (stary && stary.nieob) syncLog_('utwórz nieobecność', 'nieob:' + w.wid, cel, 'ok');
+  syncLog_('korekta', kl, cel, 'ok');
+}
+
+/** Praca spoza planu: zadanie w fazie budowy; te same budowa, faza, dzień, godziny i opis = jedno wspólne zadanie (kolejne osoby dopisywane). */
+function czasSpozaCU_(w) {
+  const kw = 'spoza:' + w.wid; if (syncByl_(kw)) return;
+  const pr = projektyBaza_().find(p => p.kod === w.kod); if (!pr || !pr.cu) throw new Error('Praca spoza planu: budowa ' + w.kod + ' bez listy ClickUp');
+  const kg = 'spozaGr:' + [w.kod, w.faza, w.data, w.od, w.do, U_norm_(w.opis)].join('|');
+  let id = syncByl_(kg);
+  if (id) {
+    cu_('put', 'task/' + id, { assignees: { add: cuIds_([w.osoba]) } });
+    cu_('post', 'task/' + id + '/comment', { comment_text: czasKomentarz_([w], 'dopisano osobę'), notify_all: false });
+  } else {
+    const fid = faza_(pr.cu, w.faza || 'Montaż i Wykonawstwo');
+    const nz = cu_('post', 'list/' + pr.cu + '/task', { name: txt_(w.opis || 'Praca spoza planu').slice(0, 160), parent: fid, assignees: cuIds_([w.osoba]),
+      description: 'Praca spoza planu wpisana w ELWIS.' + (w.notatka ? '\n' + String(w.notatka).slice(0, 1500) : ''),
+      start_date: msDnia_(w.data, w.od), start_date_time: true, due_date: msDnia_(w.data, w.do), due_date_time: true, time_estimate: Math.round((minOfH_(w.do) - minOfH_(w.od)) * 6e4), notify_all: false });
+    id = nz.id;
+    try { cu_('put', 'task/' + id, { status: w.st === 'update required' ? 'update required' : 'complete' }); } catch (e) { Logger.log(e); }
+    cu_('post', 'task/' + id + '/comment', { comment_text: czasKomentarz_([w], 'czas pracy (spoza planu)'), notify_all: false });
+    syncLog_('utwórz spoza planu', kg, id, 'ok');
+    harmZadanie_({ cu: id, kod: w.kod, faza: w.faza, parent: fid, nazwa: w.opis, status: w.st === 'update required' ? 'update required' : 'complete', start: w.data + ' ' + w.od, termin: w.data + ' ' + w.do, h: godzH_(w.od, w.do), osoby: [w.osoba] });
+  }
+  syncLog_('spoza planu', kw, id, 'ok'); P.setProperty('PLAN_VER', String(Date.now()));
+}
+function U_norm_(s) { return txt_(s).toLowerCase().replace(/\s+/g, ' '); }
+
+/** Noc (z `codziennie`): auto-zatwierdzanie i powiadomienia o brakujących godzinach z poprzedniego dnia roboczego. */
+function czasNoc_() {
+  const k = konfig_(); if (!k.harmonogram_id) return;
+  czasPrzetworz_();
+  let d = dodajDni_(dzienTz_(Date.now()), -1); while (!robTz_(d)) d = dodajDni_(d, -1);
+  const pl = plan_(d, d); if (!pl.zadania) return;
+  const L = {}; ludzie_().forEach(o => { L[o.id] = o.name; });
+  const W = czasStan_(czasZdarzenia_(d)), ma = {}; Object.values(W).forEach(w => { if (w.data === d && w.zad && ['zastapiony', 'zignorowany', 'po_zatw'].indexOf(w.stan) < 0) ma[w.osoba + '|' + w.zad] = 1; });
+  const pow = [];
+  pl.zadania.filter(t => !t.zamk && t.koniec && dzienTz_(t.koniec) === d).forEach(t => (t.osoby || []).forEach(i => { const n = L[i]; if (n && !ma[n + '|' + t.id]) pow.push({ t: 'czas', kod: kodZListy_(t.listaNazwa), tyt: 'Brak godzin: ' + n + ' – ' + txt_(t.nazwa).slice(0, 80), opis: dzTxt_(d) + ' – zadanie bez statusu i godzin', kto: 'serwer' }); }));
+  powDodaj_(pow);
 }

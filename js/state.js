@@ -16,6 +16,7 @@ const Session = {
     S.user = null; return null;
   },
   async login(u) {
+    S._czasPokaz = false;   // od 1.58.0: po zalogowaniu pokaż „Do uzupełnienia”
     const h = (S.boot && S.boot.sesjaGodziny) || 12;
     S.user = { name: u.name, rola: u.rola, ekipa: u.ekipa, exp: Date.now() + h * 3600e3 };
     await DB.set('session', S.user);
@@ -157,7 +158,7 @@ async function addEvent(typ, urz, d) {
 }
 
 /* liczba rzeczy czekających na wysłanie: zdarzenia, zdjęcia, statusy zadań (od 1.12.0) */
-async function liczOczekujace() { S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length + ((await DB.get('zadKolejka')) || []).length + ((await DB.get('zakKolejka')) || []).length + ((await DB.get('zakFotoKolejka')) || []).length; UI.net(); return S.pending; }
+async function liczOczekujace() { S.pending = (await DB.unsynced()).length + (await DB.unsentPhotos()).length + ((await DB.get('zadKolejka')) || []).length + ((await DB.get('zakKolejka')) || []).length + ((await DB.get('zakFotoKolejka')) || []).length + ((await DB.get('czasKolejka')) || []).length; UI.net(); return S.pending; }
 
 /* Zapotrzebowania (od 1.48.0): lista z serwera w DB 'zakupy', kolejka wpisów 'zakKolejka', zdjęcia 'zakFoto:<fid>' + 'zakFotoKolejka' */
 const ZAK_ST = { nowe: 'Nowe', realizacja: 'W realizacji', dostarczone: 'Dostarczone', odrzucone: 'Odrzucone' };
@@ -249,6 +250,8 @@ const Sync = {
           if (bledy.length) UI.toast('Nie zmieniono statusu: ' + bledy[0].nazwa + ' – ' + w[bledy[0].id].blad);
         } catch (e) { if (/Nieznana operacja/.test(e.message)) S.planErr = 'Statusy zadań wymagają aktualizacji serwera ELWIS.'; else throw e; }
       }
+      // 3c. czas pracy (od 1.58.0): wpisy, propozycje, potwierdzenia → serwer; stan wpisów z serwera
+      if (!(S.boot && S.boot.dostep)) { this.prog(0.255, 'Czas pracy'); try { await Czas.sync(); } catch (e) { if (/Nieznana operacja/.test(e.message)) S.czasErr = 'Czas pracy wymaga aktualizacji serwera ELWIS.'; else console.warn('czas', e); } }
       // 4. dane budów: bieżąca + ostatnio używane
       // plan dnia z ClickUp (±7 dni) – przed plikami, żeby był od razu po zalogowaniu
       this.prog(0.26, 'Plan dnia');
@@ -356,7 +359,7 @@ const Sync = {
   },
   async pullPlan() {
     if (S.boot && S.boot.dostep) return;   // dostęp podwykonawcy – bez planu dnia (od 1.43.0)
-    const od = U.day(new Date(Date.now() - 7 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));
+    const od = U.day(new Date(Date.now() - 14 * 864e5)), d = U.day(new Date(Date.now() + 7 * 864e5));   // od 1.58.0: 14 dni wstecz – niezamknięte dni
     try { const r = await API.plan(od, d); await DB.set('plan', { od, do: d, zadania: r.zadania || [], brakKlucza: !!r.brakKlucza, pobrano: Date.now() }); S.planErr = ''; }
     catch (e) { S.planErr = /Nieznana operacja/.test(e.message) ? 'Plan dnia wymaga aktualizacji serwera ELWIS.' : 'Nie udało się pobrać planu: ' + e.message; }
     // priorytety budów i wydajność ekip – tylko rola biuro (od 1.17.0); wynik gotowy z serwera, bez przeliczania

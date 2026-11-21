@@ -269,7 +269,12 @@ const Views = {
     // miejsce prognozy: budowa z lokalizacją, na której zalogowany ma zadania tego dnia; inaczej Lublin
     const lokDnia = k => { const b2 = wszystkieZad.filter(t => naDzien(t, k) && mojeZad(t)).map(budowaZ).find(b => b && wspolrzedne(lokBudowy(b))); return b2 ? { klucz: wspolrzedne(lokBudowy(b2)).klucz, miejsce: b2.nazwa } : { klucz: POGODA_DOM.klucz, miejsce: POGODA_DOM.miejsce }; };
     const kol = t => { const k = t.lista || '?'; let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAN_KOLORY[h % PLAN_KOLORY.length]; };
-    const kolumny = osoby.map(o => ({ o, z: zad.filter(t => t.osoby.includes(String(o.cu))) }));
+    // od 1.58.0: czas pracy – zatwierdzone godziny z bazy (kłódka) zastępują zadanie z planu; wpisy spoza planu jako bloki
+    const CZW = (await Czas.lista()).filter(w => w.data === dzien && Czas.akt(w) && !w.nieob);
+    const NBW = await Czas.nieob(null, dzien);   // urlop / nieobecność w tym dniu (także odrzucone)
+    const BKD = S.user ? new Set((await Czas.braki(S.user.name)).map(x => x.d)) : new Set();
+    const kolumny = osoby.map(o => { const zat = CZW.filter(w => w.osoba === o.name && w.stan === 'zatw' && w.zad);
+      return { o, z: zad.filter(t => t.osoby.includes(String(o.cu)) && !zat.some(w => w.zad === t.id)), cz: CZW.filter(w => w.osoba === o.name && (w.stan === 'zatw' || !w.zad) && w.stan !== 'prop').concat(NBW.filter(w => w.osoba === o.name)) }; });
     // oś dnia 7:00–24:00 (od 1.14.1); każde zadanie → odcinek tego dnia [s, e] w minutach
     //  • z godzinami, jeden dzień – wg godzin (przycięte do 7–24)
     //  • z godzinami, kilka dni – 1. dzień od startu, środkowe 7–15, ostatni do końca
@@ -291,7 +296,8 @@ const Views = {
     };
     kolumny.forEach(k => {
       k.el = [];
-      k.z.forEach(t => { const o = odcinek(t); if (o.rodz !== 'auto') k.el.push({ t, ...o, s: o.se[0], e: o.se[1] }); });
+      k.z.forEach(t => { const o = odcinek(t); if (o.rodz !== 'auto') k.el.push({ t, os: k.o.name, ...o, s: o.se[0], e: o.se[1] }); });
+      (k.cz || []).forEach(w => k.el.push({ cz: w, t: { id: 'cz-' + w.wid }, rodz: 'fix', s: CZ.min(w.od), e: CZ.min(w.do) }));
       // wolne miejsca liczone tylko względem zadań z godzinami (całodniowe stoją obok – nie wypychają innych)
       const zajete = k.el.filter(x => x.rodz === 'fix').map(x => [x.s, x.e]);
       k.z.filter(t => odcinek(t).rodz === 'auto').forEach(t => {
@@ -299,7 +305,7 @@ const Views = {
         let od = D_OD;
         for (let i = 0; i < 200; i++) { const kol = zajete.find(([a, b]) => od < b && od + dl > a); if (!kol) break; od = kol[1]; }
         if (od + dl > D_DO) od = D_DO - dl;   // nie mieści się przed północą → ostatnie miejsce, obok innych
-        zajete.push([od, od + dl]); k.el.push({ t, rodz: 'auto', s: od, e: od + dl });
+        zajete.push([od, od + dl]); k.el.push({ t, os: k.o.name, rodz: 'auto', s: od, e: od + dl });
       });
     });
     const wpasowane = new Set(kolumny.flatMap(k => k.el.map(x => x.t.id)));
@@ -338,13 +344,18 @@ const Views = {
       const { t, rodz, s, e } = x;
       const top = (s - h0 * 60) / 60 * PX, hgt = Math.max(30, (e - s) / 60 * PX - 3);
       const { st, kl } = poz(top, hgt, tor);
+      if (x.cz && x.cz.nieob) { const w = x.cz;   // urlop / nieobecność
+        return `<button class="pblk${kl} pczas pnieob ${w.stan === 'zatw' ? 'zamk' : w.stan === 'odrzB' ? 'odrz' : ''}" data-cz="${U.esc(w.wid)}" style="${st}"><span class="pt">${U.esc(PC_dzien(w.data))}${w.dataDo && w.dataDo !== w.data ? ' – ' + U.esc(PC_dzien(w.dataDo)) : ''}</span><b>${U.esc(w.nazwa || CZ_ST_TXT[w.st] || '')}</b>${czChip(w)}</button>`; }
+      if (x.cz) { const w = x.cz, bp = proj.find(p => p.kod === w.kod);   // od 1.58.0: czas pracy z bazy
+        return `<button class="pblk${kl} pczas ${w.stan === 'zatw' ? 'zamk' : ''}" data-cz="${U.esc(w.wid)}" style="${st}"><span class="pt">${U.esc(w.od)}–${U.esc(w.do)} · ${CZ.hTxt(CZ.h(w.od, w.do))}</span>${bp ? `<span class="pbud">${U.esc(bp.kod)}</span>` : ''}<b>${U.esc(w.nazwa || w.opis || '')}</b>${czChip(w)}</button>`; }
+      const cw = CZW.find(w => w.zad === t.id && w.osoba === x.os);
       const a = t.start ? new Date(t.start) : null, b2 = t.koniec ? new Date(t.koniec) : null;
       let czas;
       if (rodz === 'fix') czas = x.wiel ? `${dzTyg(a)} ${hm(a)} – ${dzTyg(b2)} ${hm(b2)}` : `${hm(a)}–${hm(b2)}`;
       else if (rodz === 'auto') czas = `~${hmMin(s)}–${hmMin(e)} · ${String(Math.round((e - s) / 6) / 10).replace('.', ',')} h`;
       else czas = 'cały dzień' + (x.wiel && a && b2 ? ` · ${a.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}–${b2.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}` : '');
       return `<button class="pblk${kl}${rodz === 'auto' ? ' pauto' : ''} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">${czas}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}${rodz === 'auto' ? '<span class="pauton">Kierownik nie określił pory dnia</span>' : ''}</button>`;
+        <span class="pt">${czas}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${cw ? czChip(cw) + ` <span class="czchip c-gr">${U.esc(cw.od)}–${U.esc(cw.do)}</span>` : pst(t)}${rodz === 'auto' ? '<span class="pauton">Kierownik nie określił pory dnia</span>' : ''}</button>`;
     };
     // tory: zadania nachodzące na siebie dzielą szerokość kolumny; stykające się (koniec = początek) – nie
     const kolumnaHtml = k => {
@@ -374,9 +385,9 @@ const Views = {
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
-          ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); const sw = U.swieto(x.k); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''} ${U.wolny(x.k) ? 'wolne' : ''}" data-day="${x.k}" title="${sw ? U.esc(sw) + ' – dzień wolny' + (w ? '; ' : '') : ''}${w ? w.tmin + '°/' + w.tmax + '° (7–16)' + (w.pada ? ', pada' : '') : ''}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><span class="pmid"><b>${x.d.getDate()}</b>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span>` : ''}</span><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : ''}${w ? `<em>${w.tmin}°/${w.tmax}°</em>` : ''}${!x.n && !w ? '&nbsp;' : ''}</i></button>`; }).join('')}
+          ${tydzien.map(x => { const w = pogodaDnia(x.k, lokDnia(x.k)); const sw = U.swieto(x.k); return `<button class="pday ${x.k === dzien ? 'on' : ''} ${x.k === dzis ? 'today' : ''} ${U.wolny(x.k) ? 'wolne' : ''} ${BKD.has(x.k) ? 'czbrak' : ''}" data-day="${x.k}" title="${sw ? U.esc(sw) + ' – dzień wolny' + (w ? '; ' : '') : ''}${w ? w.tmin + '°/' + w.tmax + '° (7–16)' + (w.pada ? ', pada' : '') : ''}"><span>${x.d.toLocaleDateString('pl-PL', { weekday: 'short' }).replace('.', '')}</span><span class="pmid"><b>${x.d.getDate()}</b>${w ? `<span class="pico" aria-hidden="true">${w.ikona}</span>` : ''}</span><i>${x.n ? '•'.repeat(Math.min(x.n, 4)) : ''}${w ? `<em>${w.tmin}°/${w.tmax}°</em>` : ''}${!x.n && !w ? '&nbsp;' : ''}</i></button>`; }).join('')}
         </div></div>
-        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${U.wolny(dzien) ? `<span class="pchip pwolne">${U.swieto(dzien) ? U.esc(U.swieto(dzien)) : 'Weekend'} · dzień wolny</span>` : ''}${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}"><span class="pchipico">${w.ikona}</span> 7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
+        <div class="phsum"><span class="pchip">${U.esc(dzienTxt)}${dzien === dzis ? ' · dziś' : ''}</span>${(h => h ? `<span class="pchip">Moje godziny: ${CZ.hTxt(h)}</span>` : '')(CZW.filter(w => S.user && w.osoba === S.user.name && w.stan !== 'prop').reduce((a, w) => a + CZ.h(w.od, w.do), 0))}${BKD.has(dzien) ? '<span class="pchip pwolne">brak godzin</span>' : ''}${U.wolny(dzien) ? `<span class="pchip pwolne">${U.swieto(dzien) ? U.esc(U.swieto(dzien)) : 'Weekend'} · dzień wolny</span>` : ''}${(w => w ? `<span class="pchip ${w.pada ? 'pwarn' : ''}"><span class="pchipico">${w.ikona}</span> 7–16: ${w.tmin}°…${w.tmax}° · ${w.pada ? '☔ będzie padać (do ' + w.szansa + '%)' : 'bez opadów'} · ${U.esc(w.miejsce)}</span>` : '')(pogodaDnia(dzien, lokDnia(dzien)))}<span class="pchip">${mojeDzis.length} ${odm(mojeDzis.length, 'zadanie', 'zadania', 'zadań')}</span><span class="pchip">${budowy.size} ${odm(budowy.size, 'budowa', 'budowy', 'budów')}</span>${dzien !== dzis ? '<button class="pchip pnow" data-day="' + dzis + '">↺ dziś</button>' : ''}</div>
       </section>
       ${!pl ? `<p class="mute">${U.esc(S.planErr || 'Plan pobierze się przy najbliższej synchronizacji (potrzebny internet).')}</p>` : pl.brakKlucza ? '<p class="mute">Plan z ClickUp nie jest jeszcze włączony na serwerze (brak klucza ClickUp).</p>' : ''}
       ${pl ? `<p class="planage ${Date.now() - pl.pobrano > 12 * 36e5 ? 'old' : ''}">Plan z: ${U.esc(planWiek(pl.pobrano))}${S.planErr ? ' · ' + U.esc(S.planErr) : !navigator.onLine ? ' · offline – zmiany w ClickUp pojawią się po połączeniu' : ''}</p>` : ''}
@@ -451,6 +462,23 @@ const Views = {
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
       const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []));
     });
+    // od 1.58.0: czas pracy – podgląd wpisu; dotknięcie pustego miejsca w swojej kolumnie → „Co robiłem?” (praca spoza planu)
+    view.querySelectorAll('[data-cz]').forEach(b => b.onclick = () => { const w = CZW.concat(NBW).find(x => x.wid === b.dataset.cz); if (w) Dialogs.czasInfo(w); });
+    // przytrzymanie pustego miejsca w swojej kolumnie: kółko z zielonym postępem (jak na rzutach) → praca spoza planu / urlop / nieobecność
+    view.querySelectorAll('.pcol').forEach((c, i) => {
+      let tm = null, ring = null, x0 = 0, y0 = 0;
+      const stop = () => { clearTimeout(tm); tm = null; if (ring) { ring.remove(); ring = null; } };
+      c.addEventListener('pointerdown', e => {
+        if (e.target !== c || !kolumny[i] || !S.user || kolumny[i].o.name !== S.user.name) return;
+        x0 = e.clientX; y0 = e.clientY; const r = c.getBoundingClientRect(), y = e.clientY - r.top;
+        ring = document.createElement('span'); ring.className = 'pring'; ring.style.left = (e.clientX - r.left) + 'px'; ring.style.top = y + 'px'; c.appendChild(ring);
+        const m = h0 * 60 + Math.floor(y / PX * 2) * 30;
+        tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30); Dialogs.planMenu(dzien, m); }, 900);
+      });
+      c.addEventListener('pointermove', e => { if (tm && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => c.addEventListener(ev, stop));
+    });
+    if (S.user && !S._czasPokaz && !Session.isBiuro()) { S._czasPokaz = true; setTimeout(() => { if (UI.cur === 'plan' && !modal.innerHTML.trim()) Dialogs.doUzupelnienia(); }, 500); }
     // przewiń oś do „teraz” (albo do pierwszego zadania)
     const pt = view.querySelector('.pnowline') || view.querySelector('.pblk');
     if (pt) pt.scrollIntoView({ block: 'center', behavior: 'instant' });
@@ -1902,8 +1930,10 @@ const Dialogs = {
   },
 
   /* Okienko zadania z kalendarza (od 1.12.0): dane z ClickUp, 3 statusy (offline), przejście do budowy */
-  zadanie(t, bud, osoby) {
-    let wyb = null, powod = '';
+  async zadanie(t, bud, osoby, dzien, preSt) {
+    let wyb = preSt || null, powod = '';
+    dzien = dzien || (UI.cur === 'plan' && UI.par.d) || U.day(new Date());
+    const mojW = S.user ? (await Czas.dla(S.user.name, dzien)).find(w => w.zad === t.id) : null;   // od 1.58.0: mój wpis czasu do tego zadania
     const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null;
     const kiedy = maGodziny(t) ? hm(a) + ' – ' + hm(b) : b ? 'do ' + b.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) + (t.godzKoniec ? ' ' + hm(b) : '') : '—';
     const draw = () => {
@@ -1913,12 +1943,13 @@ const Dialogs = {
         <h2>${U.esc(t.nazwa)}</h2>
         <div class="zfacts"><div>Kiedy<b class="m">${U.esc(kiedy)}</b>${t.est ? 'szac. ' + String(Math.round(t.est / 36e5 * 10) / 10).replace('.', ',') + ' h' : ''}</div><div>Kto<b>${U.esc(osoby || '—')}</b></div></div>
         ${t.opis ? `<div><span class="lbl">Opis z ClickUp</span><p class="zopis">${U.esc(t.opis)}</p></div>` : ''}
-        <div><span class="lbl">Jak poszło?</span>
-          <div class="st3" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}">${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div></div>
+        ${mojW ? `<div class="card czz"><div class="row"><span class="lbl grow">Mój czas pracy – ${U.esc(PC_dzien(dzien))}</span>${czChip(mojW)}</div><b>${U.esc(mojW.od)}–${U.esc(mojW.do)} · ${CZ.hTxt(CZ.h(mojW.od, mojW.do))}</b> <span class="mute">${U.esc(CZ_ST_TXT[mojW.st] || '')}</span></div>` : ''}
+        ${mojW && mojW.stan === 'zatw' ? '<p class="mute">🔒 Zatwierdzone przez biuro – zmienić może tylko biuro.</p>' : `<div><span class="lbl">Jak poszło?</span>
+          <div class="st3" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}">${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div></div>`}
         ${wyb && wyb !== 'complete' ? `<div class="zwhy"><span class="lbl">Powód (opcjonalnie)</span>
           <div class="cats">${POWODY_ZAD.map(x => `<button data-pw="${U.esc(x)}" class="${x === powod ? 'on' : ''}">${U.esc(x)}</button>`).join('')}</div>
           <label><span class="lbl" style="display:block;margin-bottom:4px">Komentarz (opcjonalnie)</span><textarea id="zk" placeholder="Co zrobione, co zostało, warunek powrotu"></textarea></label></div>` : ''}
-        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}<button class="btn pri" id="zOk" ${wyb ? '' : 'disabled'}>Zapisz status</button></div>
+        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}<button class="btn pri" id="zOk" ${wyb && !(mojW && mojW.stan === 'zatw') ? '' : 'disabled'}>${wyb === 'on hold' ? 'Zapisz i wpisz, co robiłem' : wyb ? 'Dalej – godziny pracy' : 'Zapisz status'}</button></div>
       </section></div>`;
       $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
       modal.querySelectorAll('[data-st]').forEach(x => x.onclick = () => { const k = $('#zk') ? $('#zk').value : ''; wyb = x.dataset.st; draw(); if (k && $('#zk')) $('#zk').value = k; });
@@ -1928,11 +1959,14 @@ const Dialogs = {
       $('#zOk').onclick = async () => {
         if (!wyb) return;
         const kom = $('#zk') ? $('#zk').value.trim() : '';
+        // od 1.58.0: Wykonane / Do kontynuacji → godziny pracy (status trafia do ClickUp po zatwierdzeniu przez biuro)
+        if (wyb !== 'on hold') { UI.close(); return Dialogs.czasPracy(t, dzien, wyb, { bud, powod, kom }); }
         const k = (await DB.get('zadKolejka')) || [];
         k.push({ id: U.uid('z'), task: t.id, status: wyb, powod: wyb === 'complete' ? '' : powod, komentarz: wyb === 'complete' ? '' : kom, kto: S.user.name, ts: U.now(), nazwa: t.nazwa });
         await DB.set('zadKolejka', k); await liczOczekujace();
-        UI.close(); UI.toast(navigator.onLine ? 'Status zapisany' : 'Status zapisany – wyśle się po połączeniu z siecią'); UI.refresh();
+        UI.close(); UI.toast(navigator.onLine ? 'Status zapisany' : 'Status zapisany – wyśle się po połączeniu z siecią');
         if (navigator.onLine) Sync.soon();
+        Dialogs.coRobilem(dzien, { tytul: '„' + t.nazwa + '” – niepodjęte' + (powod ? ' · powód: ' + powod : ''), kod: bud && bud.kod });   // od 1.58.0
       };
     };
     draw();

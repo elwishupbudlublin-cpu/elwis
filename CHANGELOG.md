@@ -1,5 +1,15 @@
 # Zmiany
 
+## 1.58.0 – 2026-11-21 (aplikacja i serwer)
+- Czas pracy: po kliknięciu swojego zadania w planie – wykonane / do kontynuacji / niepodjęte. Godziny osobno dla każdej osoby (−/+ co 30 min, liczone dokładnie od–do); wpis za inną osobę to propozycja, potwierdzenie osoby ma pierwszeństwo. Do kontynuacji – wymagane godziny i proponowany termin dokończenia (zadanie kilkudniowe: najbliższy możliwy dzień).
+- „Co robiłem” (niepodjęte lub przytrzymanie pustego pola w planie): budowy z dnia zaznaczone, czas dzielony równo, min. 30 min między budowami, kontrola nakładania; pod budową faza, opis, osoby i notatka z dnia (przycisk „Notatka”). Licznik godzin dnia.
+- Urlop / nieobecność: data od i liczba dni roboczych (weekendy i święta pomijane) albo przytrzymanie pustego pola w planie (kółko z zielonym postępem) – do zatwierdzenia przez biuro; w planie jako czeka / zatwierdzone (kłódka) / odrzucone.
+- Zapomniane dni: okno „Do uzupełnienia” po zalogowaniu (z „Później”), czerwona kropka w kalendarzu, limit 14 dni; biuro widzi braki po 1 dniu roboczym.
+- Panel PC: „Czas pracy – do zatwierdzenia” i „Zatwierdzone godziny”: filtry, „Auto-zatwierdzaj zgodne z planem”, decyzja za osobę bez wpisu („Wg planu” / „Nie pracował”), edycja wszystkich pól wpisu (także po zatwierdzeniu – jako korekta z powodem).
+- Zatwierdzone wpisy pokazywane w planie z bazy z kłódką (bez edycji na tablecie).
+- Serwer: operacja `czas` (push / zatw / odrzB / ust); nowy arkusz „ELWIS – Harmonogram” (folder „Harmonogram”) z zakładkami m.in. Czas pracy, Nieobecności, Zdarzenia czasu, Sync ClickUp; klucze Konfiguracji harmonogram_id, czas_auto, cu_status_anulowane.
+- ClickUp: godziny zgodne z planem → status i szacowany czas; zadanie bez godzin (ta sama nazwa i osoby) → uzupełnione godziny i szacowany czas; różne godziny → zadanie pierwotne „cancelled” i nowe wg faktycznych godzin (identyczne godziny – jedno wspólne); dokończenie jako nowe zadanie; praca spoza planu w fazie budowy; urlop / nieobecność jako zadanie w liście osoby (HUPBUD); komentarze: kto potwierdził i kiedy, kto i kiedy zatwierdził, korekty biura z powodem.
+
 ## 1.57.0 – 2026-11-21 (aplikacja i serwer)
 - Panel biura na komputerze (Chrome, ekran ≥ 1200 px, rola biuro): ta sama aplikacja z menu bocznym; „Widok tabletu” przełącza z powrotem. Nowe ekrany: Harmonogram tygodnia (osoby × dni, statusy, zajętość z 8 h, weekendy i święta), Obciążenie ekip (zakładka z Bazy, „Przelicz teraz”), Budowy (tabela z licznikami i sortowaniem), Braki i Protokoły ze wszystkich budów (filtry, podsumowanie), Administracja – podgląd Pracowników (bez PIN), Tabletów (bez kluczy), Słowników, Protokołów, Konfiguracji.
 - Wszystkie ekrany tabletu dostępne na komputerze w wyglądzie panelu (jasne nagłówki, mniejsze przyciski i pola, kafelki budowy w 3 kolumnach); w budowie – jej ekrany w menu bocznym; Esc zamyka okno jak „Anuluj”.
