@@ -244,7 +244,7 @@ Object.assign(Dialogs, {
         if (rows.some(kolizja)) return UI.toast('Popraw godziny zaznaczone na czerwono');
         if (st === 'update required' && !termin) return UI.toast('Wybierz termin dokończenia');
         const evs = rows.filter(r => r.on && !r.wlasny).map((r, i) => { const [pa, pb] = CZ.planOkno(t, dzien, r.n);
-          return Czas.zdarzenie('wpis', { wid: U.uid('w'), data: dzien, osoba: r.n, zad: t.id, nazwa: t.nazwa, kod: bud ? bud.kod : '', lista: t.lista || '', faza: '', od: CZ.hm(r.od), do: CZ.hm(r.do), st,
+          return Czas.zdarzenie('wpis', { wid: U.uid('w'), data: dzien, osoba: r.n, zad: t.id, nazwa: t.nazwa, kod: bud ? bud.kod : (t.kod || ''), lista: t.lista || '', faza: t.faza || '', od: CZ.hm(r.od), do: CZ.hm(r.do), st,
             powod: st === 'update required' ? powod : '', termin: st === 'update required' ? termin : null, notatka: r.n === ja ? notatka : '', kom: r.n === ja ? (opc.kom || '') : '',
             plan: { od: CZ.hm(pa), do: CZ.hm(pb), osoby: plan, wielodniowy: wielo, bezGodz: !(t.godzStart && t.godzKoniec) } }); });
         await Czas.dodaj(evs);
@@ -432,8 +432,8 @@ Object.assign(Dialogs, {
         <p class="mute">${U.esc(w.kod || '')}${w.faza ? ' · ' + U.esc(w.faza) : ''}<br>Wpisał(a): ${U.esc(w.kto)}${w.zatw ? `<br>Zatwierdził: ${w.zatw.auto ? 'automatycznie (zgodne z planem)' : U.esc(w.zatw.kto)} ${U.esc(String(w.zatw.ts || '').replace('T', ' ').slice(0, 16))}${w.zatw.korekta ? '<br>Korekta biura: ' + U.esc(w.zatw.korekta) : ''}` : ''}</p>
         ${w.notatka ? `<div class="card"><div class="lbl">Notatka</div><p style="margin:4px 0 0">${U.esc(w.notatka)}</p></div>` : ''}
         ${w.stan === 'zatw' ? '<p class="mute">Zatwierdzone przez biuro – zmienić może tylko biuro.</p>' : ''}</div>
-      <div class="sfoot"><span class="grow"></span><button class="btn" id="ciX">Zamknij</button></div></div></div>`;
-    $('#ciX').onclick = UI.close;
+      <div class="sfoot">${w.kod && ((S.boot && S.boot.projekty) || []).some(p => p.kod === w.kod) ? '<button class="btn out" id="ciB">Przejdź do budowy</button>' : ''}<span class="grow"></span><button class="btn" id="ciX">Zamknij</button></div></div></div>`;
+    $('#ciX').onclick = UI.close; if ($('#ciB')) $('#ciB').onclick = () => { UI.close(); openProject(w.kod); };
   }
 });
 const CZ_ST_TXT = { inne: 'inna nieobecność', urlop: 'urlop', zwolnienie: 'zwolnienie lekarskie', nieobecnosc: 'nieobecność', complete: 'wykonane', 'update required': 'do kontynuacji', 'on hold': 'niepodjęte', dzien: 'dzień pracy (w toku)', spoza: 'praca spoza planu' };

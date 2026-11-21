@@ -1,5 +1,11 @@
 # Zmiany
 
+## 1.58.6 – 2026-11-21 (aplikacja, serwer, schemat 1.20)
+- Czas pracy → ClickUp dopiero, gdy każdy dzień zadania jest rozstrzygnięty: każda osoba z harmonogramu ma zatwierdzony wpis lub decyzję biura i nikt nie czeka na potwierdzenie (wcześniej przy braku osób w planie – po pierwszym zatwierdzeniu); praca spoza planu – gdy cały dzień budowy rozstrzygnięty.
+- Okno zadania: propozycje innych osób z tego dnia – „Potwierdź” / „Wpisz swoje”; zatwierdzone zadanie otwiera pełne okno (kłódka, „Przejdź do budowy”); „Przejdź do budowy” także w oknie wpisu spoza planu.
+- Synchronizacja harmonogramu: wszystkie zadania ClickUp z okresu (statystyki), z numerem i nazwą projektu oraz fazą (zadanie nadrzędne listy); tablety dostają tylko zadania swoich osób. Budowa / faza / nazwa uzupełniane z harmonogramu przy zatwierdzaniu (PC) i w arkuszu „Czas pracy”.
+- Schemat 1.20: statusy zadań ClickUp w Słownikach (L – status, M – rodzaj open/custom/done/closed, N – nazwa w ELWIS); aplikacja pokazuje nazwy z N, serwer liczy zamknięte wg M.
+
 ## 1.58.5 – 2026-11-21 (aplikacja i serwer)
 - Tablety nie łączą się z ClickUp: plan dnia z arkusza „ELWIS – Harmonogram” → Zadania; status zadania z tabletu → arkusz (Historia zmian, Komentarze) + „Kolejka ClickUp”.
 - Synchronizacja harmonogramu na serwerze co 30 min (6–21, `harmSyncCzas`) i przyciskiem „⟳ Sync harmonogram” (rola biuro): kolejka → ClickUp, zatwierdzony czas → ClickUp, ClickUp → Zadania (bieżący miesiąc, 14 dni wstecz, 45 dni naprzód). Zadania z zatwierdzonymi godzinami i utworzone przez ELWIS – zablokowane (zmiana w ClickUp ich nie nadpisuje). Nowe kolumny Zadań: ID listy ClickUp, Lista ClickUp, Link; nowa zakładka „Kolejka ClickUp”.

@@ -411,7 +411,8 @@ Object.assign(Views, {
       $('#czOdsw').onclick = () => { PC._czT = 0; Views.pcCzas(Object.assign({}, UI.par, { _bez: 0 })); };
       $('#view').querySelectorAll('[data-s]').forEach(c => c.onclick = e => { e.stopPropagation(); const w = lista[+c.dataset.s]; c.checked ? sel.add(w.wid) : sel.delete(w.wid); rys(); });
       $('#view').querySelectorAll('[data-i]').forEach(r => r.onclick = e => { if (e.target.closest('button,input')) return; const w = lista[+r.dataset.i]; wyb.w = w; wyb.od = CZ.min(w.od); wyb.do = CZ.min(w.do); wyb.powod = ''; wyb.termin = w.termin || null;
-        wyb.e = { data: w.data, osoba: w.osoba, kod: w.kod || '', faza: w.faza || '', nazwa: w.nazwa || w.opis || '', st: w.st || 'complete', notatka: w.notatka || '', rodzaj: w.rodzaj || 'urlop', dni: w.dni || 1, uwagi: w.uwagi || '', terminData: (w.termin || {}).data || '' }; rys(); });
+        const tz = w.zad ? ((pl || {}).zadania || []).find(z => z.id === w.zad) || {} : {};   // od 1.58.6: budowa / faza / nazwa z harmonogramu, gdy wpis ich nie ma
+        wyb.e = { data: w.data, osoba: w.osoba, kod: w.kod || tz.kod || '', faza: w.faza || tz.faza || '', nazwa: w.nazwa || w.opis || tz.nazwa || '', st: w.st || 'complete', notatka: w.notatka || '', rodzaj: w.rodzaj || 'urlop', dni: w.dni || 1, uwagi: w.uwagi || '', terminData: (w.termin || {}).data || '' }; wyb.e0 = Object.assign({}, wyb.e); rys(); });
       $('#view').querySelectorAll('[data-ok]').forEach(b => b.onclick = () => wyslij([{ w: lista[+b.dataset.ok] }]));
       $('#view').querySelectorAll('[data-wp]').forEach(b => b.onclick = () => wyslij([{ w: lista[+b.dataset.wp] }]));
       if ($('#czZg')) $('#czZg').onclick = () => { lista.forEach(w => { if (!w.brak && zgodny(w) && !nak(w)) sel.add(w.wid); }); rys(); };
@@ -443,7 +444,7 @@ Object.assign(Views, {
         ${edycja(w)}</aside>`; };
     // edycja wszystkich pól przez administratora (także po zatwierdzeniu – wtedy jako korekta)
     const zmiany = w => { const e = wyb.e; if (!e) return false; return e.data !== w.data || e.osoba !== w.osoba || (w.nieob ? e.rodzaj !== w.rodzaj || e.dni !== (w.dni || 1) || e.uwagi !== (w.uwagi || '')
-      : e.kod !== (w.kod || '') || e.faza !== (w.faza || '') || e.nazwa !== (w.nazwa || w.opis || '') || e.st !== (w.st || 'complete') || e.notatka !== (w.notatka || '') || e.terminData !== ((w.termin || {}).data || '')); };
+      : e.kod !== (wyb.e0 || {}).kod || e.faza !== (wyb.e0 || {}).faza || e.nazwa !== (wyb.e0 || {}).nazwa || e.st !== (w.st || 'complete') || e.notatka !== (w.notatka || '') || e.terminData !== ((w.termin || {}).data || '')); };
     const doDnia = (od, dni) => { let d = U.wolny(od) ? CZ.nastRob(od) : od; for (let n = 1; n < Math.ceil(dni); n++) d = CZ.nastRob(d); return d; };
     const edycja = w => { const e = wyb.e, zz = w.stan === 'zatw';
       const opt = (arr, v) => arr.map(([k, t]) => `<option value="${U.esc(k)}"${k === v ? ' selected' : ''}>${U.esc(t)}</option>`).join('');

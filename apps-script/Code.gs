@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.5';
+const SCRIPT_VERSION = '1.58.6';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -206,7 +206,8 @@ function slowniki_() {
     odpowiedzialni: v.map(r => txt_(r[1])).filter(String),   // kolumna B (schemat 1.17): odpowiedzialny za brak
     typy: v.filter(r => txt_(r[2])).map(r => ({ prefix: txt_(r[2]).toUpperCase(), nazwa: txt_(r[3]), kroki: txt_(r[4]).split(';').map(s => s.trim()).filter(String), sn: tak_(r[5]), opis: txt_(r[9]) })),   // opis – kolumna J (schemat 1.16): kiedy stosować prefiks
     rodzaje: v.filter(r => txt_(r[7])).map(r => ({ id: txt_(r[7]), opis: txt_(r[8]) })),
-    fazy: v.map(r => txt_(r[10])).filter(String)   // kolumna K (schemat 1.19): fazy projektu w kolejności – jak etapy listy w ClickUp
+    fazy: v.map(r => txt_(r[10])).filter(String),   // kolumna K (schemat 1.19): fazy projektu w kolejności – jak etapy listy w ClickUp
+    statusy: v.filter(r => txt_(r[11])).map(r => ({ id: txt_(r[11]).toLowerCase(), rodzaj: txt_(r[12]).toLowerCase() || 'custom', nazwa: txt_(r[13]) || txt_(r[11]) }))   // L–N (schemat 1.20): statusy zadań ClickUp
   };
 }
 
@@ -327,7 +328,7 @@ function cuPobierz_(t0, t1, ids) {
   if (!token) throw new Error('Brak klucza ClickUp na serwerze');
   const H = { headers: { Authorization: token }, muteHttpExceptions: true };
   const team = cuTeam_(), out = [], seen = {};
-  for (let page = 0; page < 30; page++) {
+  for (let page = 0; page < 60; page++) {
     const q = ['page=' + page, 'include_closed=true', 'subtasks=true', 'due_date_gt=' + (t0 - 1), 'due_date_lt=' + (t1 + 90 * 864e5)]
       .concat(ids.map(i => 'assignees[]=' + encodeURIComponent(i))).join('&');
     const r = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team/' + team + '/task?' + q, H);
@@ -355,14 +356,15 @@ function plan_(od, doDnia) {
   const czas = (s, kon) => { s = txt_(s); if (!s) return [null, false];
     const m = s.match(/^(\d{4}-\d{2}-\d{2})(?: (\d{1,2}:\d{2}))?$/); if (!m) return [null, false];
     return [Utilities.parseDate(m[1] + ' ' + (m[2] || (kon ? '23:00' : '00:00')), TZ, 'yyyy-MM-dd HH:mm').getTime(), !!m[2]]; };
-  const out = [];
+  const out = [], ZAMK = {}; try { slowniki_().statusy.forEach(s => { if (s.rodzaj === 'done' || s.rodzaj === 'closed') ZAMK[s.id] = 1; }); } catch (e) { }
   kol.forEach(k => { const r = Z[k]; if (txt_(r[31])) return;   // usunięte / poza ClickUp
+    const os = txt_(r[14]).split(';').map(x => CU[x.trim()]).filter(Boolean); if (!os.length) return;   // tablety – tylko zadania osób z ELWIS
     const [s, gs] = czas(r[10], false), [e, ge] = czas(r[11], true); if (!s && !e) return;
     const a = s || e, b = e || s; if (b < t0 || a > t1 || b > t1 + 90 * 864e5) return;
     const st = txt_(r[8]).toLowerCase();
-    out.push({ id: k, nazwa: txt_(r[5]), status: st, zamk: /^(complete|closed|done|cancelled|zamkni)/.test(st),
-      lista: txt_(r[32]), listaNazwa: txt_(r[33]), kod: txt_(r[2]), start: s, koniec: e, godzStart: gs, godzKoniec: ge,
-      osoby: txt_(r[14]).split(';').map(x => CU[x.trim()]).filter(Boolean), url: txt_(r[34]),
+    out.push({ id: k, nazwa: txt_(r[5]), status: st, zamk: Object.keys(ZAMK).length ? !!ZAMK[st] : /^(complete|closed|done|cancelled|zamkni)/.test(st),
+      lista: txt_(r[32]), listaNazwa: txt_(r[33]), kod: txt_(r[2]), faza: txt_(r[3]), start: s, koniec: e, godzStart: gs, godzKoniec: ge,
+      osoby: os, url: txt_(r[34]),
       est: Math.round(Number(txt_(r[13]).replace(',', '.') || 0) * 36e5), opis: txt_(r[6]).slice(0, 1500), zrodlo: txt_(r[24]) });
   });
   const res = { ok: true, zadania: out, pobrano: Date.now(), zrodlo: 'harmonogram', sync: P.getProperty('HARM_SYNC') || '' };
@@ -480,7 +482,8 @@ function harmImport_() {
   const dz = dzienTz_(Date.now()), m1 = dz.slice(0, 8) + '01', d14 = dodajDni_(dz, -14), od = d14 < m1 ? d14 : m1, doD = dodajDni_(dz, 45);   // bieżący miesiąc (i 14 dni wstecz – plan tabletów) + 45 dni
   const t0 = new Date(od + 'T00:00:00').getTime(), t1 = new Date(doD + 'T23:59:59').getTime();
   const L = {}; ludzie_().forEach(o => { L[o.id] = o; });
-  const tasks = cuPobierz_(t0, t1, Object.keys(L));
+  const tasks = cuPobierz_(t0, t1, []);   // od 1.58.6: wszystkie zadania z okresu (statystyki), nie tylko osób z ELWIS – tablety dostają tylko swoje
+  const fazy = cuFazy_(tasks);
   const sh = harmSh_('Zadania'), N = HARM_TABS['Zadania'].length;
   if (sh.getLastColumn() < N) sh.getRange(1, 1, 1, N).setValues([HARM_TABS['Zadania']]).setFontWeight('bold');
   const v = sh.getDataRange().getDisplayValues();
@@ -488,7 +491,7 @@ function harmImport_() {
   for (let i = 1; i < v.length; i++) { const cu = txt_(v[i][1]); if (!cu) continue; if (v[i][24] === 'ELWIS') elwis[cu] = 1; else idx[cu] = i; }
   harmSh_('Czas pracy').getDataRange().getDisplayValues().slice(1).forEach(r => { if (txt_(r[7])) zatw[txt_(r[7])] = 1; });
   const fmt = (ms, g) => ms ? Utilities.formatDate(new Date(Number(ms)), TZ, g ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd') : '';
-  const teraz = fmt(Date.now(), true), nazwy = {}; tasks.forEach(t => { nazwy[t.id] = t.name; });
+  const teraz = fmt(Date.now(), true);
   const c = x => String(x == null ? '' : x).replace(/^[=+@-]/, "'$&");
   const nowe = [], hist = [], seen = {}; let zm = 0, pom = 0, us = 0;
   const POLA = [[5, 'Nazwa'], [8, 'Status'], [10, 'Start'], [11, 'Termin'], [13, 'Szac. czas (h)'], [14, 'Osoby']];
@@ -496,7 +499,7 @@ function harmImport_() {
     if (elwis[t.id] || zatw[t.id]) { pom++; return; }
     const os = (t.assignees || []).map(a => L[String(a.id)]).filter(Boolean);
     const r = new Array(N).fill('');
-    r[0] = 'CU-' + t.id; r[1] = t.id; r[2] = (txt_(t.list && t.list.name).match(/^(\d{2}[_p][\w]{3})/) || [])[1] || ''; r[3] = t.parent ? (nazwy[t.parent] || '') : '';
+    r[0] = 'CU-' + t.id; r[1] = t.id; r[2] = (txt_(t.list && t.list.name).match(/^(\d{2}[_p][\w]{3})/) || [])[1] || ''; r[3] = fazy[t.id] || '';
     r[4] = t.parent || ''; r[5] = t.name; r[6] = txt_(t.text_content).slice(0, 1500); r[7] = t.parent ? 'podzadanie' : 'zadanie';
     r[8] = txt_(t.status && t.status.status); r[9] = txt_(t.priority && t.priority.priority); r[10] = fmt(t.start_date, t.start_date_time); r[11] = fmt(t.due_date, t.due_date_time);
     r[12] = !t.start_date_time && !t.due_date_time ? 'tak' : 'nie'; r[13] = t.time_estimate ? String(Math.round(Number(t.time_estimate) / 36e4) / 10).replace('.', ',') : '';
@@ -505,7 +508,7 @@ function harmImport_() {
     r[32] = txt_(t.list && t.list.id); r[33] = txt_(t.list && t.list.name); r[34] = txt_(t.url);
     const i = idx[t.id];
     if (i == null) { nowe.push(r); return; }
-    const st = v[i], rozn = POLA.filter(([k]) => txt_(st[k]) !== txt_(r[k])).concat([[3], [6], [32], [33], [31]].filter(([k]) => txt_(st[k]) !== txt_(r[k])));
+    const st = v[i], rozn = POLA.filter(([k]) => txt_(st[k]) !== txt_(r[k])).concat([[2], [3], [6], [15], [32], [33], [31]].filter(([k]) => txt_(st[k]) !== txt_(r[k])));
     if (!rozn.length) return;
     r[0] = st[0]; r[25] = st[25]; r[26] = st[26];
     sh.getRange(i + 1, 1, 1, N).setNumberFormat(TEXT).setValues([r.map(c)]); zm++;
@@ -517,6 +520,21 @@ function harmImport_() {
     sh.getRange(idx[cu] + 1, 32).setNumberFormat(TEXT).setValue('brak w ClickUp ' + teraz); us++; });
   harmDopisz_('Zadania', nowe); harmDopisz_('Historia zmian', hist);
   return { od: od, do: doD, clickup: tasks.length, nowe: nowe.length, zmienione: zm, zablokowane: pom, usuniete: us };
+}
+
+/** Faza = nazwa zadania najwyższego poziomu w liście (etap). Brakujących rodziców pobiera raz na listę (pamięć 6 h). */
+function cuFazy_(tasks) {
+  const T = {}, out = {}, cache = CacheService.getScriptCache(); tasks.forEach(t => { T[t.id] = { name: t.name, parent: t.parent || '', list: txt_(t.list && t.list.id) }; });
+  const braki = {}; tasks.forEach(t => { let p = t.parent, n = 0; while (p && T[p] && T[p].parent && n++ < 5) p = T[p].parent; if (p && !T[p]) braki[T[t.id].list] = 1; });
+  Object.keys(braki).filter(String).forEach((lid, i) => {
+    let m = null; try { m = JSON.parse(cache.get('fazy:' + lid) || 'null'); } catch (e) { }
+    if (!m) { m = {}; try { if (i) Utilities.sleep(250);
+        const d = cu_('get', 'list/' + lid + '/task?subtasks=false&include_closed=true&archived=false');
+        (d.tasks || []).forEach(x => { m[x.id] = x.name; }); cache.put('fazy:' + lid, JSON.stringify(m), 21600); } catch (e) { Logger.log('fazy ' + lid + ': ' + e.message); } }
+    Object.keys(m).forEach(id => { if (!T[id]) T[id] = { name: m[id], parent: '', list: lid }; });
+  });
+  tasks.forEach(t => { let p = t.parent, n = 0; if (!p) return; while (T[p] && T[p].parent && n++ < 5) p = T[p].parent; out[t.id] = (T[p] || {}).name || ''; });
+  return out;
 }
 
 /** Synchronizacja harmonogramu z ClickUp: kolejka zapisów → ClickUp, zatwierdzony czas → ClickUp, ClickUp → arkusz. Co 30 min (6–21) i przyciskiem biura. */
@@ -2122,7 +2140,8 @@ function czasPrzetworz_(teraz, bezCU) {   // bezCU – zapytania tabletów i PC:
     if (i > 0 && !/zastąpione/.test(nbv[i][4])) nb.getRange(i + 1, 5).setValue(nbv[i][4] + ' · zastąpione korektą biura (' + w.przez + ')'); });
   const nbRows = Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !nbJuz[w.wid]).map(w => [w.osoba, w.data, w.dataDo || w.data, w.rodzaj === 'urlop' ? 'U' : w.rodzaj === 'zwolnienie' ? 'L4' : w.rodzaj === 'inne' ? 'I' : 'N', nbDni_(w.dni) + ((w.dni || 1) % 1 ? ' (ostatni dzień – pół dnia)' : '') + (w.uwagi ? ' · ' + w.uwagi : '') + ' · zatwierdził ' + (w.zatw.auto ? 'auto' : w.zatw.kto) + ' [' + w.wid + ']']);
   if (nbRows.length) harmDopisz_('Nieobecności', nbRows);
-  const rows = Object.values(W).filter(w => w.stan === 'zatw' && !w.nieob && !juz[w.wid]).map(w => [harmLicznik_('CP_N', 'CP-'), w.data, w.osoba, (L[w.osoba] || {}).ek || '', w.kod || '', w.faza || '', '', w.zad || '', w.nazwa || w.opis || '',
+  const zbM = {}, zbF = zid => zbM[zid] || (zbM[zid] = zadBaza_(zid));   // od 1.58.6: budowa i faza z harmonogramu, gdy wpis ich nie ma
+  const rows = Object.values(W).filter(w => w.stan === 'zatw' && !w.nieob && !juz[w.wid]).map(w => [harmLicznik_('CP_N', 'CP-'), w.data, w.osoba, (L[w.osoba] || {}).ek || '', w.kod || (w.zad ? zbF(w.zad).kod : ''), w.faza || (w.zad ? zbF(w.zad).faza : ''), '', w.zad || '', w.nazwa || w.opis || (w.zad ? zbF(w.zad).nazwa : ''),
     w.od, w.do, String(godzH_(w.od, w.do)).replace('.', ','), ST_CZAS[w.st] || w.st, w.spoza ? 'tak' : 'nie', [w.opis, w.notatka].filter(String).join(' · ').slice(0, 2000),
     w.kto, w.kto === w.osoba ? (w.potw ? 'propozycja → potwierdzona' : 'własne') : 'propozycja / decyzja biura', w.zatw.auto ? 'auto' : w.zatw.kto, w.zatw.ts.replace('T', ' ').slice(0, 16),
     w.zatw.auto ? 'tak' : 'nie', w.spoza ? '–' : zgodnyZPlanem_(w) ? 'tak' : 'nie', w.zatw.korekta, w.tablet || '', [w.wid].concat(w.eid).join('; ')]);
@@ -2131,7 +2150,8 @@ function czasPrzetworz_(teraz, bezCU) {   // bezCU – zapytania tabletów i PC:
   if (!bezCU && P.getProperty('CLICKUP_TOKEN')) {
     const zadania = {}; Object.values(W).filter(w => w.zad && !w.korOf).forEach(w => { (zadania[w.zad] = zadania[w.zad] || []).push(w); });
     Object.keys(zadania).forEach(zid => { try { czasZadanieCU_(zid, zadania[zid]); } catch (e) { bledy.push(e.message); syncLog_('zadanie', 'zad:' + zid, zid, 'błąd', e.message); } });
-    Object.values(W).filter(w => !w.zad && w.spoza && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasSpozaCU_(w); } catch (e) { bledy.push(e.message); syncLog_('spoza', 'spoza:' + w.wid, '', 'błąd', e.message); } });
+    const czekaSp = w => Object.values(W).some(x => !x.zad && x.spoza && x.data === w.data && x.kod === w.kod && ['wlasne', 'prop'].indexOf(x.stan) >= 0);   // od 1.58.6: cały dzień budowy rozstrzygnięty
+    Object.values(W).filter(w => !w.zad && w.spoza && w.stan === 'zatw' && !w.korOf && !czekaSp(w)).forEach(w => { try { czasSpozaCU_(w); } catch (e) { bledy.push(e.message); syncLog_('spoza', 'spoza:' + w.wid, '', 'błąd', e.message); } });
     Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasNieobCU_(w); } catch (e) { bledy.push(e.message); syncLog_('nieobecność', 'nieob:' + w.wid, '', 'błąd', e.message); } });
     Object.values(W).filter(w => w.korOf && w.stan === 'zatw').forEach(w => { try { czasKorektaCU_(w, W[w.korOf], W); } catch (e) { bledy.push(e.message); syncLog_('korekta', 'kor:' + w.wid, '', 'błąd', e.message); } });
   }
@@ -2159,21 +2179,33 @@ function harmZadanie_(o) {
 function cuIds_(osoby) { const L = {}; ludzie_().forEach(o => { L[o.name] = Number(o.id); }); return osoby.map(n => L[n]).filter(Boolean); }
 
 /** Zadanie z planu: gdy wszystkie osoby z planu mają rozstrzygnięty dzień końcowy – status albo anulowanie + nowe zadania. */
+/** Zadanie z arkusza „ELWIS – Harmonogram” → Zadania (ostatnie niepuste wartości wierszy o tym ID ClickUp). */
+let ZADB_MEMO = null;
+function zadBaza_(zid) {
+  if (!ZADB_MEMO) { ZADB_MEMO = {}; harmSh_('Zadania').getDataRange().getDisplayValues().slice(1).forEach(r => { const k = txt_(r[1]) || txt_(r[0]); if (!k) return;
+    const o = ZADB_MEMO[k] || (ZADB_MEMO[k] = { kod: '', faza: '', nazwa: '', projekt: '', osoby: [] });
+    if (txt_(r[2])) o.kod = txt_(r[2]); if (txt_(r[3])) o.faza = txt_(r[3]); if (txt_(r[5])) o.nazwa = txt_(r[5]); if (txt_(r[33])) o.projekt = txt_(r[33]);
+    if (txt_(r[14])) o.osoby = txt_(r[14]).split(';').map(x => x.trim()).filter(String); }); }
+  return ZADB_MEMO[zid] || { kod: '', faza: '', nazwa: '', projekt: '', osoby: [] };
+}
 function czasZadanieCU_(zid, ws) {
   if (syncByl_('zad:' + zid)) return;
   const plan = (ws.find(w => w.plan) || {}).plan || {};
-  const osobyPlanu = plan.osoby || [];
+  const zb = zadBaza_(zid), osobyPlanu = zb.osoby.length ? zb.osoby : (plan.osoby || []);   // od 1.58.6: osoby z harmonogramu (arkusz), awaryjnie z planu na tablecie
   const kon = ws.filter(w => w.stan === 'zatw' && (w.st === 'complete' || w.st === 'update required'));
   if (!kon.length) return;   // brak zatwierdzonego dnia końcowego
+  // od 1.58.6: do ClickUp dopiero, gdy wszystkie dni tego zadania są rozstrzygnięte – każda osoba z planu ma zatwierdzony wpis
+  // albo decyzję biura („nie pracował”), a nikt nie czeka na potwierdzenie ani zatwierdzenie
+  if (ws.some(w => ['wlasne', 'prop'].indexOf(w.stan) >= 0)) return;
   const dzienK = kon.map(w => w.data).sort().pop();
-  const naDzien = ws.filter(w => w.data === dzienK);
-  const rozstrz = n => naDzien.some(w => w.osoba === n && ['zatw', 'odrzucone', 'odrzB'].indexOf(w.stan) >= 0);
-  if (!osobyPlanu.every(rozstrz)) return;   // czekamy na pozostałe osoby
+  const dniZ = [...new Set(ws.filter(w => w.stan === 'zatw').map(w => w.data))];
+  const rozstrz = (d, n) => ws.some(w => w.data === d && w.osoba === n && ['zatw', 'odrzB'].indexOf(w.stan) >= 0);
+  if (!osobyPlanu.length || !dniZ.every(d => osobyPlanu.every(n => rozstrz(d, n)))) return;   // czekamy na pozostałe osoby
   const prac = ws.filter(w => w.stan === 'zatw').sort((a, b) => (a.data + a.od < b.data + b.od ? -1 : 1));
   const t = cu_('get', 'task/' + zid);
   const wszyscyZgodni = prac.every(w => zgodnyZPlanem_(w) || (w.st === 'dzien' && w.od === (w.plan || {}).od && w.do === (w.plan || {}).do))
     && osobyPlanu.every(n => prac.some(w => w.osoba === n)) && prac.every(w => osobyPlanu.indexOf(w.osoba) >= 0) && kon.every(w => w.st === 'complete');
-  const kod = (prac[0] || {}).kod || '', faza = (prac[0] || {}).faza || '';
+  const kod = (prac[0] || {}).kod || zb.kod, faza = (prac[0] || {}).faza || zb.faza;
   // zadanie bez godzin w ClickUp (od 1.58.0): ci sami ludzie i te same godziny → uzupełnienie godzin i szacowanego czasu zamiast nowych zadań
   const bezGodz = !(t.start_date && t.due_date && t.start_date_time && t.due_date_time) || !!plan.bezGodz;
   const jedenDzien = prac.every(w => w.data === dzienK), takieSame = prac.every(w => w.od === prac[0].od && w.do === prac[0].do && w.st === prac[0].st);

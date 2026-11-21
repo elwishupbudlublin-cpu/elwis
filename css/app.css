@@ -945,3 +945,4 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .cznb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .phtop .pnz.psh{left:calc(50% + 120px);width:50px;padding:0;font-size:22px;justify-content:center}
 @media (max-width:700px){.phtop .pnz.psh{left:auto}}
+.czprop{border-color:#93C5FD;background:#F5F9FF}.czpr{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.czpr:first-of-type{border-top:0}

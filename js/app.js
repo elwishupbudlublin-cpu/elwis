@@ -372,7 +372,7 @@ const Views = {
       return el.map(y => blok(y.x, y.tor)).join('');
     };
     const karta = t => { const bud = budowaZ(t); return `<button class="pcard ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="--c:${kol(t)}">${pogodaZad(t)}${pbud(t)}<b>${U.esc(t.nazwa)}</b>${pst(t)}
-      ${t.status ? `<span class="mute">${U.esc(t.status)}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
+      ${t.status ? `<span class="mute">${U.esc(stNazwa(t.status))}</span>` : ''}${wszyscy ? `<span class="pwho">${U.esc(osobyTxt(t, prac))}</span>` : ''}</button>`; };
     const bezGodz = [...new Set(kolumny.flatMap(k => k.z.filter(t => !wpasowane.has(t.id))))];
     const terazTop = dzien === dzis ? ((new Date().getHours() - h0) * 60 + new Date().getMinutes()) / 60 * PX : -1;
     const inicjaly = n => n.split(' ').map(w => w[0]).join('');
@@ -464,7 +464,10 @@ const Views = {
       const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []));
     });
     // od 1.58.0: czas pracy – podgląd wpisu; dotknięcie pustego miejsca w swojej kolumnie → „Co robiłem?” (praca spoza planu)
-    view.querySelectorAll('[data-cz]').forEach(b => b.onclick = () => { const w = CZW.concat(NBW).find(x => x.wid === b.dataset.cz); if (w) Dialogs.czasInfo(w); });
+    // od 1.58.6: zatwierdzony blok zadania otwiera pełne okno zadania (z „Przejdź do budowy”), z kłódką
+    view.querySelectorAll('[data-cz]').forEach(b => b.onclick = () => { const w = CZW.concat(NBW).find(x => x.wid === b.dataset.cz); if (!w) return;
+      const t = !w.nieob && w.zad && zad.find(x => x.id === w.zad);
+      if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []), dzien, null, w.osoba); else Dialogs.czasInfo(w); });
     // przytrzymanie pustego miejsca w swojej kolumnie: kółko z zielonym postępem (jak na rzutach) → praca spoza planu / urlop / nieobecność
     view.querySelectorAll('.pcol').forEach((c, i) => {
       let tm = null, ring = null, x0 = 0, y0 = 0;
@@ -1931,33 +1934,48 @@ const Dialogs = {
   },
 
   /* Okienko zadania z kalendarza (od 1.12.0): dane z ClickUp, 3 statusy (offline), przejście do budowy */
-  async zadanie(t, bud, osoby, dzien, preSt) {
+  async zadanie(t, bud, osoby, dzien, preSt, kogo) {
     let wyb = preSt || null, powod = '';
     dzien = dzien || (UI.cur === 'plan' && UI.par.d) || U.day(new Date());
-    const mojW = S.user ? (await Czas.dla(S.user.name, dzien)).find(w => w.zad === t.id) : null;   // od 1.58.0: mój wpis czasu do tego zadania
+    const ja = S.user ? S.user.name : '', kto = kogo || ja;
+    const mojW = kto ? (await Czas.dla(kto, dzien)).find(w => w.zad === t.id) : null;   // od 1.58.0: mój wpis czasu do tego zadania (od 1.58.6: albo osoby z klikniętej kolumny)
+    // od 1.58.6: propozycje innych osób dla mnie z tego dnia – potwierdzam albo wpisuję swoje
+    const PR = ja && kto === ja ? (await Czas.propozycje(ja)).filter(w => w.data === dzien) : [];
+    const plZ = ((await DB.get('plan')) || {}).zadania || [];
     const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null;
     const kiedy = maGodziny(t) ? hm(a) + ' – ' + hm(b) : b ? 'do ' + b.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) + (t.godzKoniec ? ' ' + hm(b) : '') : '—';
     const draw = () => {
       modal.innerHTML = `<div class="ov bottom" id="ov"><section class="zsheet" role="dialog" aria-label="Zadanie">
         <div class="grab"></div>
-        <div class="row">${bud ? `<span class="chip">${U.esc(bud.kod)} · ${U.esc(String(bud.nazwa).replace(bud.kod, '').trim())}</span>` : `<span class="chip gr">${U.esc(t.listaNazwa || 'spoza budów ELWIS')}</span>`}<span class="chip gr">${U.esc(t.status || '')}${t.czeka ? ' · czeka na wysłanie' : ''}</span></div>
+        <div class="row">${bud ? `<span class="chip">${U.esc(bud.kod)} · ${U.esc(String(bud.nazwa).replace(bud.kod, '').trim())}</span>` : `<span class="chip gr">${U.esc(t.listaNazwa || 'spoza budów ELWIS')}</span>`}<span class="chip gr">${U.esc(stNazwa(t.status || ''))}${t.czeka ? ' · czeka na wysłanie' : ''}</span></div>
         <h2>${U.esc(t.nazwa)}</h2>
         <div class="zfacts"><div>Kiedy<b class="m">${U.esc(kiedy)}</b>${t.est ? 'szac. ' + String(Math.round(t.est / 36e5 * 10) / 10).replace('.', ',') + ' h' : ''}</div><div>Kto<b>${U.esc(osoby || '—')}</b></div></div>
         ${t.opis ? `<div><span class="lbl">Opis z ClickUp</span><p class="zopis">${U.esc(t.opis)}</p></div>` : ''}
-        ${mojW ? `<div class="card czz"><div class="row"><span class="lbl grow">Mój czas pracy – ${U.esc(PC_dzien(dzien))}</span>${czChip(mojW)}</div><b>${U.esc(mojW.od)}–${U.esc(mojW.do)} · ${CZ.hTxt(CZ.h(mojW.od, mojW.do))}</b> <span class="mute">${U.esc(CZ_ST_TXT[mojW.st] || '')}</span></div>` : ''}
-        ${mojW && mojW.stan === 'zatw' ? '<p class="mute">🔒 Zatwierdzone przez biuro – zmienić może tylko biuro.</p>' : `<div><span class="lbl">Jak poszło?</span>
+        ${mojW ? `<div class="card czz"><div class="row"><span class="lbl grow">${kto === ja ? 'Mój czas pracy' : 'Czas pracy: ' + U.esc(kto)} – ${U.esc(PC_dzien(dzien))}</span>${czChip(mojW)}</div><b>${U.esc(mojW.od)}–${U.esc(mojW.do)} · ${CZ.hTxt(CZ.h(mojW.od, mojW.do))}</b> <span class="mute">${U.esc(CZ_ST_TXT[mojW.st] || '')}</span></div>` : ''}
+        ${PR.length ? `<div class="card czprop"><div class="lbl">Propozycje dla Ciebie z tego dnia – potwierdź albo wpisz swoje</div>
+          ${PR.map((w, i) => `<div class="czpr"><div class="grow"><b>${U.esc(w.kod || '')} · ${U.esc(w.nazwa || w.opis || '')}</b><br><span class="mute">${U.esc(w.od)}–${U.esc(w.do)} (${CZ.hTxt(CZ.h(w.od, w.do))}) · ${U.esc(CZ_ST_TXT[w.st] || w.st)} · zaproponował(a) ${U.esc(w.kto)}</span></div>
+            <button class="btn sm ok" data-prp="${i}">Potwierdź</button><button class="btn sm" data-prw="${i}">Wpisz swoje</button></div>`).join('')}</div>` : ''}
+        ${mojW && mojW.stan === 'zatw' ? '<p class="mute">🔒 Zatwierdzone przez biuro – zmienić może tylko biuro.</p>' : kto !== ja ? '' : `<div><span class="lbl">Jak poszło?</span>
           <div class="st3" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}">${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div></div>`}
         ${wyb && wyb !== 'complete' ? `<div class="zwhy"><span class="lbl">Powód (opcjonalnie)</span>
           <div class="cats">${POWODY_ZAD.map(x => `<button data-pw="${U.esc(x)}" class="${x === powod ? 'on' : ''}">${U.esc(x)}</button>`).join('')}</div>
           <label><span class="lbl" style="display:block;margin-bottom:4px">Komentarz (opcjonalnie)</span><textarea id="zk" placeholder="Co zrobione, co zostało, warunek powrotu"></textarea></label></div>` : ''}
-        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}<button class="btn pri" id="zOk" ${wyb && !(mojW && mojW.stan === 'zatw') ? '' : 'disabled'}>${wyb === 'on hold' ? 'Zapisz i wpisz, co robiłem' : wyb ? 'Dalej – godziny pracy' : 'Zapisz status'}</button></div>
+        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}${mojW && mojW.stan === 'zatw' || kto !== ja ? '' : `<button class="btn pri" id="zOk" ${wyb && !(mojW && mojW.stan === 'zatw') ? '' : 'disabled'}>${wyb === 'on hold' ? 'Zapisz i wpisz, co robiłem' : wyb ? 'Dalej – godziny pracy' : 'Zapisz status'}</button>`}</div>
       </section></div>`;
       $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
       modal.querySelectorAll('[data-st]').forEach(x => x.onclick = () => { const k = $('#zk') ? $('#zk').value : ''; wyb = x.dataset.st; draw(); if (k && $('#zk')) $('#zk').value = k; });
       modal.querySelectorAll('[data-pw]').forEach(x => x.onclick = () => { const k = $('#zk').value; powod = powod === x.dataset.pw ? '' : x.dataset.pw; draw(); $('#zk').value = k; });
       if ($('#zX')) $('#zX').onclick = UI.close;
       if ($('#zBud')) $('#zBud').onclick = () => { UI.close(); openProject(bud.kod); };
-      $('#zOk').onclick = async () => {
+      modal.querySelectorAll('[data-prp]').forEach(x => x.onclick = async () => { const w = PR[+x.dataset.prp];
+        await Czas.dodaj([Czas.zdarzenie('potw', { ref: w.wid, osoba: ja })]); UI.close(); UI.toast('Potwierdzono – trafi do zatwierdzenia przez biuro'); UI.refresh(); });
+      modal.querySelectorAll('[data-prw]').forEach(x => x.onclick = async () => { const w = PR[+x.dataset.prw]; UI.close();
+        if (w.zad) { const t2 = plZ.find(z => z.id === w.zad) || (w.zad === t.id ? t : { id: w.zad, nazwa: w.nazwa, lista: w.lista || '', kod: w.kod, faza: w.faza });
+          const b2 = ((S.boot && S.boot.projekty) || []).find(p => p.kod === (t2.kod || w.kod));
+          return Dialogs.czasPracy(t2, dzien, w.st === 'update required' ? 'update required' : 'complete', { bud: b2 }); }
+        await Czas.dodaj([Czas.zdarzenie('odrz', { ref: w.wid, osoba: ja })]);   // praca spoza planu: odrzucam propozycję i wpisuję swoje
+        Dialogs.coRobilem(dzien, { kod: w.kod }); });
+      if ($('#zOk')) $('#zOk').onclick = async () => {
         if (!wyb) return;
         const kom = $('#zk') ? $('#zk').value.trim() : '';
         // od 1.58.0: Wykonane / Do kontynuacji → godziny pracy (status trafia do ClickUp po zatwierdzeniu przez biuro)
@@ -2000,6 +2018,8 @@ const Dialogs = {
 };
 
 /* ---------- Plan dnia ---------- */
+/* od 1.58.6: nazwy statusów ClickUp ze Słowników (kolumny L–N) */
+const stNazwa = s => { const x = ((S.boot && S.boot.slowniki && S.boot.slowniki.statusy) || []).find(y => y.id === String(s || '').toLowerCase()); return x ? x.nazwa : s; };
 const STATUS_ZAD = { 'complete': { t: 'Wykonane', kl: 'complete', ic: 'check', b: 'ok' }, 'update required': { t: 'Do kontynuacji', kl: 'update', ic: 'pause', b: 'wip' }, 'on hold': { t: 'Zadanie niepodjęte', kl: 'hold', ic: 'x', b: 'no' } };
 const POWODY_ZAD = ['Brak materiału', 'Brak dostępu', 'Brak zasilania', 'Brak frontu robót', 'Koniec dnia', 'Inne'];
 const PLAN_KOLORY = ['#0b4f8a', '#1f7a4d', '#a3561b', '#6b3fa0', '#b02e4c', '#0e7c86', '#5a6b1e', '#8a5a0b'];
