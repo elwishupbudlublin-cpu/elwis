@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.58.2 – 2026-11-21 (aplikacja i serwer)
+- Nieobecności: liczbę dni można wpisać ręcznie co 0,5 dnia (ostatni dzień – pół dnia), przyciski −/+ zmieniają o 1 dzień; nowy rodzaj „Inne” z wymaganym opisem (w arkuszu „Nieobecności” kod I, w ClickUp „Nieobecność – inne: opis – osoba”).
+
 ## 1.58.1 – 2026-11-21 (aplikacja i serwer)
 - Zwolnienie lekarskie jako trzeci rodzaj obok urlopu i nieobecności (tablet, przytrzymanie pustego pola, panel PC); w arkuszu „Nieobecności” jako L4, w ClickUp zadanie „Zwolnienie lekarskie – osoba” (obciążenie pokazuje L4).
 

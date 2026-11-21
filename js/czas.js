@@ -7,8 +7,12 @@ const CZ = {
   h: (od, d) => (CZ.min(d) - CZ.min(od)) / 60,
   hTxt: x => String(Math.round(x * 2) / 2).replace('.', ',') + ' h',
   mnD: d => d.getHours() * 60 + d.getMinutes(),
-  NB: { urlop: 'Urlop', zwolnienie: 'Zwolnienie lekarskie', nieobecnosc: 'Nieobecność' },
-  NBKL: { urlop: 'on ok', zwolnienie: 'on bad', nieobecnosc: 'on wip' },
+  NB: { urlop: 'Urlop', zwolnienie: 'Zwolnienie lekarskie', nieobecnosc: 'Nieobecność', inne: 'Inne' },
+  NBKL: { urlop: 'on ok', zwolnienie: 'on bad', nieobecnosc: 'on wip', inne: 'on wip' },
+  /* liczba dni nieobecności: wpis ręczny co 0,5 (min 0,5, max 60); przyciski ±1 */
+  dniFix(v) { const n = Math.round(parseFloat(String(v).replace(',', '.')) * 2) / 2; return isFinite(n) ? Math.max(0.5, Math.min(60, n)) : 1; },
+  dniTxt(n) { n = n || 1; return String(n).replace('.', ',') + ' ' + (n === 1 ? 'dzień' : n < 1 || n % 1 ? 'dnia' : 'dni'); },
+  dniPole(id, n) { return `<div class="tp tpn"><button type="button" data-dn="-1">−</button><input type="text" inputmode="decimal" id="${id}" value="${String(n).replace('.', ',')}"><button type="button" data-dn="1">+</button></div>`; },
   FAZY: ['Przygotowanie i Rozpoznanie', 'Logistyka i Zamówienia', 'Montaż i Wykonawstwo', 'Uruchomienia i Pomiary', 'Zamknięcie i Serwis'],
   prac: n => ((S.boot && S.boot.pracownicy) || []).find(p => p.name === n),
   okno(n) { const p = CZ.prac(n); return p && String(p.ekipa) === '1' ? [480, 960] : [420, 900]; },
@@ -367,7 +371,8 @@ Object.assign(Dialogs, {
       <div class="sbody"><button class="czmi" data-m="co"><b>Praca spoza planu</b><span>Co robiłem – budowy, godziny, opis</span></button>
         <button class="czmi" data-m="urlop"><b>Urlop</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
         <button class="czmi" data-m="zwolnienie"><b>Zwolnienie lekarskie</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
-        <button class="czmi" data-m="nieobecnosc"><b>Nieobecność</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button></div>
+        <button class="czmi" data-m="nieobecnosc"><b>Nieobecność</b><span>od ${U.esc(PC_dzien(dzien))}, liczba dni – do zatwierdzenia przez biuro</span></button>
+        <button class="czmi" data-m="inne"><b>Inne</b><span>np. szkolenie, badania, sprawy urzędowe – opis wymagany, do zatwierdzenia przez biuro</span></button></div>
       <div class="sfoot"><span class="grow"></span><button class="btn" id="pmX">Anuluj</button></div></div></div>`;
     $('#pmX').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
     modal.querySelectorAll('[data-m]').forEach(b => b.onclick = () => b.dataset.m === 'co' ? this.coRobilem(dzien, { start }) : this.nieobecnosc(dzien, b.dataset.m));
@@ -376,26 +381,27 @@ Object.assign(Dialogs, {
   /* Urlop / nieobecność: data od i liczba dni roboczych (weekendy i święta pomijane) → do zatwierdzenia przez biuro */
   nieobecnosc(dzien, rodzaj) {
     let od = U.wolny(dzien) ? CZ.nastRob(dzien) : dzien, dni = 1, uw = '';
-    const doDnia = () => { let d = od, n = 1; while (n < dni) { d = CZ.nastRob(d); n++; } return d; };
+    const doDnia = () => { let d = od, n = 1; while (n < Math.ceil(dni)) { d = CZ.nastRob(d); n++; } return d; };
     const draw = () => {
       modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czdlg"><div class="shead"><h3 class="grow">${CZ.NB[rodzaj]} – ${U.esc(S.user.name)}</h3></div>
         <div class="sbody">
-          <div class="czst" style="grid-template-columns:1fr 1fr 1fr">${Object.keys(CZ.NB).map(k => `<button class="${rodzaj === k ? CZ.NBKL[k] : ''}" data-r="${k}">${CZ.NB[k]}</button>`).join('')}</div>
+          <div class="czst" style="grid-template-columns:repeat(4,1fr)">${Object.keys(CZ.NB).map(k => `<button class="${rodzaj === k ? CZ.NBKL[k] : ''}" data-r="${k}">${CZ.NB[k]}</button>`).join('')}</div>
           <div class="row" style="gap:12px;flex-wrap:wrap"><label class="grow"><span class="lbl">Od dnia</span><input type="date" id="nbOd" value="${od}"></label>
-            <div><span class="lbl" style="display:block">Liczba dni roboczych</span><div class="tp"><button type="button" id="nbM">−</button><b>${dni}</b><button type="button" id="nbP">+</button></div></div></div>
-          <p>Do dnia: <b>${U.esc(PC_dzien(doDnia()))}</b> <span class="mute">(weekendy i święta pomijane)</span></p>
-          <label><span class="lbl">Uwagi (opcjonalnie)</span><input type="text" id="nbUw" value="${U.esc(uw)}"></label>
+            <div><span class="lbl" style="display:block">Liczba dni roboczych</span>${CZ.dniPole('nbDni', dni)}</div></div>
+          <p>Do dnia: <b>${U.esc(PC_dzien(doDnia()))}</b>${dni % 1 ? ' (ostatni dzień – pół dnia)' : ''} <span class="mute">(weekendy i święta pomijane; ręcznie można wpisać co 0,5 dnia)</span></p>
+          <label><span class="lbl">${rodzaj === 'inne' ? 'Czego dotyczy (wymagane)' : 'Uwagi (opcjonalnie)'}</span><input type="text" id="nbUw" value="${U.esc(uw)}"></label>
           <p class="mute">Trafi do biura do zatwierdzenia. W planie zobaczysz je jako „czeka na biuro”, a potem zatwierdzone (kłódka) albo odrzucone.</p></div>
         <div class="sfoot"><button class="btn" id="nbX">Anuluj</button><span class="grow"></span><button class="btn pri" id="nbOk">Wyślij do biura</button></div></div></div>`;
       $('#nbX').onclick = UI.close;
       modal.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { rodzaj = b.dataset.r; draw(); });
       $('#nbOd').onchange = e => { if (e.target.value) { od = U.wolny(e.target.value) ? CZ.nastRob(e.target.value) : e.target.value; draw(); } };
       $('#nbUw').oninput = e => { uw = e.target.value; };
-      $('#nbM').onclick = () => { dni = Math.max(1, dni - 1); draw(); };
-      $('#nbP').onclick = () => { dni = Math.min(60, dni + 1); draw(); };
+      modal.querySelectorAll('[data-dn]').forEach(b => b.onclick = () => { dni = CZ.dniFix(dni + +b.dataset.dn); draw(); });
+      $('#nbDni').onchange = e => { dni = CZ.dniFix(e.target.value); draw(); };
       $('#nbOk').onclick = async () => {
+        if (rodzaj === 'inne' && !uw.trim()) return UI.toast('Wpisz, czego dotyczy nieobecność');
         const [o0, o1] = CZ.okno(S.user.name);
-        await Czas.dodaj([Czas.zdarzenie('wpis', { wid: U.uid('w'), data: od, dataDo: doDnia(), dni, osoba: S.user.name, zad: '', nieob: true, rodzaj, st: rodzaj, nazwa: CZ.NB[rodzaj], od: CZ.hm(o0), do: CZ.hm(o1), uwagi: uw.trim() })]);
+        await Czas.dodaj([Czas.zdarzenie('wpis', { wid: U.uid('w'), data: od, dataDo: doDnia(), dni, osoba: S.user.name, zad: '', nieob: true, rodzaj, st: rodzaj, nazwa: rodzaj === 'inne' ? 'Inne: ' + uw.trim() : CZ.NB[rodzaj], od: CZ.hm(o0), do: CZ.hm(o1), uwagi: uw.trim() })]);
         UI.close(); UI.toast(CZ.NB[rodzaj] + ' – wysłane do biura'); UI.refresh();
       };
     };
@@ -412,5 +418,5 @@ Object.assign(Dialogs, {
     $('#ciX').onclick = UI.close;
   }
 });
-const CZ_ST_TXT = { urlop: 'urlop', zwolnienie: 'zwolnienie lekarskie', nieobecnosc: 'nieobecność', complete: 'wykonane', 'update required': 'do kontynuacji', 'on hold': 'niepodjęte', dzien: 'dzień pracy (w toku)', spoza: 'praca spoza planu' };
+const CZ_ST_TXT = { inne: 'inna nieobecność', urlop: 'urlop', zwolnienie: 'zwolnienie lekarskie', nieobecnosc: 'nieobecność', complete: 'wykonane', 'update required': 'do kontynuacji', 'on hold': 'niepodjęte', dzien: 'dzień pracy (w toku)', spoza: 'praca spoza planu' };
 function PC_dzien(k) { const d = new Date(k + 'T12:00'); return d.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'numeric' }).replace('.', ''); }

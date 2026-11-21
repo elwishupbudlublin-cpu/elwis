@@ -365,7 +365,7 @@ Object.assign(Views, {
     const nak = w => !w.nieob && akt.some(x => x !== w && !x.nieob && x.osoba === w.osoba && x.data === w.data && x.stan !== 'prop' && CZ.min(x.od) < CZ.min(w.do) && CZ.min(x.do) > CZ.min(w.od));
     const wNieob = (n, d) => akt.some(x => x.nieob && x.osoba === n && x.data <= d && (x.dataDo || x.data) >= d);
     const godz = w => w.nieob ? 0 : CZ.h(w.od, w.do);
-    const nbTxt = w => `${U.esc(w.nazwa || CZ_ST_TXT[w.st] || '')} · ${w.dni || 1} ${(w.dni || 1) === 1 ? 'dzień' : 'dni'}: ${U.esc(PC_dzien(w.data))}${w.dataDo && w.dataDo !== w.data ? ' – ' + U.esc(PC_dzien(w.dataDo)) : ''}`;
+    const nbTxt = w => `${U.esc(w.nazwa || CZ_ST_TXT[w.st] || '')} · ${CZ.dniTxt(w.dni)}: ${U.esc(PC_dzien(w.data))}${w.dataDo && w.dataDo !== w.data ? ' – ' + U.esc(PC_dzien(w.dataDo)) : ''}`;
     const zgodny = w => w.zad && w.plan && w.od === w.plan.od && w.do === w.plan.do && (w.st === 'complete' || w.st === 'dzien');
     // zadania z planu bez wpisu osoby (dni robocze do wczoraj, 14 dni)
     const braki = [];
@@ -417,7 +417,8 @@ Object.assign(Views, {
         v.querySelectorAll('[data-e]').forEach(el => el.onchange = ev => { E[el.dataset.e] = ev.target.value; if (['st', 'data'].includes(el.dataset.e)) rys(); });
         v.querySelectorAll('input[data-e],textarea[data-e]').forEach(el => el.oninput = ev => { E[el.dataset.e] = ev.target.value; });
         v.querySelectorAll('[data-er]').forEach(b => b.onclick = () => { E.rodzaj = b.dataset.er; rys(); });
-        v.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => { E.dni = Math.max(1, Math.min(60, E.dni + +b.dataset.ed)); rys(); });
+        v.querySelectorAll('[data-dn]').forEach(b => b.onclick = () => { E.dni = CZ.dniFix(E.dni + +b.dataset.dn); rys(); });
+        if ($('#czDni')) $('#czDni').onchange = ev => { E.dni = CZ.dniFix(ev.target.value); rys(); };
         $('#czDOk').onclick = () => { const w = wyb.w, zmG = !w.nieob && (CZ.hm(wyb.od) !== w.od || CZ.hm(wyb.do) !== w.do), zmP = zmiany(w);
           if ((zmG || zmP || w.stan === 'zatw') && !wyb.powod.trim() && !w.brak) return UI.toast('Podaj powód zmiany');
           if (w.stan === 'zatw' && !zmG && !zmP) return UI.toast('Nic nie zmieniono');
@@ -435,12 +436,12 @@ Object.assign(Views, {
     // edycja wszystkich pól przez administratora (także po zatwierdzeniu – wtedy jako korekta)
     const zmiany = w => { const e = wyb.e; if (!e) return false; return e.data !== w.data || e.osoba !== w.osoba || (w.nieob ? e.rodzaj !== w.rodzaj || e.dni !== (w.dni || 1) || e.uwagi !== (w.uwagi || '')
       : e.kod !== (w.kod || '') || e.faza !== (w.faza || '') || e.nazwa !== (w.nazwa || w.opis || '') || e.st !== (w.st || 'complete') || e.notatka !== (w.notatka || '') || e.terminData !== ((w.termin || {}).data || '')); };
-    const doDnia = (od, dni) => { let d = U.wolny(od) ? CZ.nastRob(od) : od; for (let n = 1; n < dni; n++) d = CZ.nastRob(d); return d; };
+    const doDnia = (od, dni) => { let d = U.wolny(od) ? CZ.nastRob(od) : od; for (let n = 1; n < Math.ceil(dni); n++) d = CZ.nastRob(d); return d; };
     const edycja = w => { const e = wyb.e, zz = w.stan === 'zatw';
       const opt = (arr, v) => arr.map(([k, t]) => `<option value="${U.esc(k)}"${k === v ? ' selected' : ''}>${U.esc(t)}</option>`).join('');
-      const pola = w.nieob ? `<div class="czst" style="grid-template-columns:1fr 1fr 1fr">${Object.keys(CZ.NB).map(k => `<button class="${e.rodzaj === k ? CZ.NBKL[k] : ''}" data-er="${k}">${U.esc(CZ.NB[k])}</button>`).join('')}</div>
+      const pola = w.nieob ? `<div class="czst" style="grid-template-columns:repeat(4,1fr)">${Object.keys(CZ.NB).map(k => `<button class="${e.rodzaj === k ? CZ.NBKL[k] : ''}" data-er="${k}">${U.esc(CZ.NB[k])}</button>`).join('')}</div>
           <label><span class="lbl">Od dnia</span><input type="date" data-e="data" value="${e.data}"></label>
-          <div><span class="lbl" style="display:block">Liczba dni roboczych</span><div class="tp"><button type="button" data-ed="-1">−</button><b>${e.dni}</b><button type="button" data-ed="1">+</button></div> <span class="mute">do ${U.esc(PC_dzien(doDnia(e.data, e.dni)))}</span></div>
+          <div><span class="lbl" style="display:block">Liczba dni roboczych</span>${CZ.dniPole('czDni', e.dni)} <span class="mute">do ${U.esc(PC_dzien(doDnia(e.data, e.dni)))}</span></div>
           <label><span class="lbl">Uwagi</span><input type="text" data-e="uwagi" value="${U.esc(e.uwagi)}"></label>`
         : `<label><span class="lbl">Dzień</span><input type="date" data-e="data" value="${e.data}"></label>
           <label><span class="lbl">Budowa</span><select data-e="kod"><option value="">–</option>${opt(proj.map(p => [p.kod, String(p.nazwa || '').startsWith(p.kod) ? p.nazwa : p.kod + ' ' + p.nazwa]), e.kod)}</select></label>
@@ -457,7 +458,7 @@ Object.assign(Views, {
         <p class="mute">${zz ? 'Korekta zastępuje zatwierdzony wpis; w ClickUp komentarz z powodem i nowe godziny.' : 'Po zatwierdzeniu: wpis zablokowany na tablecie, wiersz w arkuszu „ELWIS – Harmonogram”. Godziny różne od planu → w ClickUp pierwotne zadanie „cancelled” i nowe zadania wg faktycznych godzin.'}</p>`; };
     const nowyWpis = (w, x) => Czas.zdarzenie('wpis', { wid: U.uid('w'), data: w.data, osoba: w.osoba, zad: w.zad, nazwa: w.nazwa, kod: w.kod, faza: '', od: x.od || w.od, do: x.do || w.do, st: x.st || w.st, plan: w.plan, notatka: '' });
     const wpisEd = w => { const e = wyb.e, nb = !!w.nieob;
-      const d = nb ? { wid: U.uid('w'), data: U.wolny(e.data) ? CZ.nastRob(e.data) : e.data, dataDo: doDnia(e.data, e.dni), dni: e.dni, osoba: e.osoba, zad: '', nieob: true, rodzaj: e.rodzaj, st: e.rodzaj, nazwa: CZ.NB[e.rodzaj], od: w.od, do: w.do, uwagi: e.uwagi.trim() }
+      const d = nb ? { wid: U.uid('w'), data: U.wolny(e.data) ? CZ.nastRob(e.data) : e.data, dataDo: doDnia(e.data, e.dni), dni: e.dni, osoba: e.osoba, zad: '', nieob: true, rodzaj: e.rodzaj, st: e.rodzaj, nazwa: e.rodzaj === 'inne' ? 'Inne: ' + e.uwagi.trim() : CZ.NB[e.rodzaj], od: w.od, do: w.do, uwagi: e.uwagi.trim() }
         : { wid: U.uid('w'), data: e.data, osoba: e.osoba, zad: w.zad || '', lista: w.lista || '', nazwa: e.nazwa.trim(), opis: w.zad ? (w.opis || '') : e.nazwa.trim(), kod: e.kod, faza: e.faza, od: CZ.hm(wyb.od), do: CZ.hm(wyb.do), st: e.st, plan: w.plan, notatka: e.notatka, spoza: w.spoza, osoby: w.osoby,
             termin: e.st === 'update required' && e.terminData ? Object.assign({}, w.termin || { od: CZ.hm(wyb.od), do: CZ.hm(wyb.do) }, { data: e.terminData }) : (e.st === 'update required' ? w.termin : undefined) };
       if (!w.brak) d.kor = w.wid; return Czas.zdarzenie('wpis', d); };

@@ -936,3 +936,5 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .pced{display:flex;flex-direction:column;gap:8px}.pced label{display:flex;flex-direction:column;gap:3px}.pced select,.pced input,.pced textarea{width:100%}
 .czst button.on.bad{border-color:var(--bad);background:#fff1f2;color:var(--bad)}
 .pblk.pnieob.l4{background:#fff7ed;border-left-color:#ea580c}
+.tp.tpn input{width:62px;height:100%;border:0;text-align:center;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;padding:0;background:#fff}
+.czst button{min-width:0;white-space:normal;line-height:1.15}
