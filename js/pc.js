@@ -28,14 +28,18 @@ const PC = {
     tab: '<rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M11 18h2"></path>',
     dict: '<path d="M4 5h16M4 10h16M4 15h10M4 20h7"></path>',
     gear: '<circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path>',
-    swap: '<path d="M4 7h14l-3-3M20 17H6l3 3"></path>'
+    swap: '<path d="M4 7h14l-3-3M20 17H6l3 3"></path>',
+    wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"></path>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"></path><path d="M9 12l2 2 4-4"></path>',
+    inbox: '<path d="M3 13l3-8h12l3 8v6H3z"></path><path d="M3 13h5l1 3h6l1-3h5"></path>'
   },
   ico(k) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${this.IKO[k] || ''}</svg>`; },
   MENU: [
     ['Plan', [['pcTydz', 'Harmonogram tygodnia', 'cal'], ['plan', 'Plan dnia', 'day'], ['pcObc', 'Obciążenie ekip', 'bars']]],
     ['Czas pracy', [['pcCzas', 'Do zatwierdzenia', 'list', { st: 'dec' }], ['pcCzas', 'Zatwierdzone godziny', 'doc', { st: 'zatw' }]]],
     ['Budowy', [['pcBud', 'Budowy', 'home'], ['pcBraki', 'Braki', 'warn'], ['pcProt', 'Protokoły', 'doc'], ['dokumenty', 'Dokumenty techniczne', 'book', { typ: 'tech' }]]],
-    ['Biuro', [['zakupy', 'Zapotrzebowania', 'cart'], ['powiad', 'Powiadomienia', 'bell'], ['zmiany', 'Ostatnie zmiany', 'list'], ['wydajnosc', 'Wydajność ekip', 'bars']]],
+    ['Biuro', [['zakupy', 'Zapotrzebowania', 'cart'], ['powiad', 'Powiadomienia', 'bell'], ['zmiany', 'Ostatnie zmiany', 'list'], ['wydajnosc', 'Wydajność ekip', 'bars'], ['pcRap', 'Raporty', 'doc']]],
+    ['Serwis', [['pcSerwPrz', 'Przekazanie do serwisu', 'swap'], ['pcSerwObj', 'Obiekty na gwarancji', 'shield'], ['pcSerwKal', 'Kalendarz przeglądów', 'cal'], ['pcSerwZgl', 'Zgłoszenia serwisowe', 'inbox']]],   // od 1.60.0 – wdrożenie testowe
     ['Administracja · podgląd', [['pcAdmin', 'Pracownicy', 'users', { tab: 'pracownicy' }], ['pcAdmin', 'Tablety', 'tab', { tab: 'tablety' }], ['pcAdmin', 'Słowniki', 'dict', { tab: 'slowniki' }], ['pcAdmin', 'Protokoły (definicje)', 'doc', { tab: 'protokoly' }], ['pcAdmin', 'Konfiguracja', 'gear', { tab: 'konfiguracja' }]]]
   ],
   /* menu boczne – po każdym przerysowaniu ekranu */
@@ -160,6 +164,7 @@ Object.assign(Views, {
     const proj = (S.boot && S.boot.projekty) || [];
     const budowaZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
     const kodZ = t => { const b = budowaZ(t); return b ? b.kod : t.kod || String(t.listaNazwa || '').split(' ')[0]; };
+    const budNZ = t => { const b = budowaZ(t), k = kodZ(t); return String((b && b.nazwa) || t.listaNazwa || '').replace(k, '').replace(/^[\s·–-]+/, '').trim(); };   // od 1.60.0: nazwa budowy na kafelku
     const godz = d => { const x = new Date(d); return x.getHours() + (x.getMinutes() ? ':' + String(x.getMinutes()).padStart(2, '0') : ''); };
     const hDnia = (t, k) => {
       const s = t.start ? U.day(new Date(t.start)) : U.day(new Date(t.koniec)), e = U.day(new Date(t.koniec));
@@ -201,7 +206,7 @@ Object.assign(Views, {
         const chipy = lista.map(t => { const x = hDnia(t, k); if (x == null) q = true; else h += x;
           const cz = stanCz(t, o.name, k), czas = t.godzStart ? godz(t.start) + (t.godzKoniec ? '–' + godz(t.koniec) : '') : x ? hTxt(x) : 'cały dzień';
           return M ? `<button class="pczd pczm ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(info(t, o.name, k, cz))}"><span class="pczk">${U.esc(String(kodZ(t) || '').slice(3) || '•')}</span>${cz ? `<i class="pcczd ${cz[1]}"></i>` : ''}</button>`
-            : `<button class="pczd ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(info(t, o.name, k, cz))}"><span class="pczk">${U.esc(kodZ(t))} · ${U.esc(czas)}</span><span class="pczn">${U.esc(t.nazwa)}</span>${cz ? `<span class="czchip ${cz[1]} pczst">${U.esc(cz[0])}</span>` : ''}</button>`; }).join('');
+            : `<button class="pczd ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(info(t, o.name, k, cz))}"><span class="pczk">${U.esc(kodZ(t))} · ${U.esc(czas)}</span>${budNZ(t) ? `<span class="pczb">${U.esc(budNZ(t))}</span>` : ''}<span class="pczn">${U.esc(t.nazwa)}</span>${cz ? `<span class="czchip ${cz[1]} pczst">${U.esc(cz[0])}</span>` : ''}</button>`; }).join('');
         suma += h; nieokr = nieokr || q;
         const hd = lista.length ? `<div class="pchd ${hKl(h)}" title="${hTxt(h)} z 8 h${q ? ' + zadania bez czasu' : ''}">${M ? String(Math.round(h * 2) / 2).replace('.', ',') : hTxt(h)}${q ? '+?' : ''}</div>` : '';
         return `<td class="${wkl(k)}${zwin ? ' zw' : ''}">${hd}${zwin ? (lista.length && !M ? `<span class="mute pczn2">${lista.length} ${odm(lista.length, 'zadanie', 'zadania', 'zadań')}</span>` : '') : chipy}</td>`;
@@ -609,5 +614,215 @@ Object.assign(Views, {
       Czas.wTle(w.stan === 'zatw' ? 'Zwrot do użytkownika' : w.brak ? 'Decyzja „nie pracował”' : 'Cofnięcie do poprawy', () => API.czas({ op: 'odrzB', wpisy, lista: l }), [w.wid]);
     };
     rys();
+  }
+});
+
+/* ---------- Serwis (od 1.60.0, wdrożenie testowe) ----------
+ * Dane w osobnym arkuszu „ELWIS – Serwis” (folder _Serwis) – nie w Bazie i nie w harmonogramie montażu.
+ * Wizyty i przeglądy → zadania w ClickUp (lista budowy, faza Zamknięcie i Serwis). Tablety: bez zadań serwisowych.
+ */
+const SERW_RODZ = ['przegląd gwarancyjny', 'konserwacja', 'wymiana filtrów', 'przegląd ppoż. / oddymianie', 'kalibracja detektorów', 'inne'];
+const Serw = {
+  async stan(sw) {
+    const c = await DB.get('serwis');
+    if (!sw && c && Date.now() - (c._t || 0) < 60000) return c;
+    if (!navigator.onLine || !API.ready()) { if (c) return c; throw new Error('Brak połączenia z serwerem'); }
+    const r = await API.serwis({ co: 'stan' }); r._t = Date.now(); await DB.set('serwis', r); return r;
+  },
+  async zapisz(op, d, msg) {
+    const r = await API.serwis(Object.assign({ co: op }, d));
+    await this.stan(true); if (msg) UI.toast(msg + (r.blad ? ' · ClickUp: ' + r.blad : '')); return r;
+  },
+  dni(d) { if (!/^\d{4}-\d{2}-\d{2}/.test(d || '')) return null; return Math.round((new Date(d.slice(0, 10) + 'T12:00:00') - new Date(U.day(new Date()) + 'T12:00:00')) / 864e5); },
+  chipDni(d, przyp) {
+    const n = this.dni(d); if (n === null) return '<span class="mute">—</span>';
+    const kl = n < 0 ? 'r' : n <= (Number(przyp) || 30) ? 'y' : 'g';
+    return `<span class="srch ${kl}">${n < 0 ? Math.abs(n) + ' dni po terminie' : n === 0 ? 'dziś' : 'za ' + n + ' dni'}</span>`;
+  },
+  naz(S0, kod) { const o = (S0.obiekty || []).find(x => x.Kod === kod), p = (S0.projekty || []).find(x => x.kod === kod); return o ? o.Nazwa : p ? String(p.nazwa).replace(kod, '').trim() : ''; },
+  akcje(S0) { return `${S0 && S0.url ? `<a class="btn sm" href="${U.esc(S0.url)}" target="_blank" rel="noopener">Arkusz Serwis ↗</a><a class="btn sm" href="${U.esc(S0.folder)}" target="_blank" rel="noopener">Folder _Serwis ↗</a>` : ''}<button class="btn sm" id="srOd">⟳ Odśwież</button>`; },
+  async ekran(v, tytul, opis, rys) {
+    if (!PC.on()) return UI.go('plan', {}, { zastap: true });
+    let S0 = await DB.get('serwis');
+    const pokaz = (laduje, err) => { if (UI.cur !== v) return;
+      PC.widok(tytul, this.akcje(S0), (S0 ? '' : `<p class="mute">${err ? U.esc(err) : laduje ? 'Wczytuję dane serwisu…' : 'Brak danych.'}</p>`) + `<p class="pcinfo">Wdrożenie testowe – dane w osobnym arkuszu „ELWIS – Serwis”. ${opis}</p>` + (S0 ? '<div id="srT"></div>' : ''),
+        S0 && S0._t ? 'Stan z ' + PC.data(new Date(S0._t).toISOString()) + (laduje ? ' · odświeżam…' : '') : '');
+      $('#srOd').onclick = () => { S0 = null; this.ekran(v, tytul, opis, rys); };
+      if (S0) rys(S0, () => this.ekran(v, tytul, opis, rys));
+    };
+    pokaz(true);
+    try { S0 = await this.stan(!S0); pokaz(false); } catch (e) { pokaz(false, 'Serwis: ' + e.message + ' (wymagana aktualizacja serwera ELWIS do 1.60.0)'); }
+  },
+  /* okno z formularzem: pola [klucz, etykieta, typ, opcje] */
+  form(tytul, pola, w, onOk, extra) {
+    const inp = ([k, l, t, op]) => `<label class="fld${t === 'area' || k === 'nazwa' ? ' srwide' : ''}"><span class="mute">${U.esc(l)}</span>${t === 'sel' ? `<select data-k="${U.esc(k)}">${op.map(o => `<option${String(w[k] || '') === o ? ' selected' : ''}>${U.esc(o)}</option>`).join('')}</select>` :
+      t === 'area' ? `<textarea data-k="${U.esc(k)}" rows="3">${U.esc(w[k] || '')}</textarea>` : `<input data-k="${U.esc(k)}" type="${t || 'text'}" value="${U.esc(w[k] || '')}" ${op ? `placeholder="${U.esc(op)}"` : ''}>`}</label>`;
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog nzdlg srdlg" role="dialog" aria-label="${U.esc(tytul)}">
+      <div class="shead"><h3>${U.esc(tytul)}</h3></div>
+      <div class="sbody zapform"><div class="srgrid">${pola.map(inp).join('')}</div>${extra ? extra.html : ''}</div>
+      <div class="sfoot"><button class="btn" id="srX">Anuluj</button><span class="grow"></span><button class="btn pri" id="srOk">Zapisz</button></div></div></div>`;
+    if (extra && extra.init) extra.init();
+    $('#srX').onclick = () => UI.close();
+    $('#srOk').onclick = async () => {
+      const o = {}; modal.querySelectorAll('.srgrid [data-k]').forEach(e => { o[e.dataset.k] = e.value.trim(); });
+      const b = $('#srOk'); b.disabled = true; b.textContent = 'Zapisuję…';
+      try { await onOk(o); UI.close(); } catch (e) { b.disabled = false; b.textContent = 'Zapisz'; UI.toast(e.message); }
+    };
+  },
+  OBJ_POLA: [['Data odbioru', 'Data odbioru', 'date'], ['Gwarancja (mies.)', 'Gwarancja (mies.)', 'number', 'np. 36'], ['Koniec gwarancji', 'Koniec gwarancji (puste = policz)', 'date'],
+    ['Przeglądy wymagane', 'Przeglądy wymagane', 'sel', ['', 'tak', 'nie', 'do ustalenia']], ['Czas reakcji (h)', 'Czas reakcji (h)', 'number', 'np. 48'], ['Serwis w umowie do', 'Serwis w umowie do', 'date'],
+    ['Kaucja', 'Kaucja / zabezpieczenie', 'text', 'np. 5% – 70% po odbiorze'], ['Zwrot kaucji', 'Zwrot kaucji (termin)', 'date'], ['Uwagi', 'Uwagi', 'area']],
+  TERM_POLA: [['Rodzaj', 'Rodzaj', 'sel', SERW_RODZ], ['Urządzenia', 'Urządzenia', 'text', 'np. centrale NW1–NW3'], ['Co ile mies.', 'Co ile miesięcy', 'number', '12'],
+    ['Ostatnio', 'Ostatnio wykonano', 'date'], ['Następny', 'Następny termin (puste = policz)', 'date'], ['Przypomnij (dni)', 'Przypomnij (dni przed)', 'number', '30'],
+    ['Kto', 'Kto wykonuje', 'sel', ['HUP-BUD', 'serwis producenta', 'inwestor / zarządca', 'do ustalenia']], ['Płatne', 'Płatne', 'sel', ['w cenie', 'płatne osobno', 'do ustalenia']], ['Aktywny', 'Aktywny', 'sel', ['tak', 'nie']], ['Uwagi', 'Uwagi', 'area']],
+  termin(S0, kod, t, po) {
+    this.form((t ? 'Termin ' + t.ID : 'Nowy termin') + ' – ' + kod + ' ' + this.naz(S0, kod), this.TERM_POLA, t || { Aktywny: 'tak', 'Przypomnij (dni)': '30', Kto: 'HUP-BUD' },
+      async o => { await this.zapisz('zapisz', { tab: 'Terminy', w: Object.assign(o, { ID: t ? t.ID : '', Kod: kod }) }, 'Zapisano termin'); po && po(); });
+  },
+  zaplanuj(S0, z0, po) {
+    const zesp = S0.zespol || [], wyb = new Set();
+    this.form('Zaplanuj – ' + z0.kod + ' ' + this.naz(S0, z0.kod), [['nazwa', 'Nazwa zadania (ClickUp)', 'text'], ['data', 'Data', 'date'], ['od', 'Od', 'time'], ['do', 'Do', 'time'], ['opis', 'Opis', 'area']],
+      { nazwa: z0.nazwa, data: z0.data || '', od: '08:00', do: '12:00', opis: z0.opis || '' },
+      async o => { if (!wyb.size) throw new Error('Wybierz osoby');
+        await this.zapisz('zaplanuj', { z: Object.assign(o, { kod: z0.kod, rodzaj: z0.rodzaj, zrodlo: z0.zrodlo, osoby: [...wyb] }) }, 'Zaplanowano – zadanie w ClickUp (Zamknięcie i Serwis)'); po && po(); },
+      { html: `<div><div class="mute" style="margin:10px 0 6px">Osoby (zespół serwisowy – Konfiguracja „serwis_zespol”)</div><div class="cats" id="srOs">${zesp.map(n => `<button data-o="${U.esc(n)}">${U.esc(n)}</button>`).join('')}</div>
+        <p class="mute sm" style="margin-top:8px">Zadanie powstanie w ClickUp na liście budowy, w fazie „Zamknięcie i Serwis”, z tagiem „serwis”. Nie trafia do harmonogramu montażu ani na tablety.</p></div>`,
+        init: () => modal.querySelectorAll('#srOs [data-o]').forEach(b => b.onclick = () => { const n = b.dataset.o; wyb.has(n) ? wyb.delete(n) : wyb.add(n); b.classList.toggle('on', wyb.has(n)); }) });
+  },
+  zadWiersz(S0, z, po) {
+    return `<tr><td>${U.esc(PC_dzien(z.Data))} <span class="mute">${U.esc(z.Od)}–${U.esc(z.Do)}</span></td><td class="m">${U.esc(z.Kod)}</td><td>${U.esc(this.naz(S0, z.Kod))}</td><td><b>${U.esc(z.Nazwa)}</b><div class="mute sm">${U.esc(z.Rodzaj)}${z.Źródło ? ' · ' + U.esc(z.Źródło) : ''}</div></td><td>${U.esc(z.Osoby)}</td>
+      <td><span class="srch ${z.Status === 'wykonane' ? 'g' : z.Status === 'anulowane' ? 'r' : 'y'}">${U.esc(z.Status)}</span>${/ClickUp:/.test(z.Uwagi) ? `<div class="sm" style="color:#b91c1c">${U.esc(z.Uwagi)}</div>` : ''}</td>
+      <td class="srak">${z.Status === 'zaplanowane' ? `<button class="btn sm pri" data-zw="${U.esc(z.ID)}">Wykonane</button><button class="btn sm" data-za="${U.esc(z.ID)}">Anuluj</button>` : ''}</td></tr>`;
+  },
+  zadBind(po) {
+    $('#view').querySelectorAll('[data-zw],[data-za]').forEach(b => b.onclick = async () => {
+      const an = !!b.dataset.za, id = b.dataset.zw || b.dataset.za;
+      if (an && !confirm('Anulować zadanie serwisowe ' + id + '? (w ClickUp – status anulowane)')) return;
+      b.disabled = true; try { await this.zapisz('zamknij', { id, anuluj: an, data: an ? '' : U.day(new Date()) }, an ? 'Anulowano' : 'Zamknięto – następny termin przeliczony'); po(); } catch (e) { b.disabled = false; UI.toast(e.message); } });
+  }
+};
+Object.assign(Views, {
+  /* 1. Przekazanie do serwisu – budowy z Bazy, które nie są jeszcze obiektami serwisu */
+  async pcSerwPrz() {
+    Serw.ekran('pcSerwPrz', 'Przekazanie do serwisu', 'Przekazanie zakłada folder obiektu w _Serwis (Przeglądy, Zgłoszenia, Gwarancja + skrót do folderu budowy), wiersz w „Obiekty” i terminy przeglądów. Dane gwarancyjne – z sekcji „Gwarancja i serwis” Notatek budowy.', (S0, po) => {
+      const juz = new Set((S0.obiekty || []).map(o => o.Kod)), q = (UI.par.q || '').toLowerCase();
+      const l = (S0.projekty || []).filter(p => !juz.has(p.kod) && (!q || (p.kod + ' ' + p.nazwa).toLowerCase().includes(q)))
+        .sort((a, b) => (a.aktywna === 'nie' ? 0 : 1) - (b.aktywna === 'nie' ? 0 : 1) || (a.kod < b.kod ? 1 : -1));
+      $('#srT').innerHTML = `<div class="row" style="gap:10px;margin-bottom:10px"><input id="srQ" class="pcq" placeholder="Szukaj: kod lub nazwa" value="${U.esc(UI.par.q || '')}"><span class="mute">${l.length} budów do przekazania · ${juz.size} już w serwisie</span></div>
+        <div class="pctw"><table class="pct"><thead><tr><th>Kod</th><th>Nazwa</th><th>W ELWIS</th><th>ClickUp</th><th>Folder</th><th></th></tr></thead><tbody>${l.slice(0, 150).map(p => `<tr><td class="m"><b>${U.esc(p.kod)}</b></td><td>${U.esc(String(p.nazwa).replace(p.kod, '').trim())}</td>
+          <td>${p.aktywna === 'tak' ? '<span class="srch y">aktywna</span>' : p.aktywna === 'nie' ? '<span class="srch g">zakończona</span>' : '<span class="mute">' + U.esc(p.aktywna || '—') + '</span>'}</td><td>${p.cu ? '✓' : '<span class="mute">brak listy</span>'}</td><td>${p.folder ? '✓' : '<span class="mute">brak</span>'}</td>
+          <td class="srak"><button class="btn sm pri" data-pk="${U.esc(p.kod)}">Przekaż do serwisu</button></td></tr>`).join('')}</tbody></table></div>`;
+      const qi = $('#srQ'); qi.oninput = () => { clearTimeout(qi._t); qi._t = setTimeout(() => { UI.par.q = qi.value; UI.zapamietaj && UI.zapamietaj(); po(); setTimeout(() => { const n = $('#srQ'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }); }, 250); };
+      $('#srT').querySelectorAll('[data-pk]').forEach(b => b.onclick = () => {
+        const kod = b.dataset.pk, T = [];
+        const rT = () => { $('#srTl').innerHTML = T.length ? T.map((t, i) => `<div class="srtw"><b>${U.esc(t.Rodzaj)}</b> ${U.esc(t.Urządzenia || '')} · co ${U.esc(t['Co ile mies.'] || '?')} mies. · ${U.esc(t.Kto)} · ${U.esc(t.Płatne)} <button class="btn sm" data-tu="${i}">✕</button></div>`).join('') : '<p class="mute sm">Brak terminów – można dodać teraz albo później w „Obiekty na gwarancji”.</p>';
+          $('#srTl').querySelectorAll('[data-tu]').forEach(x => x.onclick = () => { T.splice(+x.dataset.tu, 1); rT(); }); };
+        Serw.form('Przekazanie do serwisu – ' + kod + ' ' + Serw.naz(S0, kod), [['Nazwa', 'Nazwa obiektu', 'text']].concat(Serw.OBJ_POLA), { Nazwa: Serw.naz(S0, kod) },
+          async o => { await Serw.zapisz('przekaz', { w: Object.assign(o, { Kod: kod }), terminy: T }, 'Przekazano do serwisu – folder i wiersz utworzone'); po(); },
+          { html: `<div class="srterm"><div class="row"><b class="grow">Terminy przeglądów</b></div><div id="srTl"></div>
+            <div class="srtadd"><label class="fld"><span class="mute">Rodzaj</span><select id="srTR">${SERW_RODZ.map(r => `<option>${r}</option>`).join('')}</select></label>
+            <label class="fld"><span class="mute">Urządzenia</span><input id="srTU" type="text" placeholder="np. centrale NW1–NW3"></label><label class="fld"><span class="mute">Co ile mies.</span><input id="srTM" type="number" value="12"></label>
+            <label class="fld"><span class="mute">Kto</span><select id="srTK"><option>HUP-BUD</option><option>serwis producenta</option><option>inwestor / zarządca</option><option>do ustalenia</option></select></label>
+            <label class="fld"><span class="mute">Płatne</span><select id="srTP"><option>w cenie</option><option>płatne osobno</option><option>do ustalenia</option></select></label><button class="btn sm" id="srTA">+ Dodaj</button></div>
+            <p class="mute sm">Pierwszy termin = data odbioru + okres (gdy brak daty odbioru – od dziś).</p></div>`,
+            init: () => { rT(); $('#srTA').onclick = () => { T.push({ Rodzaj: $('#srTR').value, Urządzenia: $('#srTU').value.trim(), 'Co ile mies.': $('#srTM').value, Kto: $('#srTK').value, Płatne: $('#srTP').value, 'Przypomnij (dni)': '30' }); $('#srTU').value = ''; rT(); }; } });
+      });
+    });
+  },
+  /* 2. Obiekty na gwarancji */
+  async pcSerwObj() {
+    Serw.ekran('pcSerwObj', 'Obiekty na gwarancji', 'Kliknij obiekt, aby zmienić dane gwarancji; „+ Termin” – nowy przegląd lub konserwacja.', (S0, po) => {
+      const T = S0.terminy || [], l = (S0.obiekty || []).slice().sort((a, b) => (a['Koniec gwarancji'] || '9') < (b['Koniec gwarancji'] || '9') ? -1 : 1);
+      $('#srT').innerHTML = !l.length ? '<p class="mute">Brak obiektów – przekaż budowę w „Przekazanie do serwisu”.</p>' : `<div class="pctw"><table class="pct"><thead><tr><th>Kod</th><th>Obiekt</th><th>Odbiór</th><th>Gwarancja do</th><th></th><th>Przeglądy</th><th>Reakcja</th><th>Kaucja – zwrot</th><th>Najbliższy termin</th><th></th></tr></thead><tbody>${l.map(o => {
+        const tt = T.filter(t => t.Kod === o.Kod && t.Aktywny !== 'nie').sort((a, b) => (a.Następny || '9') < (b.Następny || '9') ? -1 : 1), n = tt[0];
+        return `<tr class="pcrow" data-ok="${U.esc(o.Kod)}"><td class="m"><b>${U.esc(o.Kod)}</b></td><td>${U.esc(o.Nazwa)}${o.Uwagi ? `<div class="mute sm">${U.esc(o.Uwagi)}</div>` : ''}</td><td>${U.esc(o['Data odbioru'] || '—')}</td><td>${U.esc(o['Koniec gwarancji'] || '—')}</td><td>${o['Koniec gwarancji'] ? Serw.chipDni(o['Koniec gwarancji'], 90) : ''}</td>
+          <td>${U.esc(o['Przeglądy wymagane'] || '—')}${tt.length ? ` <span class="mute">(${tt.length})</span>` : ''}</td><td>${o['Czas reakcji (h)'] ? U.esc(o['Czas reakcji (h)']) + ' h' : '—'}</td><td>${U.esc(o.Kaucja || '—')}${o['Zwrot kaucji'] ? `<div class="mute sm">zwrot ${U.esc(o['Zwrot kaucji'])}</div>` : ''}</td>
+          <td>${n ? `${U.esc(n.Rodzaj)}<div class="sm">${U.esc(n.Następny || '—')} ${Serw.chipDni(n.Następny, n['Przypomnij (dni)'])}</div>` : '<span class="mute">—</span>'}</td>
+          <td class="srak">${o.Folder ? `<a class="btn sm" href="${U.esc(o.Folder)}" target="_blank" rel="noopener">Folder ↗</a>` : ''}<button class="btn sm" data-ot="${U.esc(o.Kod)}">+ Termin</button></td></tr>`; }).join('')}</tbody></table></div>`;
+      $('#srT').querySelectorAll('[data-ot]').forEach(b => b.onclick = e => { e.stopPropagation(); Serw.termin(S0, b.dataset.ot, null, po); });
+      $('#srT').querySelectorAll('a').forEach(a => a.onclick = e => e.stopPropagation());
+      $('#srT').querySelectorAll('[data-ok]').forEach(r => r.onclick = () => { const o = l.find(x => x.Kod === r.dataset.ok);
+        Serw.form('Obiekt ' + o.Kod + ' ' + o.Nazwa, [['Nazwa', 'Nazwa obiektu', 'text']].concat(Serw.OBJ_POLA), o, async w => { await Serw.zapisz('zapisz', { tab: 'Obiekty', w: Object.assign(w, { Kod: o.Kod }) }, 'Zapisano'); po(); }); });
+    });
+  },
+  /* 3. Kalendarz przeglądów – terminy wg daty + zadania serwisowe */
+  async pcSerwKal() {
+    Serw.ekran('pcSerwKal', 'Kalendarz przeglądów', 'Osobny harmonogram serwisu (nie miesza się z montażem). „Zaplanuj” tworzy zadanie w ClickUp; „Wykonane” przelicza następny termin.', (S0, po) => {
+      const pl = new Set((S0.zadania || []).filter(z => z.Status === 'zaplanowane').map(z => z.Źródło));
+      const T = (S0.terminy || []).filter(t => t.Aktywny !== 'nie').sort((a, b) => (a.Następny || '9') < (b.Następny || '9') ? -1 : 1);
+      const Z = (S0.zadania || []).filter(z => z.Rodzaj !== 'zgłoszenie' || true).sort((a, b) => (a.Data + a.Od < b.Data + b.Od ? -1 : 1));
+      const zOt = Z.filter(z => z.Status === 'zaplanowane'), zZam = Z.filter(z => z.Status !== 'zaplanowane').reverse().slice(0, 30);
+      const tab = l => `<div class="pctw"><table class="pct"><thead><tr><th>Termin</th><th>Kod</th><th>Obiekt</th><th>Zadanie</th><th>Osoby</th><th>Status</th><th></th></tr></thead><tbody>${l.map(z => Serw.zadWiersz(S0, z)).join('')}</tbody></table></div>`;
+      $('#srT').innerHTML = `<h2 class="pch2">Terminy przeglądów i konserwacji</h2>${!T.length ? '<p class="mute">Brak terminów.</p>' : `<div class="pctw"><table class="pct"><thead><tr><th>Następny</th><th></th><th>Kod</th><th>Obiekt</th><th>Rodzaj</th><th>Urządzenia</th><th>Co ile</th><th>Ostatnio</th><th>Kto · płatne</th><th></th></tr></thead><tbody>${T.map(t => `<tr class="pcrow" data-tt="${U.esc(t.ID)}"><td><b>${U.esc(t.Następny || '—')}</b></td><td>${Serw.chipDni(t.Następny, t['Przypomnij (dni)'])}</td><td class="m">${U.esc(t.Kod)}</td><td>${U.esc(Serw.naz(S0, t.Kod))}</td><td>${U.esc(t.Rodzaj)}</td><td>${U.esc(t.Urządzenia || '')}</td><td>${t['Co ile mies.'] ? U.esc(t['Co ile mies.']) + ' mies.' : '—'}</td><td>${U.esc(t.Ostatnio || '—')}</td><td>${U.esc(t.Kto || '')}<div class="mute sm">${U.esc(t.Płatne || '')}</div></td>
+        <td class="srak">${pl.has(t.ID) ? '<span class="srch y">zaplanowany</span>' : `<button class="btn sm pri" data-tz="${U.esc(t.ID)}">Zaplanuj</button>`}</td></tr>`).join('')}</tbody></table></div>`}
+        <h2 class="pch2" style="margin-top:18px">Zaplanowane zadania serwisowe</h2>${zOt.length ? tab(zOt) : '<p class="mute">Brak.</p>'}
+        ${zZam.length ? `<h2 class="pch2" style="margin-top:18px">Ostatnio zamknięte</h2>${tab(zZam)}` : ''}`;
+      $('#srT').querySelectorAll('[data-tz]').forEach(b => b.onclick = e => { e.stopPropagation(); const t = T.find(x => x.ID === b.dataset.tz);
+        Serw.zaplanuj(S0, { kod: t.Kod, rodzaj: t.Rodzaj, zrodlo: t.ID, nazwa: 'Serwis: ' + t.Rodzaj + (t.Urządzenia ? ' – ' + t.Urządzenia : ''), data: t.Następny && Serw.dni(t.Następny) >= 0 ? t.Następny : '', opis: [t.Kto && 'Wykonuje: ' + t.Kto, t.Płatne && 'Rozliczenie: ' + t.Płatne, t.Uwagi].filter(Boolean).join('\n') }, po); });
+      $('#srT').querySelectorAll('[data-tt]').forEach(r => r.onclick = () => { const t = T.find(x => x.ID === r.dataset.tt); Serw.termin(S0, t.Kod, t, po); });
+      Serw.zadBind(po);
+    });
+  },
+  /* 4. Zgłoszenia serwisowe */
+  async pcSerwZgl() {
+    Serw.ekran('pcSerwZgl', 'Zgłoszenia serwisowe', 'Numer S-00001-kod-rrmm nadaje serwer; termin reakcji liczony z czasu reakcji obiektu. Zdjęcia i pisma – do folderu obiektu → Zgłoszenia.', (S0, po) => {
+      const f = UI.par.st || 'otw', Z = (S0.zgloszenia || []).filter(z => f === 'wsz' || (f === 'otw' ? z.Status !== 'zamknięte' : z.Status === 'zamknięte')).sort((a, b) => (a.Zgłoszono < b.Zgłoszono ? 1 : -1));
+      $('#srT').innerHTML = `<div class="row" style="gap:8px;margin-bottom:10px">${[['otw', 'Otwarte'], ['zam', 'Zamknięte'], ['wsz', 'Wszystkie']].map(([k, t]) => `<button class="btn sm${k === f ? ' pri' : ''}" data-sf="${k}">${t}</button>`).join('')}<span class="grow"></span><button class="btn sm pri" id="srNZ">+ Nowe zgłoszenie</button></div>
+        ${!Z.length ? '<p class="mute">Brak zgłoszeń.</p>' : `<div class="pctw"><table class="pct"><thead><tr><th>Nr</th><th>Zgłoszono</th><th>Obiekt</th><th>Opis</th><th>Pilność</th><th>Reakcja do</th><th>Gwar.</th><th>Status</th><th></th></tr></thead><tbody>${Z.map(z => `<tr class="pcrow" data-zn="${U.esc(z.Nr)}"><td class="m">${U.esc(z.Nr)}</td><td>${U.esc(z.Zgłoszono)}<div class="mute sm">${U.esc(z.Zgłaszający || '')}${z.Kontakt ? ' · ' + U.esc(z.Kontakt) : ''}</div></td><td><b>${U.esc(z.Kod)}</b> ${U.esc(Serw.naz(S0, z.Kod))}</td>
+          <td>${U.esc(z.Opis)}${z.Urządzenia ? `<div class="mute sm">${U.esc(z.Urządzenia)}</div>` : ''}</td><td>${z.Pilność === 'pilne' ? '<span class="srch r">pilne</span>' : U.esc(z.Pilność || '')}</td><td>${U.esc(z['Termin reakcji'] || '—')}${z.Status === 'nowe' && z['Termin reakcji'] ? '<div>' + Serw.chipDni(z['Termin reakcji'], 1) + '</div>' : ''}</td><td>${U.esc(z.Gwarancyjne || '')}</td>
+          <td><span class="srch ${z.Status === 'zamknięte' ? 'g' : z.Status === 'nowe' ? 'r' : 'y'}">${U.esc(z.Status)}</span>${z.Zadanie ? `<div class="mute sm">${U.esc(z.Zadanie)}</div>` : ''}</td>
+          <td class="srak">${z.Status === 'nowe' ? `<button class="btn sm pri" data-zp="${U.esc(z.Nr)}">Zaplanuj wizytę</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`}`;
+      $('#srT').querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { UI.par.st = b.dataset.sf; po(); });
+      const OB = (S0.obiekty || []).map(o => o.Kod + ' ' + o.Nazwa);
+      const ZP = [['Obiekt', 'Obiekt', 'sel', OB], ['Zgłaszający', 'Zgłaszający', 'text', 'np. administrator'], ['Kontakt', 'Kontakt', 'text', 'telefon / e-mail'], ['Urządzenia', 'Urządzenia', 'text'],
+        ['Pilność', 'Pilność', 'sel', ['normalne', 'pilne', 'niskie']], ['Gwarancyjne', 'Gwarancyjne (puste = wg końca gwarancji)', 'sel', ['', 'tak', 'nie', 'do ustalenia']], ['Status', 'Status', 'sel', ['nowe', 'zaplanowane', 'w toku', 'zamknięte']], ['Opis', 'Opis usterki', 'area'], ['Uwagi', 'Uwagi', 'area']];
+      $('#srNZ').onclick = () => { if (!OB.length) return UI.toast('Najpierw przekaż obiekt do serwisu');
+        Serw.form('Nowe zgłoszenie serwisowe', ZP, { Pilność: 'normalne', Status: 'nowe' }, async o => { if (!o.Opis) throw new Error('Opisz usterkę');
+          const kod = o.Obiekt.split(' ')[0]; delete o.Obiekt; await Serw.zapisz('zapisz', { tab: 'Zgłoszenia', w: Object.assign(o, { Kod: kod }) }, 'Zapisano zgłoszenie'); po(); }); };
+      $('#srT').querySelectorAll('[data-zp]').forEach(b => b.onclick = e => { e.stopPropagation(); const z = Z.find(x => x.Nr === b.dataset.zp);
+        Serw.zaplanuj(S0, { kod: z.Kod, rodzaj: 'zgłoszenie', zrodlo: z.Nr, nazwa: 'Serwis – zgłoszenie ' + z.Nr + ': ' + String(z.Opis).slice(0, 80), opis: [z.Opis, z.Urządzenia && 'Urządzenia: ' + z.Urządzenia, z.Zgłaszający && 'Zgłosił: ' + z.Zgłaszający + (z.Kontakt ? ', ' + z.Kontakt : ''), z['Termin reakcji'] && 'Reakcja do: ' + z['Termin reakcji']].filter(Boolean).join('\n') }, po); });
+      $('#srT').querySelectorAll('[data-zn]').forEach(r => r.onclick = () => { const z = Z.find(x => x.Nr === r.dataset.zn), o0 = Object.assign({}, z, { Obiekt: OB.find(x => x.split(' ')[0] === z.Kod) || '' });
+        Serw.form('Zgłoszenie ' + z.Nr, ZP, o0, async o => { const kod = o.Obiekt.split(' ')[0] || z.Kod; delete o.Obiekt; await Serw.zapisz('zapisz', { tab: 'Zgłoszenia', w: Object.assign(o, { Nr: z.Nr, Kod: kod }) }, 'Zapisano'); po(); }); });
+    });
+  }
+});
+
+/* ---------- Raporty (od 1.60.0) – godziny pracowników z zatwierdzonych wpisów czasu pracy ---------- */
+Object.assign(Views, {
+  async pcRap(par) {
+    if (!PC.on()) return UI.go('plan', {}, { zastap: true });
+    const dzis = U.day(new Date()), f = Object.assign({ m: dzis.slice(0, 7), os: '', tryb: 'osoby' }, par.f || {});
+    const W = (await Czas.lista()).filter(w => w.stan === 'zatw' && String(w.data).slice(0, 7) === f.m && (!f.os || w.osoba === f.os));
+    const prac = ((S.boot && S.boot.pracownicy) || []).filter(p => p.rola !== 'biuro' || W.some(w => w.osoba === p.name)).map(p => p.name);
+    const [r, mm] = f.m.split('-').map(Number), ile = new Date(r, mm, 0).getDate(), dni = Array.from({ length: ile }, (_, i) => f.m + '-' + String(i + 1).padStart(2, '0'));
+    const osoby = [...new Set((f.os ? [f.os] : prac).concat(W.map(w => w.osoba)))].sort();
+    const godz = w => w.nieob ? 0 : CZ.h(w.od, w.do);
+    const komorka = (o, d) => { const l = W.filter(w => w.osoba === o && (w.data === d || (w.nieob && w.data <= d && (w.dataDo || w.data) >= d)));
+      const nb = l.find(w => w.nieob); const h = l.reduce((a, w) => a + godz(w), 0); return { h, nb: nb ? (nb.rodzaj === 'urlop' ? 'U' : 'N') : '' }; };
+    const M = {}; osoby.forEach(o => { M[o] = dni.map(d => komorka(o, d)); });
+    const suma = o => M[o].reduce((a, c) => a + c.h, 0), urlop = (o, t) => M[o].filter((c, i) => c.nb === t && !U.wolny(dni[i])).length;
+    const budowy = {}; W.filter(w => !w.nieob).forEach(w => { const k = w.kod || '(bez budowy)'; budowy[k] = budowy[k] || {}; budowy[k][w.osoba] = (budowy[k][w.osoba] || 0) + godz(w); });
+    const hT = h => h ? String(Math.round(h * 2) / 2).replace('.', ',') : '';
+    const mies = new Date(r, mm - 1, 15).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    const tabOs = `<div class="pctw"><table class="pct prap"><thead><tr><th>Osoba</th>${dni.map(d => `<th class="${U.wolny(d) ? 'prw' : ''}">${+d.slice(8)}</th>`).join('')}<th>Suma h</th><th>Urlop</th><th>Nieob.</th></tr></thead><tbody>${osoby.map(o => `<tr><td><b>${U.esc(o)}</b></td>${M[o].map((c, i) => `<td class="${U.wolny(dni[i]) ? 'prw' : ''}">${c.nb ? `<span class="prnb">${c.nb}</span>` : hT(c.h)}</td>`).join('')}<td><b>${hT(suma(o)) || 0}</b></td><td>${urlop(o, 'U') || ''}</td><td>${urlop(o, 'N') || ''}</td></tr>`).join('')}</tbody></table></div>`;
+    const bk = Object.keys(budowy).sort();
+    const tabBud = !bk.length ? '<p class="mute">Brak godzin na budowach.</p>' : `<div class="pctw"><table class="pct"><thead><tr><th>Budowa</th>${osoby.map(o => `<th>${U.esc(o)}</th>`).join('')}<th>Suma h</th></tr></thead><tbody>${bk.map(k => `<tr><td class="m"><b>${U.esc(k)}</b></td>${osoby.map(o => `<td>${hT(budowy[k][o])}</td>`).join('')}<td><b>${hT(Object.values(budowy[k]).reduce((a, b) => a + b, 0))}</b></td></tr>`).join('')}</tbody></table></div>`;
+    const ms = []; for (let i = 0; i < 13; i++) { const d = new Date(+dzis.slice(0, 4), +dzis.slice(5, 7) - 1 - i, 1); ms.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+    PC.widok('Raporty', `<button class="btn sm" id="rpCsv">Pobierz CSV</button><button class="btn sm" onclick="window.print()">Drukuj / PDF</button>`,
+      `<div class="row prf" style="gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center"><select id="rpM">${ms.map(m => `<option value="${m}"${m === f.m ? ' selected' : ''}>${new Date(+m.slice(0, 4), +m.slice(5) - 1, 15).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' })}</option>`).join('')}</select>
+        <select id="rpO"><option value="">Wszyscy pracownicy</option>${prac.map(n => `<option${n === f.os ? ' selected' : ''}>${U.esc(n)}</option>`).join('')}</select>
+        <div class="seg">${[['osoby', 'Godziny – osoby × dni'], ['bud', 'Godziny – budowy × osoby']].map(([k, t]) => `<button data-rt="${k}" class="${k === f.tryb ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+       <p class="pcinfo">Raport z zatwierdzonych wpisów czasu pracy (dane na komputerze – zsynchronizuj „Do zatwierdzenia”, by mieć najnowsze). U – urlop, N – nieobecność; szare kolumny – dni wolne.</p>
+       <h2 class="pch2">${f.tryb === 'bud' ? 'Godziny na budowach' : 'Godziny pracowników'} – ${U.esc(mies)}</h2>${f.tryb === 'bud' ? tabBud : tabOs}`, W.length + ' zatwierdzonych wpisów');
+    const zm = (k, v) => { f[k] = v; UI.par.f = Object.assign({}, f); UI.zapamietaj && UI.zapamietaj(); Views.pcRap(UI.par); };
+    $('#rpM').onchange = e => zm('m', e.target.value); $('#rpO').onchange = e => zm('os', e.target.value);
+    $('#view').querySelectorAll('[data-rt]').forEach(b => b.onclick = () => zm('tryb', b.dataset.rt));
+    $('#rpCsv').onclick = () => {
+      const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+      const wiersze = f.tryb === 'bud' ? [['Budowa', ...osoby, 'Suma h']].concat(bk.map(k => [k, ...osoby.map(o => hT(budowy[k][o])), hT(Object.values(budowy[k]).reduce((a, b) => a + b, 0))]))
+        : [['Osoba', ...dni.map(d => d.slice(8)), 'Suma h', 'Urlop (dni)', 'Nieobecność (dni)']].concat(osoby.map(o => [o, ...M[o].map(c => c.nb || hT(c.h)), hT(suma(o)) || 0, urlop(o, 'U'), urlop(o, 'N')]));
+      const blob = new Blob(['\ufeff' + wiersze.map(r => r.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ELWIS-godziny-' + (f.tryb === 'bud' ? 'budowy-' : '') + f.m + (f.os ? '-' + f.os.replace(/\s+/g, '_') : '') + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
   }
 });

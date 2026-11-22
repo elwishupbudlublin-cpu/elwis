@@ -981,8 +981,40 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .pctyd #tZW{font-size:11px;padding:4px 8px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .pcmies .pczm{min-height:18px}
 /* 1.59.2: Budowy na PC – kafelki ostatnich i paski postępu */
-.pckafle{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
-.pckaf{text-align:left;display:flex;flex-direction:column;gap:6px;align-items:stretch}.pckn{font-size:15px}.pckt{font-size:12px}
+.pckafle{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.pckaf{text-align:left;display:flex;flex-direction:column;gap:3px;align-items:stretch;padding:8px 10px;font-size:12px;min-width:0}.pckaf .bkd{font-size:11px}.pckn{font-size:12.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pckt{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.btc.pckaf b.pckn{font-size:13px}.tile.btc.pckaf .lstat b{font-size:12px}.tile.btc.pckaf .lstat small{font-size:9.5px}.tile.btc.pckaf .lstat .lgrp{gap:8px}
+/* od 1.59.3: kafelki ostatnich budów o ~60% mniejsze – tylko kod, nazwa, postęp i pasek */
+.pckaf .lkier,.pckaf .ldod,.pckaf .lgrp.kol>:not(:last-child){display:none}.pckaf .lstat{margin-top:2px;min-width:0;font-size:11px;gap:2px}.pckaf .lstat .m b{font-size:12px}.pckaf .lstat small{font-size:10px}.pckaf .tbar3.sm{width:100%;height:5px}
 .pch2{font-size:16px;margin:4px 0 10px}
 .pcbud td.pcpr{min-width:130px}.pcbud td.pcpr .tbar3{width:120px}
-@media (max-width:1500px){.pckafle{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:1250px){.pckafle{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.zpwol{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:6px;cursor:pointer}.zpwol input{width:20px;height:20px;margin:0}
+/* od 1.59.3: plan dnia – kafelki dni i chipy (data, pogoda) widoczne na tle panelu PC; „Nowe zadanie” i ⟳ po prawej, przy Mój plan / Wszyscy, ta sama wysokość */
+body.pc .pday{background:#fff;border:1px solid #dbe2ea;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+body.pc .pday.on{border-color:var(--pri)}
+body.pc .pday.wolne{background:#fdecec;border-color:#f6caca}
+body.pc .pday .pico{filter:drop-shadow(0 0 1px rgba(15,23,42,.35))}
+body.pc .pchip{background:#fff;border:1px solid #dbe2ea;color:#1e293b}
+body.pc .pchip.pwolne{border-color:#f6caca}body.pc .pchip.pwarn{border-color:#fcd34d}body.pc .pchip.pnow{border-color:var(--pri)}
+.pchip{background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.phtop .pnz,.phtop .pnz.psh{position:static;transform:none;left:auto;top:auto;margin:0;height:50px;min-height:50px;order:0}
+.phtop .pnz.psh{width:50px;padding:0}
+.phtop .pseg{margin-left:4px}
+body.pc .phtop .pnz{height:42px;min-height:42px;border-radius:10px;font-size:14px;background:#fff;border:1px solid #dbe2ea;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+body.pc .phtop .pnz.psh{width:42px;font-size:20px}
+@media (max-width:700px){.phtop .pnz{order:3}.phtop .pnz.psh{order:4}}
+/* od 1.60.0: Serwis */
+.srdlg{max-width:860px}.srgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px}.srgrid .srwide{grid-column:1/-1}
+.srgrid select,.srgrid input,.srgrid textarea,.srterm select,.srterm input{width:100%}
+.srterm{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}.srtw{display:flex;gap:8px;align-items:center;font-size:14px}.srtw .btn{margin-left:auto}
+.srak{white-space:nowrap;text-align:right}.srak .btn+.btn,.srak a+.btn{margin-left:6px}
+/* od 1.60.0: Raporty */
+.prap th,.prap td{padding:6px 5px;text-align:center;font-size:12.5px}.prap td:first-child,.prap th:first-child{text-align:left;white-space:nowrap}
+.prap .prw{background:#f1f5f9;color:#94a3b8}.prnb{display:inline-block;min-width:18px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;font-size:11px}
+@media print{#pcNav,.pcakc,#hdr,header,.bnav{display:none!important}body.pc .pcw{padding:0}}
+.srtadd{display:grid;grid-template-columns:1fr 1.4fr 110px;gap:8px 12px;align-items:end}.srtadd .btn{justify-self:start;height:42px}
+.srch{display:inline-block;border-radius:10px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap}.srch.r{background:#fee2e2;color:#b91c1c}.srch.y{background:#fef3c7;color:#92400e}.srch.g{background:#dcfce7;color:#166534}
+.prf select{width:auto;min-width:200px}
+.srak a.btn{text-decoration:none}#view .pct td:has(> .srch){white-space:nowrap}
+.pczb{font-size:11px;font-weight:600;color:#1e3a8a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}

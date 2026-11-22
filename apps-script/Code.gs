@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.59.2';
+const SCRIPT_VERSION = '1.60.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -55,7 +55,7 @@ function handle_(p, body) {
     if (dost.wygasl) return out_({ ok: false, error: 'Dostęp wygasł ' + dost.wazny + ' – skontaktuj się z HUP-BUD' });
     const akcja = body ? body.action : p.action;
     if (dost.budowy) {
-      if (['plan', 'zadania', 'docx', 'priorytety', 'zakupy', 'zadNowe', 'powiad'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
+      if (['plan', 'zadania', 'docx', 'priorytety', 'zakupy', 'zadNowe', 'powiad', 'serwis'].indexOf(akcja) >= 0) return out_({ ok: false, error: 'Operacja niedostępna dla dostępu podwykonawcy' });
       const kod = String((body && body.kod) || p.kod || '');
       if (['project', 'events', 'foto', 'push'].indexOf(akcja) >= 0 && dost.budowy.indexOf(kod) < 0) return out_({ ok: false, error: 'Brak dostępu do tej budowy' });
     }
@@ -75,6 +75,7 @@ function handle_(p, body) {
       case 'zadNowe': return out_(zadNowe_(body || {}));   // od 1.56.0: warianty terminu, zaplanowanie, nowy projekt
       case 'powiad': return out_(powiad_(String(p.kto || ''), p.since));
       case 'pc': return out_(pc_(body || {}));
+      case 'serwis': return out_(serwis_(body || {}));   // od 1.60.0: dział Serwis (panel PC, rola biuro)
       case 'czas': return out_(czas_(body || {}, tablet));   // od 1.58.0: czas pracy – wpisy, potwierdzenia, zatwierdzanie   // od 1.57.0: panel biura na komputerze – obciążenie i dane administracyjne (tylko odczyt)   // od 1.56.0: powiadomienia (rola biuro)
       default: return out_({ ok: false, error: 'Nieznana operacja' });
     }
@@ -359,6 +360,7 @@ function plan_(od, doDnia) {
   const out = [], ZAMK = {}; try { slowniki_().statusy.forEach(s => { if (s.rodzaj === 'done' || s.rodzaj === 'closed') ZAMK[s.id] = 1; }); } catch (e) { }
   kol.forEach(k => { const r = Z[k]; if (txt_(r[31])) return;   // usunięte / poza ClickUp
     const os = txt_(r[14]).split(';').map(x => CU[x.trim()]).filter(Boolean); if (!os.length) return;   // tablety – tylko zadania osób z ELWIS
+    if (/(^|;)\s*serwis\s*(;|$)/i.test(txt_(r[18])) || /Serwis ELWIS \[SZ-/.test(txt_(r[6]))) return;   // od 1.60.0: zadania serwisowe – osobny harmonogram (panel Serwis), nie na tabletach
     const [s, gs] = czas(r[10], false), [e, ge] = czas(r[11], true); if (!s && !e) return;
     const a = s || e, b = e || s; if (b < t0 || a > t1 || b > t1 + 90 * 864e5) return;
     const st = txt_(r[8]).toLowerCase();
@@ -2510,4 +2512,154 @@ function czasNoc_() {
   const pow = [];
   pl.zadania.filter(t => !t.zamk && t.koniec && dzienTz_(t.koniec) === d).forEach(t => (t.osoby || []).forEach(i => { const n = L[i]; if (n && !ma[n + '|' + t.id]) pow.push({ t: 'czas', kod: kodZListy_(t.listaNazwa), tyt: 'Brak godzin: ' + n + ' – ' + txt_(t.nazwa).slice(0, 80), opis: dzTxt_(d) + ' – zadanie bez statusu i godzin', kto: 'serwer' }); }));
   powDodaj_(pow);
+}
+
+/* ===================== SERWIS (od 1.60.0) =====================
+ * Wdrożenie testowe, osobne od harmonogramu montażu: folder „_Serwis” na Dysku (per obiekt folder <Kod Nazwa>
+ * z podfolderami i skrótem do folderu budowy – bez kopii danych budowy) i arkusz „ELWIS – Serwis”.
+ * Wizyty serwisowe i przeglądy tworzą zadania w ClickUp jak inne (lista budowy, faza Zamknięcie i Serwis).
+ * Tylko rola biuro (panel PC); tablety nie dostają zadań serwisowych.
+ */
+const SERW_TABS = {
+  'Obiekty': ['Kod', 'Nazwa', 'Data odbioru', 'Gwarancja (mies.)', 'Koniec gwarancji', 'Przeglądy wymagane', 'Czas reakcji (h)', 'Serwis w umowie do', 'Kaucja', 'Zwrot kaucji', 'Przekazano', 'Przekazał', 'Folder', 'Uwagi'],
+  'Terminy': ['ID', 'Kod', 'Rodzaj', 'Urządzenia', 'Co ile mies.', 'Ostatnio', 'Następny', 'Przypomnij (dni)', 'Kto', 'Płatne', 'Uwagi', 'Aktywny'],
+  'Zgłoszenia': ['Nr', 'Kod', 'Zgłoszono', 'Zgłaszający', 'Kontakt', 'Opis', 'Urządzenia', 'Pilność', 'Termin reakcji', 'Gwarancyjne', 'Status', 'Zadanie', 'Zamknięto', 'Uwagi'],
+  'Zadania': ['ID', 'Kod', 'Rodzaj', 'Źródło', 'Nazwa', 'Opis', 'Data', 'Od', 'Do', 'Osoby', 'Status', 'ID ClickUp', 'Utworzył', 'Utworzono', 'Zamknięto', 'Uwagi'],
+  'Historia': ['Kiedy', 'Kto', 'Operacja', 'Zakładka', 'Klucz', 'Szczegóły']
+};
+const SERW_KLUCZ = { 'Obiekty': 0, 'Terminy': 0, 'Zgłoszenia': 0, 'Zadania': 0 };
+const SERW_PODF = ['Przeglądy', 'Zgłoszenia', 'Gwarancja'];
+let SERW_SS = null;
+function serwFolder_() {
+  const k = konfig_(); let f = null;
+  if (k.folder_serwis_id) try { f = DriveApp.getFolderById(k.folder_serwis_id); } catch (e) { Logger.log('_Serwis: ' + e); }
+  if (!f) { const it = DriveApp.getRootFolder().getFoldersByName('_Serwis'); f = it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder('_Serwis');
+    konfigUstaw_('folder_serwis_id', f.getId(), 'Folder „_Serwis” – per obiekt folder <Kod Nazwa>: Przeglądy, Zgłoszenia, Gwarancja + skrót do folderu budowy'); }
+  return f;
+}
+function serw_() {
+  if (SERW_SS) return SERW_SS;
+  const k = konfig_(); let ss = null;
+  if (k.serwis_arkusz_id) try { ss = SpreadsheetApp.openById(k.serwis_arkusz_id); } catch (e) { Logger.log('serwis arkusz: ' + e); }
+  if (!ss) {
+    ss = SpreadsheetApp.create('ELWIS – Serwis'); DriveApp.getFileById(ss.getId()).moveTo(serwFolder_());
+    konfigUstaw_('serwis_arkusz_id', ss.getId(), 'Arkusz „ELWIS – Serwis” (folder _Serwis): obiekty na gwarancji, terminy przeglądów, zgłoszenia, zadania serwisowe');
+    if (!k.serwis_zespol) konfigUstaw_('serwis_zespol', '', 'Osoby do zadań serwisowych (po przecinku); puste = wszyscy pracownicy');
+  }
+  Object.keys(SERW_TABS).forEach((n, i) => {
+    let sh = ss.getSheetByName(n);
+    if (!sh) sh = i === 0 && ss.getSheets().length === 1 && ss.getSheets()[0].getLastRow() === 0 ? ss.getSheets()[0].setName(n) : ss.insertSheet(n);
+    if (sh.getLastRow() === 0) { sh.getRange(1, 1, 1, SERW_TABS[n].length).setValues([SERW_TABS[n]]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  });
+  SERW_SS = ss; return ss;
+}
+/** Uruchom raz w edytorze (albo samo przy pierwszym otwarciu ekranu Serwis): folder, arkusz, klucze Konfiguracji. */
+function instalujSerwis() { const ss = serw_(); Logger.log('ELWIS – Serwis: ' + ss.getUrl()); }
+function serwObj_(n) {
+  const sh = serw_().getSheetByName(n), v = sh.getDataRange().getDisplayValues(), H = SERW_TABS[n];
+  return v.slice(1).filter(r => txt_(r[0])).map(r => { const o = {}; H.forEach((h, i) => { o[h] = txt_(r[i]); }); return o; });
+}
+function serwHist_(kto, op, tab, klucz, szcz) {
+  const sh = serw_().getSheetByName('Historia'), c = v => String(v == null ? '' : v).replace(/^[=+@-]/, "'$&");
+  sh.getRange(sh.getLastRow() + 1, 1, 1, 6).setNumberFormat(TEXT).setValues([[Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), kto, op, tab, klucz, String(szcz || '').slice(0, 1500)].map(c)]);
+}
+/** Zapis wiersza (po kluczu z 1. kolumny): nowy albo nadpisanie podanych pól. Zwraca obiekt wiersza. */
+function serwZapisz_(n, o, kto) {
+  const sh = serw_().getSheetByName(n), H = SERW_TABS[n], v = sh.getDataRange().getDisplayValues(), k = txt_(o[H[0]]);
+  if (!k) throw new Error('Brak klucza ' + H[0]);
+  const c = x => String(x == null ? '' : x).replace(/^[=+@-]/, "'$&");
+  const i = v.findIndex((r, j) => j > 0 && txt_(r[0]) === k);
+  const r = i > 0 ? v[i].slice() : H.map(() => '');
+  while (r.length < H.length) r.push('');
+  H.forEach((h, j) => { if (o[h] !== undefined) r[j] = txt_(o[h]); });
+  const w = i > 0 ? i + 1 : v.length + 1;
+  sh.getRange(w, 1, 1, H.length).setNumberFormat(TEXT).setValues([r.slice(0, H.length).map(c)]);
+  serwHist_(kto, i > 0 ? 'zmiana' : 'nowy', n, k, JSON.stringify(o));
+  const out = {}; H.forEach((h, j) => { out[h] = r[j]; }); return out;
+}
+function serwPlusMies_(d, m) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !(Number(m) > 0)) return '';
+  const x = new Date(d + 'T12:00:00Z'), dz = x.getUTCDate(); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth() + Number(m));
+  const ost = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate(); x.setUTCDate(Math.min(dz, ost));
+  return x.toISOString().slice(0, 10);
+}
+/** Pierwszy termin: odbiór + N mies., a gdy wypada w przeszłości (budowa oddana dawno) – najbliższy przyszły w tym cyklu. */
+function serwPierwszy_(od, m, dzis) { let d = serwPlusMies_(od, m), n = 0; while (d && d < dzis && n++ < 200) d = serwPlusMies_(d, m); return d; }
+function serwZespol_() {
+  const z = txt_(konfig_().serwis_zespol).split(/[,;]/).map(s => s.trim()).filter(String);
+  return z.length ? z : ludzie_().map(o => o.name);
+}
+function serwis_(b) {
+  const kto = txt_(b.kto); if (!rolaBiuro_()[kto]) throw new Error('Serwis – tylko rola biuro');
+  const lk = b.co === 'stan' ? null : LockService.getScriptLock(); if (lk) lk.waitLock(25000);
+  try {
+    const dzis = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'), teraz = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    const projekt = kod => { const r = rowsT_(baza_().getSheetByName('Projekty')).find(x => txt_(x[0]) === kod);
+      return r ? { kod: txt_(r[0]), nazwa: txt_(r[1]), aktywna: txt_(r[5]), folder: idFromUrl_(r[8]), cu: txt_(r[9]), kierownik: txt_(r[15]) } : null; };
+    if (b.co === 'zapisz') {
+      if (!SERW_KLUCZ.hasOwnProperty(b.tab)) throw new Error('Nieznana zakładka');
+      const o = Object.assign({}, b.w || {});
+      if (b.tab === 'Terminy' && !txt_(o.ID)) { o.ID = harmLicznik_('SRV_T', 'T-'); if (o.Aktywny === undefined) o.Aktywny = 'tak'; }
+      if (b.tab === 'Terminy' && txt_(o.Ostatnio) && !txt_(o.Następny) && txt_(o['Co ile mies.'])) o.Następny = serwPlusMies_(txt_(o.Ostatnio), o['Co ile mies.']);
+      if (b.tab === 'Obiekty' && txt_(o['Data odbioru']) && txt_(o['Gwarancja (mies.)']) && !txt_(o['Koniec gwarancji'])) o['Koniec gwarancji'] = serwPlusMies_(txt_(o['Data odbioru']), o['Gwarancja (mies.)']);
+      if (b.tab === 'Zgłoszenia' && !txt_(o.Nr)) {
+        const n = Number(P.getProperty('SRV_Z') || '0') + 1; P.setProperty('SRV_Z', String(n));
+        o.Nr = 'S-' + ('0000' + n).slice(-5) + '-' + txt_(o.Kod) + '-' + dzis.slice(2, 4) + dzis.slice(5, 7);
+        if (!txt_(o.Zgłoszono)) o.Zgłoszono = teraz; if (!txt_(o.Status)) o.Status = 'nowe';
+        const ob = serwObj_('Obiekty').find(x => x.Kod === txt_(o.Kod)), h = Number((ob || {})['Czas reakcji (h)']) || 0;
+        if (h && !txt_(o['Termin reakcji'])) o['Termin reakcji'] = Utilities.formatDate(new Date(Date.now() + h * 36e5), TZ, 'yyyy-MM-dd HH:mm');
+        if (!txt_(o.Gwarancyjne) && ob) o.Gwarancyjne = ob['Koniec gwarancji'] && ob['Koniec gwarancji'] >= dzis ? 'tak' : 'nie';
+      }
+      return { ok: true, w: serwZapisz_(b.tab, o, kto) };
+    }
+    if (b.co === 'przekaz') {
+      const o = Object.assign({}, b.w || {}), kod = txt_(o.Kod), pr = projekt(kod); if (!pr) throw new Error('Brak budowy ' + kod + ' w Bazie');
+      o.Nazwa = txt_(o.Nazwa) || txt_(pr.nazwa).replace(kod, '').trim();
+      const root = serwFolder_(), nazwa = (kod + ' ' + o.Nazwa).trim(), it = root.getFoldersByName(nazwa), f = it.hasNext() ? it.next() : root.createFolder(nazwa);
+      SERW_PODF.forEach(s => sub_(f, s, true));
+      if (pr.folder) try { if (!f.getFilesByName('Folder budowy').hasNext()) { const sc = f.createShortcut(pr.folder); sc.setName('Folder budowy'); } } catch (e) { Logger.log('skrót: ' + e); }
+      o.Folder = f.getUrl(); o.Przekazano = txt_(o.Przekazano) || dzis; o.Przekazał = kto;
+      if (txt_(o['Data odbioru']) && txt_(o['Gwarancja (mies.)']) && !txt_(o['Koniec gwarancji'])) o['Koniec gwarancji'] = serwPlusMies_(txt_(o['Data odbioru']), o['Gwarancja (mies.)']);
+      const w = serwZapisz_('Obiekty', o, kto);
+      const T = (b.terminy || []).filter(t => txt_(t.Rodzaj)).map(t => serwZapisz_('Terminy', Object.assign({ ID: harmLicznik_('SRV_T', 'T-'), Kod: kod, Aktywny: 'tak',
+        Następny: txt_(t.Następny) || serwPierwszy_(txt_(o['Data odbioru']) || dzis, t['Co ile mies.'], dzis) }, t), kto));
+      powDodaj_([{ t: 'zad', kod, tyt: 'Przekazano do serwisu: ' + nazwa.slice(0, 80), opis: (o['Koniec gwarancji'] ? 'gwarancja do ' + o['Koniec gwarancji'] + ' · ' : '') + T.length + ' termin(y) przeglądów', kto }]);
+      return { ok: true, w, terminy: T };
+    }
+    if (b.co === 'zaplanuj') {
+      const z = b.z || {}, kod = txt_(z.kod), pr = projekt(kod); if (!pr) throw new Error('Brak budowy ' + kod + ' w Bazie');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(txt_(z.data)) || !/^\d{1,2}:\d{2}$/.test(txt_(z.od)) || !/^\d{1,2}:\d{2}$/.test(txt_(z.do))) throw new Error('Podaj datę i godziny');
+      const osoby = (z.osoby || []).map(txt_).filter(String); if (!osoby.length) throw new Error('Wybierz osoby');
+      const id = harmLicznik_('SRV_ZD', 'SZ-'), nazwa = txt_(z.nazwa).slice(0, 180) || 'Serwis';
+      let cuId = '', cuUrl = '', blad = '';
+      if (pr.cu) try {
+        const opis = [txt_(z.opis), 'Serwis ELWIS [' + id + ']' + (txt_(z.zrodlo) ? ' · źródło ' + txt_(z.zrodlo) : '') + ' · zaplanował ' + kto + ' ' + teraz].filter(String).join('\n\n');
+        const t = cu_('post', 'list/' + pr.cu + '/task', { name: nazwa, parent: faza_(pr.cu, 'Zamknięcie i Serwis'), assignees: cuIds_(osoby), description: opis, tags: ['serwis'],
+          start_date: msDnia_(z.data, z.od), start_date_time: true, due_date: msDnia_(z.data, z.do), due_date_time: true, time_estimate: Math.round((minOf_(z.do) - minOf_(z.od)) * 6e4), notify_all: false });
+        cuId = txt_(t.id); cuUrl = txt_(t.url); syncLog_('utworz', 'serwis:' + id, cuId, 'ok', '');
+      } catch (e) { blad = String(e.message || e); Logger.log('serwis CU: ' + blad); }
+      else blad = 'budowa bez listy ClickUp w Bazie';
+      const w = serwZapisz_('Zadania', { ID: id, Kod: kod, Rodzaj: txt_(z.rodzaj) || 'przegląd', Źródło: txt_(z.zrodlo), Nazwa: nazwa, Opis: txt_(z.opis).slice(0, 2000), Data: z.data, Od: z.od, Do: z.do,
+        Osoby: osoby.join('; '), Status: 'zaplanowane', 'ID ClickUp': cuId, Utworzył: kto, Utworzono: teraz, Uwagi: blad ? 'ClickUp: ' + blad : '' }, kto);
+      if (/^S-/.test(txt_(z.zrodlo))) { const zg = serwObj_('Zgłoszenia').find(x => x.Nr === txt_(z.zrodlo)); if (zg) serwZapisz_('Zgłoszenia', { Nr: zg.Nr, Status: 'zaplanowane', Zadanie: id }, kto); }
+      return { ok: true, w, cuUrl, blad };
+    }
+    if (b.co === 'zamknij') {
+      const zd = serwObj_('Zadania').find(x => x.ID === txt_(b.id)); if (!zd) throw new Error('Brak zadania ' + b.id);
+      const data = txt_(b.data) || zd.Data || dzis;
+      const w = serwZapisz_('Zadania', { ID: zd.ID, Status: b.anuluj ? 'anulowane' : 'wykonane', Zamknięto: teraz, Uwagi: txt_(b.uwagi) || zd.Uwagi }, kto);
+      let blad = '';
+      if (zd['ID ClickUp']) try { cu_('put', 'task/' + zd['ID ClickUp'], { status: b.anuluj ? (konfig_().cu_status_anulowane || 'cancelled') : 'complete' }); } catch (e) { blad = String(e.message || e); }
+      if (!b.anuluj && /^T-/.test(zd.Źródło)) { const t = serwObj_('Terminy').find(x => x.ID === zd.Źródło);
+        if (t) serwZapisz_('Terminy', { ID: t.ID, Ostatnio: data, Następny: serwPlusMies_(data, t['Co ile mies.']) }, kto); }
+      if (/^S-/.test(zd.Źródło)) serwZapisz_('Zgłoszenia', { Nr: zd.Źródło, Status: b.anuluj ? 'nowe' : 'zamknięte', Zamknięto: b.anuluj ? '' : teraz, Zadanie: b.anuluj ? '' : zd.ID }, kto);
+      return { ok: true, w, blad };
+    }
+    if (b.co === 'stan') {
+      const ss = serw_(), proj = rowsT_(baza_().getSheetByName('Projekty')).filter(r => txt_(r[0])).map(r => ({ kod: txt_(r[0]), nazwa: txt_(r[1]), aktywna: txt_(r[5]), cu: !!txt_(r[9]), folder: !!idFromUrl_(r[8]) }));
+      return { ok: true, czas: Date.now(), url: ss.getUrl(), folder: serwFolder_().getUrl(), obiekty: serwObj_('Obiekty'), terminy: serwObj_('Terminy'), zgloszenia: serwObj_('Zgłoszenia'),
+        zadania: serwObj_('Zadania'), projekty: proj, zespol: serwZespol_() };
+    }
+    throw new Error('Nieznana operacja serwisu');
+  } finally { if (lk) lk.releaseLock(); }
 }

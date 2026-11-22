@@ -1,5 +1,5 @@
 /* ELWIS – komunikacja ze skryptem Apps Script (zamknięta lista operacji, patrz docs/API.md). */
-const APP_VERSION = '1.59.2';
+const APP_VERSION = '1.60.0';
 
 const API = (() => {
   let cfg = null; // {url, key, tablet}
@@ -65,6 +65,7 @@ const API = (() => {
     zadNowe: (d) => post(Object.assign({ action: 'zadNowe', kto: S.user ? S.user.name : '' }, d)),   // od 1.56.0: warianty terminu / zaplanowanie zadania
     pc: (d) => post(Object.assign({ action: 'pc', kto: S.user ? S.user.name : '' }, d)),   // od 1.57.0: panel biura na PC
     czas: (d) => post(Object.assign({ action: 'czas', kto: S.user ? S.user.name : '' }, d)),   // od 1.58.0: czas pracy
+    serwis: (d) => post(Object.assign({ action: 'serwis', kto: S.user ? S.user.name : '' }, d)),   // od 1.60.0: dział Serwis (panel PC)
     priorytety: (odswiez) => get('priorytety', Object.assign({ kto: S.user ? S.user.name : '' }, odswiez ? { odswiez: '1' } : {})),
     zadania: (zmiany) => post({ action: 'zadania', zmiany }),
     zakupy: (o) => post(Object.assign({ action: 'zakupy' }, o || {})),   // od 1.48.0: zapotrzebowania

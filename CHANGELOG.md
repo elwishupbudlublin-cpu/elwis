@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.60.0 – 2026-11-22 (aplikacja i serwer)
+- Panel PC – nowy dział **Serwis** (wdrożenie testowe): Przekazanie do serwisu, Obiekty na gwarancji, Kalendarz przeglądów, Zgłoszenia serwisowe. Dane w osobnym arkuszu „ELWIS – Serwis” w folderze _Serwis na Dysku (per obiekt folder z podfolderami Przeglądy / Zgłoszenia / Gwarancja i skrótem do folderu budowy). „Zaplanuj” tworzy zadanie w ClickUp (lista budowy, faza Zamknięcie i Serwis, tag „serwis”); „Wykonane” przelicza następny termin. Zadania serwisowe nie trafiają na tablety ani do harmonogramu montażu. Serwer: operacja `serwis` (tylko rola biuro), klucze Konfiguracji folder_serwis_id, serwis_arkusz_id, serwis_zespol.
+- Biuro → **Raporty**: godziny pracowników z zatwierdzonych wpisów (osoby × dni z urlopami i nieobecnościami; budowy × osoby), miesiąc i osoba, CSV i druk / PDF.
+- Plan dnia: kafelki dni i etykiety (data, pogoda) czytelne na tle panelu PC; „Nowe zadanie” i ⟳ po prawej przy „Mój plan / Wszyscy”, równa wysokość; podpowiedź przy czerwonej kropce (brak wpisanych godzin).
+- Harmonogram tygodnia: nazwa budowy na kafelku zadania (pod kodem).
+- Budowy (PC): kafelki ostatnich budów ~60% mniejsze (6 w rzędzie).
+- Okno zadania: czytelny przełącznik „praca również w dni wolne”.
+
 ## 1.59.2 – 2026-11-22 (aplikacja)
 - Budowy na komputerze: kafelki 6 ostatnich budów (ostatnio otwierane, potem z najnowszym wpisem) z licznikami i paskami postępu jak na tablecie; kolumna „Postęp” z paskiem w tabeli budów (sortowanie).
 
