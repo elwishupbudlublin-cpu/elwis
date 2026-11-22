@@ -417,20 +417,26 @@ const Views = {
     // przeciąganie paska dni: 21 kafelków (7 widocznych), tor przesuwa się za palcem; po puszczeniu dociąga do pełnych dni
     (() => {
       const wrap = $('#pWeekWrap'), w = $('#pWeek'), GAP = 6;
-      let szer = 0, baza = 0, x0 = null, dx = 0, przeciagniete = false;
+      // od 1.59.1: dni wolne o połowę węższe – położenia kafelków liczone narastająco
+      const kaf = [...w.querySelectorAll('.pday')], waga = kaf.map(k => k.classList.contains('wolne') ? 0.5 : 1);
+      let szer = 0, baza = 0, x0 = null, dx = 0, przeciagniete = false, X = [];
       const uloz = () => {
-        const W = wrap.getBoundingClientRect().width; szer = (W - 6 * GAP) / 7;
-        w.querySelectorAll('.pday').forEach(k => { k.style.flex = `0 0 ${szer}px`; });
-        baza = -ZAPAS * (szer + GAP); w.style.transition = 'none'; w.style.transform = `translateX(${baza}px)`;
+        const W = wrap.getBoundingClientRect().width, jedn = waga.slice(ZAPAS, ZAPAS + 7).reduce((a, b) => a + b, 0);
+        szer = (W - 6 * GAP) / jedn;
+        kaf.forEach((k, i) => { k.style.flex = `0 0 ${szer * waga[i]}px`; });
+        X = []; let x = 0; kaf.forEach((k, i) => { X.push(x); x += szer * waga[i] + GAP; });
+        baza = -X[ZAPAS]; w.style.transition = 'none'; w.style.transform = `translateX(${baza}px)`;
       };
       uloz(); window.addEventListener('resize', uloz, { once: true });
       const ruch = e => { if (x0 === null) return; dx = e.clientX - x0; if (Math.abs(dx) > 10) przeciagniete = true;
-        if (przeciagniete) w.style.transform = `translateX(${Math.max(Math.min(baza + dx, 0), 2 * baza)}px)`; };
+        if (przeciagniete) w.style.transform = `translateX(${Math.max(Math.min(baza + dx, 0), -X[2 * ZAPAS])}px)`; };
       const koniec = () => {
         if (x0 === null) return; x0 = null; window.removeEventListener('pointermove', ruch);
-        const krok = szer + GAP; let n = Math.round(-dx / krok); if (!n && Math.abs(dx) > krok / 3) n = dx < 0 ? 1 : -1;
+        const cel = X[ZAPAS] - dx; let k = ZAPAS, best = Infinity;
+        X.forEach((x, i) => { if (i <= 2 * ZAPAS && Math.abs(x - cel) < best) { best = Math.abs(x - cel); k = i; } });
+        let n = k - ZAPAS; if (!n && Math.abs(dx) > szer / 3) n = dx < 0 ? 1 : -1;
         n = Math.max(-ZAPAS, Math.min(ZAPAS, n));
-        w.style.transition = 'transform .18s ease-out'; w.style.transform = `translateX(${baza - n * krok}px)`;
+        w.style.transition = 'transform .18s ease-out'; w.style.transform = `translateX(${-X[ZAPAS + n]}px)`;
         if (n) setTimeout(() => idz({ od: dzienPlus(od, n) }), 180);
       };
       w.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; przeciagniete = false; w.style.transition = 'none'; window.addEventListener('pointermove', ruch); window.addEventListener('pointerup', koniec, { once: true }); window.addEventListener('pointercancel', koniec, { once: true }); });
@@ -463,9 +469,9 @@ const Views = {
     })();
     const zapiszWid = async o => DB.set(kluczWid, { ...wid, ...o });
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
-    if ($('#pNZ')) { $('#pNZ').onclick = async () => { const q = (await DB.get('zadNoweKolejka')) || []; if (q.length) Dialogs.zadKolejka(); else Dialogs.noweZadanie(null, dzien); }; planNZ(); }
+    if ($('#pNZ')) { $('#pNZ').onclick = async () => { const q = (await DB.get('zadNoweKolejka')) || []; if (q.length) Dialogs.zadKolejka(); else if (dzien > dzis) Dialogs.typZadania(dzien, { naglowek: true }); else Dialogs.noweZadanie(null, dzien); }; planNZ(); }
     if ($('#pSH')) $('#pSH').onclick = () => harmSyncTeraz();
-    if ($('#pNZp')) $('#pNZp').onclick = () => Dialogs.zadPlanForm(dzien > dzis ? dzien : '');   // od 1.59.0: pracownik – zadanie na jutro lub później
+    if ($('#pNZp')) $('#pNZp').onclick = () => Dialogs.typZadania(dzien > dzis ? dzien : CZ.nastRob(dzis));   // od 1.59.1: wybór – zadanie / urlop / nieobecność / inne   // od 1.59.0: pracownik – zadanie na jutro lub później
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
     { const pp = view.querySelector('.ppeople'); if (pp && ppScroll) pp.scrollLeft = ppScroll; }   // 1.23.2: pasek osób zostaje w miejscu po wyborze osoby
     view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { ppScroll = b.closest('.ppeople').scrollLeft; const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
@@ -491,7 +497,7 @@ const Views = {
         ring = document.createElement('span'); ring.className = 'pring'; ring.style.left = (e.clientX - r.left) + 'px'; ring.style.top = y + 'px'; c.appendChild(ring);
         const m = h0 * 60 + Math.floor(y / PX * 2) * 30;
         tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30);
-          if (dzien > dzis) Dialogs.zadPlanForm(dzien, { start: m, osoba: kolumny[i].o.name });   // od 1.59.0: przyszły dzień → nowe zadanie (do zatwierdzenia)
+          if (dzien > dzis) Dialogs.typZadania(dzien, { start: m, osoba: kolumny[i].o.name });   // od 1.59.1: najpierw rodzaj wpisu   // od 1.59.0: przyszły dzień → nowe zadanie (do zatwierdzenia)
           else Dialogs.coRobilem(dzien, { start: m, osoba: kolumny[i].o.name }); }, 2000);   // jak przytrzymanie kropki na rzucie
       });
       c.addEventListener('pointermove', e => { if (tm && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
@@ -2017,8 +2023,8 @@ const Dialogs = {
       if ($('#zpE')) $('#zpE').onclick = async () => { const x = await zpX(); if (x) this.zadPlanForm(x.data, { ed: x }); };
       if ($('#zpU')) $('#zpU').onclick = async () => { if (!(await Czas.zpLokalne(t.id))) return UI.toast('Zadanie zostało już wysłane – o usunięciu decyduje biuro');
         if (!confirm('Usunąć to zadanie?')) return; await Czas.zpZapisz({ zid: t.id, usun: true }); UI.close(); UI.toast('Usunięto'); UI.refresh(); };
-      if ($('#zpA')) $('#zpA').onclick = async () => { if (await this.zpDecyzja(t.id, 'zatw')) { UI.close(); UI.refresh(); } };
-      if ($('#zpC')) $('#zpC').onclick = async () => { if (await this.zpDecyzja(t.id, 'anul')) { UI.close(); UI.refresh(); } };
+      if ($('#zpA')) $('#zpA').onclick = async () => { if (this.zpDecyzja(t.id, 'zatw')) UI.close(); };
+      if ($('#zpC')) $('#zpC').onclick = async () => { if (this.zpDecyzja(t.id, 'anul')) UI.close(); };
       if ($('#zpZ')) $('#zpZ').onclick = async () => { const x = await zpX(); if (x) this.zadPlanForm(x.data, { ed: x, admin: true }); else UI.toast('Brak danych zgłoszenia – odśwież'); };
       if ($('#zOk')) $('#zOk').onclick = async () => {
         if (!wyb) return;
@@ -2096,7 +2102,8 @@ function hm(d) { return d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute:
 function maGodziny(t) { return t.start && t.koniec && t.godzStart && t.godzKoniec && U.day(new Date(t.start)) === U.day(new Date(t.koniec)); }
 function naDzien(t, dzien) {
   const k = t.koniec ? U.day(new Date(t.koniec)) : null, s0 = t.start ? U.day(new Date(t.start)) : k;
-  return !!k && s0 <= dzien && dzien <= k;
+  if (!k || s0 > dzien || dzien > k) return false;
+  return s0 === k || t.wolne || !U.wolny(dzien);   // od 1.59.1: zadanie kilkudniowe nie zajmuje dni wolnych, chyba że „praca w dni wolne”
 }
 function osobyTxt(t, prac) { return t.osoby.map(i => (prac.find(p => String(p.cu) === i) || {}).name).filter(Boolean).join(', '); }
 

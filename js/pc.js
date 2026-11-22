@@ -132,62 +132,103 @@ const PC = {
 
 /* ---------- ekrany panelu ---------- */
 Object.assign(Views, {
-  /* Harmonogram tygodnia: osoby × dni, zadania z ClickUp (plan ±7 dni) */
+  /* Harmonogram tygodnia / miesiąca (od 1.59.1): osoby × dni, zadania z harmonogramu bazy, statusy czasu pracy, zwijanie, dni wolne */
   async pcTydz(par) {
     if (!PC.on()) return UI.go('plan', {}, { zastap: true });
-    const dzis = U.day(new Date()), pon = par.t || PC.poniedzialek(dzis);
-    const dni = [0, 1, 2, 3, 4, 5, 6].map(i => PC.plus(pon, i));
-    const pl = (await DB.get('plan')) || null;
+    const opc = Object.assign({ mies: false, bezWolnych: false }, (await DB.get('pcTydOpc')) || {});
+    const dzis = U.day(new Date());
+    const m0 = (par.m || dzis.slice(0, 7)) + '-01', ileM = new Date(+m0.slice(0, 4), +m0.slice(5, 7), 0).getDate();
+    const pon = par.t || PC.poniedzialek(dzis);
+    const wszDni = opc.mies ? Array.from({ length: ileM }, (_, i) => PC.plus(m0, i)) : [0, 1, 2, 3, 4, 5, 6].map(i => PC.plus(pon, i));
+    const dni = opc.bezWolnych ? wszDni.filter(k => !U.wolny(k)) : wszDni;
+    // plan: z komputera, a gdy zakres wykracza poza pobrany – z serwera (do 31 dni, pamięć do odświeżenia)
+    let pl = (await DB.get('plan')) || null, zakresInfo = '';
+    const od = wszDni[0], doD = wszDni[wszDni.length - 1];
+    if (!pl || !pl.od || od < pl.od || doD > pl.do) {
+      const kl = 'planPC:' + od + ':' + doD, zap = PC._planPC && PC._planPC[kl];
+      if (zap) pl = zap;
+      else if (navigator.onLine && API.ready()) { try { const r = await API.plan(od, doD); pl = { od, do: doD, zadania: r.zadania || [] }; (PC._planPC = PC._planPC || {})[kl] = pl; } catch (e) { zakresInfo = 'Nie udało się pobrać planu dla tego zakresu: ' + e.message; } }
+      else zakresInfo = 'Plan na komputerze obejmuje 14 dni wstecz i 7 naprzód – dla dalszych dni potrzebny internet.';
+    }
     const kol = (await DB.get('zadKolejka')) || [];
+    const W = await Czas.lista();
+    const ZP = (await Czas.zadPlany()).filter(x => !x.usun).map(x => Czas.zpZad(x));
     if (UI.cur !== 'pcTydz') return;
-    const zad = ((pl && pl.zadania) || []).map(t => { const q = kol.filter(z => z.task === t.id).pop(); return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
+    const zad = ((pl && pl.zadania) || []).filter(t => !ZP.some(z => z.prop && (z.id === t.id || z.zid === t.id))).concat(ZP.filter(z => z.prop || !((pl && pl.zadania) || []).some(t => t.id === z.id)))
+      .map(t => { const q = kol.filter(z => z.task === t.id).pop(); return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
     const prac = ((S.boot && S.boot.pracownicy) || []).filter(x => x.cu).slice().sort((a, b) => (String(a.ekipa || 'z') + a.name).localeCompare(String(b.ekipa || 'z') + b.name, 'pl'));
     const proj = (S.boot && S.boot.projekty) || [];
     const budowaZ = t => proj.find(p => (p.listaCU && p.listaCU === t.lista) || (t.kod && p.kod === t.kod));
-    const kodZ = t => { const b = budowaZ(t); return b ? b.kod : String(t.listaNazwa || '').split(' ')[0]; };
+    const kodZ = t => { const b = budowaZ(t); return b ? b.kod : t.kod || String(t.listaNazwa || '').split(' ')[0]; };
     const godz = d => { const x = new Date(d); return x.getHours() + (x.getMinutes() ? ':' + String(x.getMinutes()).padStart(2, '0') : ''); };
     const hDnia = (t, k) => {
       const s = t.start ? U.day(new Date(t.start)) : U.day(new Date(t.koniec)), e = U.day(new Date(t.koniec));
       if (t.godzStart && t.godzKoniec && s === e) return (t.koniec - t.start) / 36e5;
-      if (t.godzStart && t.godzKoniec) return U.wolny(k) ? 0 : 8;   // wielodniowe z godzinami – cały dzień pracy
-      if (t.est) { let n = 0; for (let d = s; d <= e; d = PC.plus(d, 1)) if (!U.wolny(d)) n++; return U.wolny(k) ? 0 : t.est / 36e5 / Math.max(1, n); }
+      if (U.wolny(k) && !t.wolne) return 0;
+      if (t.godzStart && t.godzKoniec) return 8;   // wielodniowe z godzinami – cały dzień pracy
+      if (t.est) { let n = 0; for (let d = s; d <= e; d = PC.plus(d, 1)) if (t.wolne || !U.wolny(d)) n++; return t.est / 36e5 / Math.max(1, n); }
       return null;
     };
-    const kl = t => { const k = STATUS_ZAD[String(t.status || '').toLowerCase()]; return t.zamk ? 'st-ok' : k ? 'st-' + k.kl : ''; };
-    const zakres = pl && pl.zadania ? null : 'Plan pobierze się przy synchronizacji.';
-    const zw = new Set((await DB.get('pcTydZw')) || []);   // od 1.59.0: zwinięte osoby (pamiętane na komputerze)
+    // stan czasu pracy osoby dla zadania i dnia
+    const czasW = (t, o, k) => W.filter(w => w.osoba === o && w.zad === t.id && w.data === k && !w.nieob);
+    const stanCz = (t, o, k) => { const L = czasW(t, o, k), z = L.find(w => w.stan === 'zatw'), wl = L.find(w => w.stan === 'wlasne'), pr = L.find(w => w.stan === 'prop'), od = L.filter(w => w.stan === 'odrzB').pop();
+      if (t.prop) return ['zatwierdzenie zadania', 'c-pro', 'zadanie czeka na zatwierdzenie przez biuro'];
+      if (z) return ['🔒 zatwierdzone', 'c-lock', 'zatwierdził ' + (z.zatw && z.zatw.auto ? 'automatycznie' : (z.zatw || {}).kto || '') + ' ' + PC.data((z.zatw || {}).ts) + ' · ' + z.od + '–' + z.do];
+      if (wl) return ['czeka na zatwierdzenie', 'c-gr', 'wpisane ' + wl.od + '–' + wl.do + ' (' + (CZ_ST_TXT[wl.st] || '') + ')' + (wl.lok ? ' · niewysłane' : '')];
+      if (pr) return ['czeka na potwierdzenie', 'c-pro', 'propozycja ' + pr.kto + ': ' + pr.od + '–' + pr.do];
+      if (od) return ['do poprawy', 'c-bad', 'odrzucone przez ' + ((od.odrzB || {}).kto || 'biuro') + ((od.odrzB || {}).powod ? ': ' + od.odrzB.powod : '')];
+      if (k < dzis && !t.zamk && !U.wolny(k)) return ['brak godzin', 'c-bad', 'nic nie wpisano'];
+      return null; };
+    const kl = t => { const k = STATUS_ZAD[String(t.status || '').toLowerCase()]; return t.prop ? 'st-prop' : t.zamk ? 'st-ok' : k ? 'st-' + k.kl : ''; };
+    const zw = new Set((await DB.get('pcTydZw')) || []);
     const hTxt = h => String(Math.round(h * 2) / 2).replace('.', ',') + ' h', hKl = h => { const r = Math.round(h * 2) / 2; return r > 8 ? 'h-hi' : r === 8 ? 'h-ok' : 'h-lo'; };
-    const poza = dni.some(d => Math.abs((new Date(d) - new Date(dzis)) / 864e5) > 7);
-    const naglowek = `<tr><th class="pcos">Osoba</th>${dni.map(k => { const sw = U.swieto(k);
-      return `<th class="${U.wolny(k) ? 'wolne' : ''}${k === dzis ? ' dzis' : ''}" title="${sw ? U.esc(sw) : ''}"><button class="pcdz" data-d="${k}">${PC.dzienTyg(k)} <b>${PC.dm(k)}</b>${sw ? `<small>${U.esc(sw)}</small>` : ''}</button></th>`; }).join('')}<th>Suma</th></tr>`;
+    const info = (t, o, k, cz) => { const b = budowaZ(t), a = t.start ? new Date(t.start) : null, e = t.koniec ? new Date(t.koniec) : null;
+      return [`${kodZ(t) || '—'}${b ? ' ' + String(b.nazwa || '').replace(b.kod, '').trim() : t.listaNazwa ? ' ' + t.listaNazwa : ''}`, t.faza ? 'Faza: ' + t.faza : '', 'Zadanie: ' + t.nazwa,
+        'Kto: ' + osobyTxt(t, (S.boot && S.boot.pracownicy) || []), 'Kiedy: ' + (a ? PC.dm(U.day(a)) + (t.godzStart ? ' ' + godz(a) : '') : '') + (e ? ' – ' + PC.dm(U.day(e)) + (t.godzKoniec ? ' ' + godz(e) : '') : '') + (t.est ? ' · szac. ' + hTxt(t.est / 36e5) : '') + (t.wolne ? ' · także w dni wolne' : ''),
+        'Status: ' + (t.prop ? 'do zatwierdzenia (dodał ' + (t.autor || '') + ')' : stNazwa(t.status || '') || '—') + (t.czeka ? ' · czeka na wysłanie' : ''),
+        cz ? 'Czas pracy (' + o + '): ' + cz[0] + ' – ' + cz[2] : '', t.opis ? 'Notatka: ' + String(t.opis).slice(0, 400) : ''].filter(String).join('\n'); };
+    const M = opc.mies, wkl = k => (U.wolny(k) ? 'wolne' : '') + (k === dzis ? ' dzis' : '');
+    const naglowek = `<tr><th class="pcos"><button class="btn sm" id="tZW" title="Zwiń / rozwiń wszystkie osoby">${prac.every(o => zw.has(o.name)) ? '▸ Rozwiń wszystkie' : '▾ Zwiń wszystkie'}</button></th>${dni.map(k => { const sw = U.swieto(k);
+      return `<th class="${wkl(k)}" title="${sw ? U.esc(sw) : ''}"><button class="pcdz" data-d="${k}">${M ? `<span>${PC.dzienTyg(k).slice(0, 2)}</span> <b>${+k.slice(8)}</b>` : `${PC.dzienTyg(k)} <b>${PC.dm(k)}</b>${sw ? `<small>${U.esc(sw)}</small>` : ''}`}</button></th>`; }).join('')}<th class="pcsumh">Suma</th></tr>`;
     let ekPop = null;
     const wiersze = prac.map(o => {
-      const gr = String(o.ekipa || '') !== ekPop ? `<tr class="pcgrw"><td colspan="9">${o.ekipa ? 'Ekipa ' + U.esc(o.ekipa) : o.rola === 'biuro' ? 'Biuro' : 'Pozostali'}</td></tr>` : '';
+      const gr = String(o.ekipa || '') !== ekPop ? `<tr class="pcgrw"><td colspan="${dni.length + 2}">${o.ekipa ? 'Ekipa ' + U.esc(o.ekipa) : o.rola === 'biuro' ? 'Biuro' : 'Pozostali'}</td></tr>` : '';
       ekPop = String(o.ekipa || '');
-      let suma = 0, nieokr = false;
+      let suma = 0, nieokr = false; const zwin = zw.has(o.name);
       const kom = dni.map(k => {
         const lista = zad.filter(t => naDzien(t, k) && t.osoby.includes(String(o.cu)));
         let h = 0, q = false;
         const chipy = lista.map(t => { const x = hDnia(t, k); if (x == null) q = true; else h += x;
-          const czas = t.godzStart ? godz(t.start) + (t.godzKoniec ? '–' + godz(t.koniec) : '') : x ? String(Math.round(x * 2) / 2).replace('.', ',') + ' h' : 'cały dzień';
-          return `<button class="pczd ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(t.nazwa)}"><span class="pczk">${U.esc(kodZ(t))} · ${U.esc(czas)}</span><span class="pczn">${U.esc(t.nazwa)}</span></button>`; }).join('');
+          const cz = stanCz(t, o.name, k), czas = t.godzStart ? godz(t.start) + (t.godzKoniec ? '–' + godz(t.koniec) : '') : x ? hTxt(x) : 'cały dzień';
+          return M ? `<button class="pczd pczm ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(info(t, o.name, k, cz))}"><span class="pczk">${U.esc(String(kodZ(t) || '').slice(3) || '•')}</span>${cz ? `<i class="pcczd ${cz[1]}"></i>` : ''}</button>`
+            : `<button class="pczd ${kl(t)}" data-t="${U.esc(t.id)}" data-dz="${k}" data-os="${U.esc(o.name)}" title="${U.esc(info(t, o.name, k, cz))}"><span class="pczk">${U.esc(kodZ(t))} · ${U.esc(czas)}</span><span class="pczn">${U.esc(t.nazwa)}</span>${cz ? `<span class="czchip ${cz[1]} pczst">${U.esc(cz[0])}</span>` : ''}</button>`; }).join('');
         suma += h; nieokr = nieokr || q;
-        // od 1.59.0: godziny dnia przy osobie – poniżej 8 h jasnozielone, 8 h zielone, ponad 8 h czerwone; zwinięta osoba – tylko godziny
-        const hd = lista.length ? `<div class="pchd ${hKl(h)}" title="${hTxt(h)} z 8 h${q ? ' + zadania bez czasu' : ''}">${hTxt(h)}${q ? ' +?' : ''}</div>` : '';
-        return `<td class="${U.wolny(k) ? 'wolne' : ''}${k === dzis ? ' dzis' : ''}${zw.has(o.name) ? ' zw' : ''}">${hd}${zw.has(o.name) ? (lista.length ? `<span class="mute pczn2">${lista.length} ${odm(lista.length, 'zadanie', 'zadania', 'zadań')}</span>` : '') : chipy}</td>`;
+        const hd = lista.length ? `<div class="pchd ${hKl(h)}" title="${hTxt(h)} z 8 h${q ? ' + zadania bez czasu' : ''}">${M ? String(Math.round(h * 2) / 2).replace('.', ',') : hTxt(h)}${q ? '+?' : ''}</div>` : '';
+        return `<td class="${wkl(k)}${zwin ? ' zw' : ''}">${hd}${zwin ? (lista.length && !M ? `<span class="mute pczn2">${lista.length} ${odm(lista.length, 'zadanie', 'zadania', 'zadań')}</span>` : '') : chipy}</td>`;
       }).join('');
-      return gr + `<tr class="${zw.has(o.name) ? 'pczw' : ''}"><td class="pcos"><button class="pczwb" data-zw="${U.esc(o.name)}" title="${zw.has(o.name) ? 'Rozwiń zadania' : 'Zwiń zadania'}">${zw.has(o.name) ? '▸' : '▾'}</button><b>${U.esc(o.name)}</b>${S.user && o.name === S.user.name ? ' <small>(ja)</small>' : ''}</td>${kom}<td class="pcsum">${String(Math.round(suma * 2) / 2).replace('.', ',')} h${nieokr ? '<small> + ?</small>' : ''}</td></tr>`;
+      return gr + `<tr class="${zwin ? 'pczw' : ''}"><td class="pcos"><button class="pczwb" data-zw="${U.esc(o.name)}" title="${zwin ? 'Rozwiń zadania' : 'Zwiń zadania'}">${zwin ? '▸' : '▾'}</button><b>${U.esc(o.name)}</b>${S.user && o.name === S.user.name ? ' <small>(ja)</small>' : ''}</td>${kom}<td class="pcsum">${hTxt(suma)}${nieokr ? '<small> + ?</small>' : ''}</td></tr>`;
     }).join('');
-    PC.widok('Harmonogram tygodnia',
-      `<button class="btn sm" id="tP">‹ Poprzedni</button><button class="btn sm" id="tD">Ten tydzień</button><button class="btn sm" id="tN">Następny ›</button><button class="btn sm" id="tSH" title="Pobierz zmiany z ClickUp do harmonogramu">⟳ Sync harmonogram</button><button class="btn sm pri" id="tNZ">${ic('plus')} Nowe zadanie</button>`,
-      `${zakres || poza ? `<p class="pcinfo">${zakres || 'Plan z harmonogramu obejmuje 14 dni wstecz i 7 dni naprzód od dziś – dalsze dni mogą być niepełne.'}</p>` : ''}
-       <div class="pctw"><table class="pct pctyd"><thead>${naglowek}</thead><tbody>${wiersze}</tbody></table></div>
-       <p class="mute pcleg"><span class="pczd st-ok">wykonane</span> <span class="pczd st-update">do kontynuacji</span> <span class="pczd st-hold">niepodjęte</span> · godziny dnia: <span class="pchd h-lo">poniżej 8 h</span> <span class="pchd h-ok">8 h</span> <span class="pchd h-hi">ponad 8 h</span> · ▾/▸ przy osobie zwija zadania · dzień tygodnia otwiera plan dnia</p>`,
-      `${PC.dm(dni[0])} – ${PC.dm(dni[6])}.${dni[6].slice(0, 4)}`);
-    $('#tP').onclick = () => UI.go('pcTydz', { t: PC.plus(pon, -7) }, { zastap: true });
-    $('#tN').onclick = () => UI.go('pcTydz', { t: PC.plus(pon, 7) }, { zastap: true });
+    const nazwaM = new Date(m0 + 'T12:00:00').toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    const tytul = M ? 'Harmonogram miesiąca' : 'Harmonogram tygodnia';
+    PC.widok(tytul,
+      `<div class="seg"><button id="tTyg" class="${M ? '' : 'on'}">Tydzień</button><button id="tMies" class="${M ? 'on' : ''}">Miesiąc</button></div>
+       <button class="btn sm" id="tP">‹ ${M ? 'Poprzedni' : 'Poprzedni'}</button><button class="btn sm" id="tD">${M ? 'Ten miesiąc' : 'Ten tydzień'}</button><button class="btn sm" id="tN">${M ? 'Następny' : 'Następny'} ›</button>
+       <button class="btn sm" id="tWol">${opc.bezWolnych ? 'Pokaż dni wolne' : 'Ukryj dni wolne'}</button>
+       <button class="btn sm" id="tSH" title="Pobierz zmiany z ClickUp do harmonogramu">⟳ Sync</button><button class="btn sm pri" id="tNZ">${ic('plus')} Nowe zadanie</button>`,
+      `${zakresInfo ? `<p class="pcinfo">${U.esc(zakresInfo)}</p>` : ''}
+       <div class="pctw"><table class="pct pctyd${M ? ' pcmies' : ''}"><colgroup><col style="width:${M ? 11 : 13}%">${dni.map(k => `<col style="width:${((U.wolny(k) ? 0.5 : 1) / dni.reduce((a, d) => a + (U.wolny(d) ? 0.5 : 1), 0) * (M ? 84 : 81)).toFixed(3)}%">`).join('')}<col style="width:${M ? 5 : 6}%"></colgroup><thead>${naglowek}</thead><tbody>${wiersze}</tbody></table></div>
+       <p class="mute pcleg"><span class="pczd st-ok">wykonane</span> <span class="pczd st-update">do kontynuacji</span> <span class="pczd st-hold">niepodjęte</span> <span class="pczd st-prop">do zatwierdzenia</span> · czas pracy: <span class="czchip c-lock">🔒 zatwierdzone</span> <span class="czchip c-gr">czeka na zatwierdzenie</span> <span class="czchip c-pro">czeka na potwierdzenie</span> <span class="czchip c-bad">do poprawy / brak godzin</span> · godziny dnia: <span class="pchd h-lo">&lt; 8 h</span> <span class="pchd h-ok">8 h</span> <span class="pchd h-hi">&gt; 8 h</span> · najedź na zadanie – szczegóły</p>`,
+      M ? nazwaM : `${PC.dm(wszDni[0])} – ${PC.dm(wszDni[6])}.${wszDni[6].slice(0, 4)}`);
+    const zapOpc = async o => { await DB.set('pcTydOpc', Object.assign(opc, o)); };
+    const idzM = n => { const d = new Date(m0 + 'T12:00:00'); d.setMonth(d.getMonth() + n); return U.day(d).slice(0, 7); };
+    $('#tP').onclick = () => UI.go('pcTydz', M ? { m: idzM(-1) } : { t: PC.plus(pon, -7) }, { zastap: true });
+    $('#tN').onclick = () => UI.go('pcTydz', M ? { m: idzM(1) } : { t: PC.plus(pon, 7) }, { zastap: true });
     $('#tD').onclick = () => UI.go('pcTydz', {}, { zastap: true });
-    $('#tNZ').onclick = () => Dialogs.noweZadanie(null, dni.includes(dzis) ? dzis : pon);
+    $('#tTyg').onclick = async () => { await zapOpc({ mies: false }); UI.go('pcTydz', { t: PC.poniedzialek(M ? (m0.slice(0, 7) === dzis.slice(0, 7) ? dzis : m0) : pon) }, { zastap: true }); };
+    $('#tMies').onclick = async () => { await zapOpc({ mies: true }); UI.go('pcTydz', { m: (M ? m0 : pon).slice(0, 7) }, { zastap: true }); };
+    $('#tWol').onclick = async () => { await zapOpc({ bezWolnych: !opc.bezWolnych }); Views.pcTydz(par); };
+    $('#tNZ').onclick = () => Dialogs.noweZadanie(null, dni.includes(dzis) ? dzis : dni[0]);
+    $('#tZW').onclick = async () => { const wsz = prac.every(o => zw.has(o.name)); await DB.set('pcTydZw', wsz ? [] : prac.map(o => o.name)); const scr = PC.scrZapisz(); await Views.pcTydz(par); PC.scrPrzywroc(scr); };
     if ($('#tSH')) $('#tSH').onclick = () => harmSyncTeraz();
     $('#view').querySelectorAll('[data-d]').forEach(b => b.onclick = () => UI.go('plan', { d: b.dataset.d, all: true }));
     $('#view').querySelectorAll('[data-zw]').forEach(b => b.onclick = async () => { const n = b.dataset.zw; zw.has(n) ? zw.delete(n) : zw.add(n); await DB.set('pcTydZw', [...zw]);
@@ -390,15 +431,15 @@ Object.assign(Views, {
         const [a, b] = CZ.planOkno(t, d, p.name);
         braki.push({ brak: true, wid: 'brak-' + t.id + '-' + p.name + '-' + d, osoba: p.name, data: d, zad: t.id, nazwa: t.nazwa, kod: (budZ(t) || {}).kod || '', od: CZ.hm(a), do: CZ.hm(b), st: 'complete',
           plan: { od: CZ.hm(a), do: CZ.hm(b), osoby: CZ.nazwyOsob(t), wielodniowy: CZ.wielo(t) } }); } }));
-    const dec = akt.filter(w => w.stan !== 'zatw').concat(braki);
-    const ZPL = (((await DB.get('czasStan')) || {}).zadProp || []).filter(x => !x.status || x.status === 'do zatwierdzenia').sort((a, b) => (a.data + a.od < b.data + b.od ? -1 : 1));   // od 1.59.0: nowe zadania od pracowników
+    const dec = akt.filter(w => w.stan !== 'zatw').concat(braki).filter(w => !Czas.ukr.has(w.wid));   // od 1.59.1: decyzje w toku znikają od razu
+    const ZPL = (((await DB.get('czasStan')) || {}).zadProp || []).filter(x => (!x.status || x.status === 'do zatwierdzenia') && !Czas.ukr.has(x.zid)).sort((a, b) => (a.data + a.od < b.data + b.od ? -1 : 1));   // od 1.59.0: nowe zadania od pracowników
     PC._czN = dec.length + ZPL.length; PC.plakietki();
     const zpHtml = () => !ZPL.length || f.st === 'zatw' ? '' : `<div class="card" style="margin-bottom:14px"><div class="row"><b class="grow">Nowe zadania od pracowników (${ZPL.length})</b><span class="mute">zatwierdzone trafią do planu osób i do ClickUp</span></div>
       <div class="pctw"><table class="pct pctzp"><thead><tr><th>Dzień</th><th>Godziny</th><th>Osoby</th><th>Budowa · faza · zadanie</th><th>Dodał(a)</th><th></th></tr></thead><tbody>
       ${ZPL.map((x, i) => `<tr><td>${U.esc(PC_dzien(x.data))}</td><td>${U.esc(x.od)}–${U.esc(x.do)} · ${CZ.hTxt(CZ.h(x.od, x.do))}</td><td>${U.esc(x.osoby.join(', '))}</td>
         <td><b>${U.esc(x.kod)}</b> · ${U.esc(x.faza)}<br>${U.esc(x.nazwa)}${x.notatka ? `<br><small>${U.esc(x.notatka.slice(0, 120))}</small>` : ''}</td><td>${U.esc(x.autor)}<br><small>${U.esc(x.utw)}</small></td>
         <td style="white-space:nowrap"><button class="btn sm ok" data-zpa="${i}">Zatwierdź</button> <button class="btn sm" data-zpz="${i}">Zmień</button> <button class="btn sm" data-zpc="${i}">Anuluj</button></td></tr>`).join('')}</tbody></table></div></div>`;
-    let lista = (f.st === 'zatw' ? akt.filter(w => w.stan === 'zatw') : dec).filter(w => wZak(w.data) && (!f.ek || ek(w.osoba) === f.ek))
+    let lista = (f.st === 'zatw' ? akt.filter(w => w.stan === 'zatw' && !Czas.ukr.has(w.wid)) : dec).filter(w => wZak(w.data) && (!f.ek || ek(w.osoba) === f.ek))
       .sort((a, b) => (a.data + a.osoba + a.od < b.data + b.osoba + b.od ? -1 : 1));
     // od 1.59.0: sortowanie po kolumnach (dotknięcie nagłówka; ponowne – odwrotnie)
     const so = PC._czSort || (PC._czSort = { k: 'data', d: 1 });
@@ -442,8 +483,8 @@ Object.assign(Views, {
       $('#czOdsw').onclick = () => { PC._czT = 0; Views.pcCzas(Object.assign({}, UI.par, { _bez: 0 })); };
       $('#view').querySelectorAll('[data-so]').forEach(h => h.onclick = () => { const k = h.dataset.so; if (so.k === k) so.d = -so.d; else { so.k = k; so.d = 1; } Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); });
       const poZp = () => Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 }));
-      $('#view').querySelectorAll('[data-zpa]').forEach(b => b.onclick = async () => { if (await Dialogs.zpDecyzja(ZPL[+b.dataset.zpa].zid, 'zatw')) poZp(); });
-      $('#view').querySelectorAll('[data-zpc]').forEach(b => b.onclick = async () => { if (await Dialogs.zpDecyzja(ZPL[+b.dataset.zpc].zid, 'anul')) poZp(); });
+      $('#view').querySelectorAll('[data-zpa]').forEach(b => b.onclick = () => Dialogs.zpDecyzja(ZPL[+b.dataset.zpa].zid, 'zatw'));
+      $('#view').querySelectorAll('[data-zpc]').forEach(b => b.onclick = () => Dialogs.zpDecyzja(ZPL[+b.dataset.zpc].zid, 'anul'));
       $('#view').querySelectorAll('[data-zpz]').forEach(b => b.onclick = () => { const x = ZPL[+b.dataset.zpz]; Dialogs.zadPlanForm(x.data, { ed: Object.assign({}, x), admin: true, po: poZp }); });
       $('#view').querySelectorAll('[data-s]').forEach(c => c.onclick = e => { e.stopPropagation(); const w = lista[+c.dataset.s]; c.checked ? sel.add(w.wid) : sel.delete(w.wid);
         if ($('#czZz')) $('#czZz').textContent = 'Zatwierdź zaznaczone (' + sel.size + ')'; });   // od 1.59.0: bez przerysowania listy
@@ -543,22 +584,21 @@ Object.assign(Views, {
       if (!navigator.onLine) return UI.toast('Zapis wymaga internetu');
       const e = wpisEd(w), pw = (w.brak ? 'decyzja biura' : 'edycja biura') + (wyb.powod.trim() ? ': ' + wyb.powod.trim() : '');
       const dod = (wyb.dod || []).map(n => { const d = Object.assign({}, e.d, { wid: U.uid('w'), osoba: n, notatka: '' }); delete d.kor; return Czas.zdarzenie('wpis', d); });   // od 1.59.0: dodatkowe osoby
-      try { await API.fg(w.stan === 'zatw' ? 'Zapisuję korektę i aktualizuję ClickUp' : 'Zatwierdzam i zapisuję w ClickUp', () => API.czas({ op: 'zatw', wpisy: [e, ...dod], lista: [e, ...dod].map(x => ({ wid: x.d.wid, powod: pw })) }));
-        await Czas.sync(); UI.toast(w.stan === 'zatw' ? 'Korekta zapisana' : 'Zatwierdzono'); wyb.w = null; Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }
-      catch (er) { UI.toast('Nie udało się: ' + er.message); } };
+      wyb.w = null;
+      Czas.wTle(w.stan === 'zatw' ? 'Korekta' : 'Zatwierdzenie', () => API.czas({ op: 'zatw', wpisy: [e, ...dod], lista: [e, ...dod].map(x => ({ wid: x.d.wid, powod: pw })) }), w.stan === 'zatw' ? [] : [w.wid]); };
     const wyslij = async pozycje => {
       if (!navigator.onLine) return UI.toast('Zatwierdzanie wymaga internetu');
       const wpisy = [], l = [];
       pozycje.forEach(({ w, od, do: dd, powod }) => { if (w.brak) { const e = nowyWpis(w, { od, do: dd }); wpisy.push(e); l.push({ wid: e.d.wid, powod: 'decyzja biura' + (powod ? ': ' + powod : '') }); }
         else l.push(Object.assign({ wid: w.wid }, od ? { od, do: dd, powod } : {}, w.termin ? { termin: w.termin } : {})); });
-      try { await API.fg('Zatwierdzam godziny i zapisuję w ClickUp', () => API.czas({ op: 'zatw', wpisy, lista: l })); await Czas.sync(); UI.toast('Zatwierdzono: ' + l.length); wyb.w = null; sel.clear(); Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }
-      catch (e) { UI.toast('Nie udało się: ' + e.message); }
+      wyb.w = null; sel.clear();
+      Czas.wTle('Zatwierdzenie (' + l.length + ')', () => API.czas({ op: 'zatw', wpisy, lista: l }), pozycje.map(p => p.w.wid));
     };
     const odrzuc = async (w, pw) => {
-      try { const wpisy = [], l = [];
-        if (w.brak) { const e = nowyWpis(w, {}); wpisy.push(e); l.push({ wid: e.d.wid, powod: pw || 'nie pracował' }); } else l.push({ wid: w.wid, powod: pw || '' });
-        await API.fg('Zapisuję decyzję', () => API.czas({ op: 'odrzB', wpisy, lista: l })); await Czas.sync(); wyb.w = null; Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); }
-      catch (e) { UI.toast('Nie udało się: ' + e.message); }
+      const wpisy = [], l = [];
+      if (w.brak) { const e = nowyWpis(w, {}); wpisy.push(e); l.push({ wid: e.d.wid, powod: pw || 'nie pracował' }); } else l.push({ wid: w.wid, powod: pw || '' });
+      wyb.w = null;
+      Czas.wTle(w.stan === 'zatw' ? 'Zwrot do użytkownika' : w.brak ? 'Decyzja „nie pracował”' : 'Cofnięcie do poprawy', () => API.czas({ op: 'odrzB', wpisy, lista: l }), [w.wid]);
     };
     rys();
   }

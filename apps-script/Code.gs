@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.59.0';
+const SCRIPT_VERSION = '1.59.1';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -364,7 +364,7 @@ function plan_(od, doDnia) {
     const st = txt_(r[8]).toLowerCase();
     out.push({ id: k, nazwa: txt_(r[5]), status: st, zamk: Object.keys(ZAMK).length ? !!ZAMK[st] : /^(complete|closed|done|cancelled|zamkni)/.test(st),
       lista: txt_(r[32]), listaNazwa: txt_(r[33]), kod: txt_(r[2]), faza: txt_(r[3]), start: s, koniec: e, godzStart: gs, godzKoniec: ge,
-      osoby: os, url: txt_(r[34]), prop: st === ZP_ST, autor: txt_(r[25]), zm: txt_(r[27]), zmT: txt_(r[28]),
+      osoby: os, url: txt_(r[34]), prop: st === ZP_ST, wolne: /praca w dni wolne/i.test(txt_(r[18])), autor: txt_(r[25]), zm: txt_(r[27]), zmT: txt_(r[28]),
       est: Math.round(Number(txt_(r[13]).replace(',', '.') || 0) * 36e5), opis: txt_(r[6]).slice(0, 1500), zrodlo: txt_(r[24]) });
   });
   const res = { ok: true, zadania: out, pobrano: Date.now(), zrodlo: 'harmonogram', sync: P.getProperty('HARM_SYNC') || '' };
@@ -2281,7 +2281,8 @@ function zadEdytuj_(id, d, kto, teraz) {
   const nowe = { 2: txt_(d.kod).slice(0, 20), 3: fazyProj_().indexOf(txt_(d.faza)) >= 0 ? txt_(d.faza) : txt_(r[3]), 5: txt_(d.nazwa).slice(0, 180), 6: txt_(d.notatka).slice(0, 2000),
     10: d.data + ' ' + CZ_HM_(d.od), 11: dDo + ' ' + CZ_HM_(d.do), 12: 'nie', 14: osoby.join('; '), 15: [...new Set(osoby.map(n => ok[n].ek).filter(Boolean))].join('; ') };
   if (dDo === d.data) nowe[13] = String(Math.round((minOf_(d.do) - minOf_(d.od)) / 6) / 10).replace('.', ',');
-  const NAZWY = { 2: 'Kod', 3: 'Faza', 5: 'Nazwa', 6: 'Opis', 10: 'Start', 11: 'Termin', 13: 'Szac. czas (h)', 14: 'Osoby' }, hist = [];
+  if (d.wolne !== undefined) { const tg = txt_(r[18]).split(';').map(x => x.trim()).filter(x => x && !/praca w dni wolne/i.test(x)); if (d.wolne) tg.push('praca w dni wolne'); nowe[18] = tg.join('; '); }   // od 1.59.1
+  const NAZWY = { 2: 'Kod', 3: 'Faza', 5: 'Nazwa', 6: 'Opis', 10: 'Start', 11: 'Termin', 13: 'Szac. czas (h)', 14: 'Osoby', 18: 'Tagi' }, hist = [];
   Object.keys(nowe).forEach(k => { if (NAZWY[k] && txt_(r[k]) !== nowe[k]) hist.push([harmLicznik_('HZ_N', 'H-'), r[0], t, kto, NAZWY[k], r[k], nowe[k], 'ELWIS – edycja biura']); r[k] = nowe[k]; });
   if (!hist.length) return;
   r[24] = 'ELWIS'; r[27] = kto; r[28] = t;   // zablokowane – zmiana w ClickUp już go nie nadpisze

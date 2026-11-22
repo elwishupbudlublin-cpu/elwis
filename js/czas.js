@@ -40,7 +40,7 @@ const CZ = {
   zadDoForm(t, bud) { const a = t.start ? new Date(t.start) : new Date(t.koniec), b = t.koniec ? new Date(t.koniec) : a, g = t.godzStart && t.godzKoniec;
     const os = CZ.nazwyOsob(t);
     return { zid: t.id, kod: t.kod || (bud && bud.kod) || '', faza: t.faza || 'Montaż i Wykonawstwo', nazwa: t.nazwa || '', osoby: os.length ? os : [S.user.name], data: U.day(a), dataDo: U.day(b),
-      od: g ? CZ.hm(CZ.mnD(a)) : '07:00', do: g ? CZ.hm(CZ.mnD(b)) : '15:00', notatka: t.opis || '' }; },
+      od: g ? CZ.hm(CZ.mnD(a)) : '07:00', do: g ? CZ.hm(CZ.mnD(b)) : '15:00', notatka: t.opis || '', wolne: !!t.wolne }; },
   okno(n) { const p = CZ.prac(n); return p && String(p.ekipa) === '1' ? [480, 960] : [420, 900]; },
   dni(t) { const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null; const dB = b ? U.day(b) : U.day(a); return { dA: a ? U.day(a) : dB, dB }; },
   wielo(t) { const { dA, dB } = CZ.dni(t); return dA !== dB; },
@@ -179,10 +179,24 @@ const Czas = {
     return out;
   },
   zdarzenie(typ, d) { return { id: U.uid('cz'), ts: U.now(), kto: S.user.name, typ, d }; },
+  /* od 1.59.1: decyzje biura w tle – okno zamyka się od razu, pozycje znikają z list (ukr), serwer i synchronizacja po kolei w tle */
+  ukr: new Set(),
+  wTle(opis, fn, ukryj, po) {
+    if (!navigator.onLine) { UI.toast(opis + ' – wymaga internetu'); return false; }
+    (ukryj || []).forEach(x => this.ukr.add(x));
+    const odsw = () => { if (UI.cur === 'pcCzas') Views.pcCzas(Object.assign({}, UI.par, { _bez: 1 })); else if (['pcTydz', 'plan'].includes(UI.cur)) UI.refresh(); };
+    odsw();
+    this._q = (this._q || Promise.resolve()).then(async () => {
+      try { await fn(); try { await this.sync(); } catch (e) { } if (po) try { await po(); } catch (e) { } UI.toast(opis + ' – zapisano'); }
+      catch (e) { UI.toast(opis + ' – nie udało się: ' + (e.message || e)); }
+      finally { (ukryj || []).forEach(x => this.ukr.delete(x)); odsw(); }
+    });
+    return true;
+  },
   /* od 1.59.0: zadania na przyszłe dni dodane na tablecie – z serwera (czekające na biuro) i niewysłane z kolejki */
   async zadPlany() {
     const st = (await DB.get('czasStan')) || {}, q = await this.kolejka(), M = new Map();
-    (st.zadProp || []).forEach(x => M.set(x.zid, Object.assign({}, x, { lok: false })));
+    (st.zadProp || []).filter(x => !this.ukr.has(x.zid) || x.status !== 'do zatwierdzenia').forEach(x => M.set(x.zid, Object.assign({}, x, { lok: false })));
     q.filter(e => e.typ === 'zadPlan').sort((a, b) => (a.ts < b.ts ? -1 : 1)).forEach(e => { const d = e.d || {}, b = M.get(d.zid);
       if (d.usun) { if (b && !b.lok) return; M.set(d.zid, { zid: d.zid, usun: true }); return; }   // wysłanego nie usuwa tablet – decyduje biuro
       M.set(d.zid, Object.assign({}, d, { autor: e.kto, utw: e.ts, lok: true })); });
@@ -298,13 +312,13 @@ Object.assign(Dialogs, {
           <div><span class="lbl">Faza</span><div class="cats" id="zpF">${CZ.FAZY.map(f => `<button data-f="${U.esc(f)}" class="${f === x.faza ? 'on' : ''}">${U.esc(f)}</button>`).join('')}</div></div>
           <label><span class="lbl">Co trzeba zrobić</span><input type="text" id="zpN" value="${U.esc(x.nazwa)}" placeholder="np. Podłączenie wentylatorów R1–R7"></label>
           <div><span class="lbl">Osoby</span><div class="row czos">${x.osoby.map((o, k) => `<button class="czchip ${k ? 'c-pro' : 'c-gr'}" data-ox="${k}">${U.esc(o)}${o === ja ? ' (ja)' : ''}${x.osoby.length > 1 ? ' ✕' : ''}</button>`).join('')}<span><input type="text" class="cbin" id="zpO" placeholder="＋ osoba"></span></div></div>
-          <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end"><label><span class="lbl">${zt ? 'Od dnia' : 'Dzień'}</span><input type="date" id="zpD" value="${U.esc(x.data)}" ${admin ? '' : 'min="' + jutro + '"'}></label>${zt ? `<label><span class="lbl">Do dnia</span><input type="date" id="zpDD" value="${U.esc(x.dataDo || x.data)}"></label>` : ''}
+          <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end"><label><span class="lbl">${zt ? 'Od dnia' : 'Dzień'}</span><input type="date" id="zpD" value="${U.esc(x.data)}" ${admin ? '' : 'min="' + jutro + '"'}></label>${zt ? `<label><span class="lbl">Do dnia</span><input type="date" id="zpDD" value="${U.esc(x.dataDo || x.data)}"></label><label class="chk" style="margin-bottom:8px"><input type="checkbox" id="zpW" ${x.wolne ? 'checked' : ''}> praca również w dni wolne</label>` : ''}
             <div><span class="lbl" style="display:block">Godziny</span><div class="row" style="gap:8px">${CZ.tp('od', od)}<span>–</span>${CZ.tp('do', dd)}<b>${CZ.hTxt((dd - od) / 60)}</b></div></div></div>
           <label><span class="lbl">Notatka (opcjonalnie)</span><textarea id="zpU" rows="2" placeholder="warunek startu, materiał, kontakt na budowie">${U.esc(x.notatka || '')}</textarea></label>
           <p class="mute">${zt ? 'Zmiana zapisze się w harmonogramie bazy (zadanie przestaje się zmieniać z ClickUp) i w tle w ClickUp: nazwa, terminy, osoby, szacowany czas + komentarz z listą zmian. Zmiana budowy lub fazy – tylko w bazie.' : admin ? 'Zmiany zapiszą się w harmonogramie bazy. „Zapisz i zatwierdź” – zadanie trafi do planu osób i do ClickUp.' : 'Pojawi się w planie wszystkich wybranych osób i na liście biura do zatwierdzenia. Dopóki nie wyśle się z tabletu, możesz je zmienić lub usunąć – potem decyduje biuro.'}</p>
         </div>
         <div class="sfoot"><button class="btn" id="zpX">Anuluj</button>${ed && !admin ? '<button class="btn" id="zpDel">Usuń</button>' : ''}<span class="grow"></span>${zt ? '<button class="btn pri" id="zpZE">Zapisz zmiany</button>' : admin ? '<button class="btn" id="zpZm">Zapisz zmiany</button><button class="btn ok" id="zpZa">Zapisz i zatwierdź</button>' : '<button class="btn pri" id="zpOk">Zapisz</button>'}</div></div></div>`;
-      const zbierz = () => { x.nazwa = $('#zpN').value.trim(); x.data = $('#zpD').value; if ($('#zpDD')) x.dataDo = $('#zpDD').value; x.notatka = $('#zpU').value.trim(); };
+      const zbierz = () => { x.nazwa = $('#zpN').value.trim(); x.data = $('#zpD').value; if ($('#zpDD')) x.dataDo = $('#zpDD').value; if ($('#zpW')) x.wolne = $('#zpW').checked; x.notatka = $('#zpU').value.trim(); };
       $('#zpX').onclick = () => { UI.close(); if (opc.po) opc.po(); };
       modal.querySelectorAll('#zpF [data-f]').forEach(b => b.onclick = () => { zbierz(); x.faza = b.dataset.f; draw(); });
       modal.querySelectorAll('[data-ox]').forEach(b => b.onclick = () => { if (x.osoby.length < 2) return; zbierz(); x.osoby.splice(+b.dataset.ox, 1); draw(); });
@@ -320,25 +334,34 @@ Object.assign(Dialogs, {
         await Czas.zpZapisz(d); UI.close(); UI.toast(navigator.onLine ? 'Zapisano – czeka na zatwierdzenie biura' : 'Zapisano na tablecie – wyśle się po połączeniu'); UI.refresh(); };
       if ($('#zpDel')) $('#zpDel').onclick = async () => { if (!(await Czas.zpLokalne(x.zid))) { UI.close(); return UI.toast('Zadanie zostało już wysłane – o usunięciu decyduje biuro'); }
         if (!confirm('Usunąć to zadanie?')) return; await Czas.zpZapisz({ zid: x.zid, usun: true }); UI.close(); UI.toast('Usunięto'); UI.refresh(); };
-      const dec = async (zatw) => { const d = dane(); if (!d) return;
-        try { await API.fg('Zapisuję', () => API.czas({ op: 'zadDec', lista: [{ zid: d.zid, dec: zatw ? 'zatw' : 'zm', zm: d }] })); await Czas.sync(); UI.close(); UI.toast(zatw ? 'Zatwierdzono' : 'Zapisano zmiany'); if (opc.po) opc.po(); else UI.refresh(); }
-        catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); } };
+      const dec = (zatw) => { const d = dane(); if (!d) return;
+        if (Czas.wTle(zatw ? 'Zatwierdzenie zadania' : 'Zmiana zadania', () => API.czas({ op: 'zadDec', lista: [{ zid: d.zid, dec: zatw ? 'zatw' : 'zm', zm: d }] }), zatw ? [d.zid] : [], () => Sync.pullPlan())) UI.close(); };
       if ($('#zpZm')) $('#zpZm').onclick = () => dec(false);
-      if ($('#zpZE')) $('#zpZE').onclick = async () => { const d = dane(); if (!d) return; d.dataDo = x.dataDo && x.dataDo >= d.data ? x.dataDo : d.data;
+      if ($('#zpZE')) $('#zpZE').onclick = async () => { const d = dane(); if (!d) return; d.dataDo = x.dataDo && x.dataDo >= d.data ? x.dataDo : d.data; d.wolne = !!x.wolne;
         if (d.dataDo === d.data && dd <= od) return UI.toast('Godzina końca po godzinie startu');
-        if (!navigator.onLine) return UI.toast('Edycja zadania wymaga internetu');
-        try { await API.fg('Zapisuję zadanie', () => API.czas({ op: 'zadEd', id: zt.id, zm: d })); try { await Sync.pullPlan(); } catch (e) { }
-          UI.close(); UI.toast('Zapisano – ClickUp zaktualizuje się w tle'); if (opc.po) opc.po(); else UI.refresh(); }
-        catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); } };
+        if (Czas.wTle('Edycja zadania', () => API.czas({ op: 'zadEd', id: zt.id, zm: d }), [], () => Sync.pullPlan())) UI.close(); };
       if ($('#zpZa')) $('#zpZa').onclick = () => dec(true);
     };
     draw();
   },
+  /* od 1.59.1: wybór rodzaju wpisu na przyszły dzień – admin: zadanie / urlop / inne; pracownik: nowe zadanie / urlop / nieobecność / inne */
+  typZadania(dzien, opc = {}) {
+    const biuro = Session.isBiuro(), osoba = opc.osoba || S.user.name, inny = osoba !== S.user.name;
+    const P = biuro ? [['zad', '+ Zadanie', opc.naglowek ? 'szukanie najbliższego wolnego terminu ekip' : 'dla: ' + osoba + ', ' + PC_dzien(dzien)], ['urlop', 'Urlop', 'od ' + PC_dzien(dzien) + ', liczba dni'], ['nieobecnosc', 'Nieobecność', 'od ' + PC_dzien(dzien) + ', liczba dni'], ['inne', 'Inne', 'np. szkolenie, badania – opis wymagany']]
+      : [['zad', 'Nowe zadanie', 'do zatwierdzenia przez biuro'], ['urlop', 'Urlop', 'od ' + PC_dzien(dzien) + ', liczba dni – do zatwierdzenia'], ['nieobecnosc', 'Nieobecność', 'do zatwierdzenia przez biuro'], ['inne', 'Inne', 'np. szkolenie, badania – opis wymagany']];
+    modal.innerHTML = `<div class="ov center" id="ov"><div class="dialog czmenu"><div class="shead"><h3 class="grow">Dodaj${inny ? ' dla: ' + U.esc(osoba) : ''} – ${U.esc(PC_dzien(dzien))}${opc.start != null ? ', ' + CZ.hm(opc.start) : ''}</h3></div>
+      <div class="sbody">${P.map(([k, t, o]) => `<button class="czmi" data-m="${k}"><b>${U.esc(t)}</b><span>${U.esc(o)}</span></button>`).join('')}</div>
+      <div class="sfoot"><span class="grow"></span><button class="btn" id="pmX">Anuluj</button></div></div></div>`;
+    $('#pmX').onclick = UI.close; $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
+    modal.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const m = b.dataset.m;
+      if (m !== 'zad') return this.nieobecnosc(dzien, m, osoba);
+      if (biuro && opc.naglowek) return this.noweZadanie(null, dzien);
+      this.zadPlanForm(dzien, { osoba, start: opc.start }); });
+  },
   /* decyzja biura bez zmian: zatwierdź / anuluj zgłoszone zadanie */
-  async zpDecyzja(zid, dec) {
+  zpDecyzja(zid, dec) {
     if (dec === 'anul' && !confirm('Anulować to zadanie? Zniknie z planu wszystkich osób.')) return false;
-    try { await API.fg('Zapisuję', () => API.czas({ op: 'zadDec', lista: [{ zid, dec }] })); await Czas.sync(); try { await Sync.pullPlan(); } catch (e) { } UI.toast(dec === 'zatw' ? 'Zatwierdzono – trafi do planu i do ClickUp' : 'Anulowano'); return true; }
-    catch (e) { UI.toast('Nie udało się: ' + (e.message || e)); return false; }
+    return Czas.wTle(dec === 'zatw' ? 'Zatwierdzenie zadania' : 'Anulowanie zadania', () => API.czas({ op: 'zadDec', lista: [{ zid, dec }] }), [zid], () => Sync.pullPlan());
   },
 
   czasNotatka(tekst, zapisz) {

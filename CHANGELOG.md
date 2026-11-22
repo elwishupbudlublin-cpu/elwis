@@ -1,5 +1,12 @@
 # Zmiany
 
+## 1.59.1 – 2026-11-22 (aplikacja i serwer)
+- Przyszły dzień („+ Nowe zadanie”, przytrzymanie palca): wybór rodzaju wpisu – admin: + Zadanie / Urlop / Nieobecność / Inne; pracownik: Nowe zadanie / Urlop / Nieobecność / Inne.
+- Zadanie kilkudniowe nie zajmuje dni wolnych (weekendy, święta), chyba że zaznaczono „praca również w dni wolne” (Edytuj zadanie; tag w harmonogramie bazy).
+- Dni wolne o połowę węższe w pasku dni planu i w harmonogramie.
+- Harmonogram (PC): tydzień / miesiąc, ukryj / pokaż dni wolne, zwiń / rozwiń wszystkie osoby, stan czasu pracy przy zadaniu (zatwierdzone, czeka na zatwierdzenie, czeka na potwierdzenie, do poprawy, brak godzin), pełny opis zadania po najechaniu myszką; poza pobranym planem dni dociągane z serwera.
+- Decyzje biura (zatwierdzanie, korekty, zwroty, zadania pracowników, edycja zadania) – okno zamyka się od razu, zapis i synchronizacja w tle.
+
 ## 1.59.0 – 2026-11-22 (aplikacja i serwer)
 - Zadania na jutro i później dodawane przez pracownika („+ Nowe zadanie”, przytrzymanie palca na przyszłym dniu): budowa, faza, opis, osoby, dzień, godziny, notatka. Widoczne od razu w planie wybranych osób (pamięć tabletu), status „do zatwierdzenia”. Autor zmienia / usuwa je tylko przed wysłaniem z tabletu; potem decyduje biuro (Zatwierdź / Zmień / Anuluj – panel PC i okno zadania). Zatwierdzone → „to do” i założenie w ClickUp w tle (lista projektu, faza).
 - Jedno okno zadania: budowa, faza, status, notatka; trzy przyciski Wykonane / Do kontynuacji / Niepodjęte (nieaktywne dla przyszłych dni, zadań do zatwierdzenia i zatwierdzonych); poprawki innych osób z podsumowaniem zmian i „Akceptuję”; stan wpisu: niewysłane / czeka na zatwierdzenie / odrzucone do poprawy (kto, powód) / zatwierdzone (kto, kiedy).
