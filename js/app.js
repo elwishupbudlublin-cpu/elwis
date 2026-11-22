@@ -256,7 +256,10 @@ const Views = {
     const kolejnosc = [...(ja ? [ja] : []), ...prac.filter(x => x !== ja)];
     // statusy wysłane z tabletu, a jeszcze niepotwierdzone przez ClickUp (od 1.12.0)
     const kolejka = (await DB.get('zadKolejka')) || [];
-    const wszystkieZad = ((pl && pl.zadania) || []).map(t => { const q = kolejka.filter(z => z.task === t.id).pop();
+    // od 1.59.0: zadania na przyszłe dni dodane na tablecie (czekające na biuro, także niewysłane) – nakładka na plan z bazy
+    const ZP = await Czas.zadPlany(), zpUs = new Set(ZP.filter(x => x.usun).map(x => x.zid)), zpT = ZP.filter(x => !x.usun).map(x => Czas.zpZad(x));
+    const plIds = new Set(((pl && pl.zadania) || []).map(t => t.id));   // czekające – z pamięci tabletu; zatwierdzone – z planu, a gdy poza oknem planu – z pamięci
+    const wszystkieZad = ((pl && pl.zadania) || []).filter(t => !zpUs.has(t.id) && !zpT.some(z => z.prop && (z.id === t.id || z.zid === t.id))).concat(zpT.filter(z => z.prop || (!plIds.has(z.id) && !plIds.has(z.zid)))).map(t => { const q = kolejka.filter(z => z.task === t.id).pop();
       return q ? { ...t, status: q.status, czeka: true, zamk: q.status === 'complete' } : t; });
     // domyślnie w „Wszyscy” kolumny tylko osób, które mają zadania tego dnia (pozostałe – jednym dotknięciem w pasku osób)
     const ileOs = o => wszystkieZad.filter(t => naDzien(t, dzien) && t.osoby.includes(String(o.cu))).length;
@@ -273,8 +276,15 @@ const Views = {
     const CZW = (await Czas.lista()).filter(w => w.data === dzien && Czas.akt(w) && !w.nieob);
     const NBW = await Czas.nieob(null, dzien);   // urlop / nieobecność w tym dniu (także odrzucone)
     const BKD = S.user ? new Set((await Czas.braki(S.user.name)).map(x => x.d)) : new Set();
+    // od 1.59.0: propozycja godzin od innej osoby do zadania spoza mojego kalendarza – zadanie pojawia się w mojej kolumnie (z propozycją)
+    const zPropozycji = o => CZW.filter(w => w.osoba === o.name && w.stan === 'prop' && w.kto !== o.name && w.zad).map(w => {
+      const t = wszystkieZad.find(x => x.id === w.zad) || { id: w.zad, nazwa: w.nazwa || '', kod: w.kod || '', faza: w.faza || '', lista: w.lista || '', listaNazwa: '', osoby: [], status: '', est: 0,
+        start: new Date(dzien + 'T' + w.od + ':00').getTime(), koniec: new Date(dzien + 'T' + w.do + ':00').getTime(), godzStart: true, godzKoniec: true };
+      return t.osoby.includes(String(o.cu)) ? null : Object.assign({}, t, { zProp: true }); }).filter(Boolean);
     const kolumny = osoby.map(o => { const zat = CZW.filter(w => w.osoba === o.name && w.stan === 'zatw' && w.zad);
-      return { o, z: zad.filter(t => t.osoby.includes(String(o.cu)) && !zat.some(w => w.zad === t.id)), cz: CZW.filter(w => w.osoba === o.name && (w.stan === 'zatw' || !w.zad) && w.stan !== 'prop').concat(NBW.filter(w => w.osoba === o.name)) }; });
+      return { o, z: zad.filter(t => t.osoby.includes(String(o.cu)) && !zat.some(w => w.zad === t.id)).concat(zPropozycji(o).filter(t => !zat.some(w => w.zad === t.id))),
+        cz: CZW.filter(w => w.osoba === o.name && (w.stan === 'zatw' || !w.zad) && (w.stan !== 'prop' || !w.zad)).concat(NBW.filter(w => w.osoba === o.name)) }; });
+    kolumny.forEach(k => k.z.filter(t => t.zProp && !zad.some(x => x.id === t.id)).forEach(t => zad.push(t)));   // okno zadania znajdzie je po id
     // oś dnia 7:00–24:00 (od 1.14.1); każde zadanie → odcinek tego dnia [s, e] w minutach
     //  • z godzinami, jeden dzień – wg godzin (przycięte do 7–24)
     //  • z godzinami, kilka dni – 1. dzień od startu, środkowe 7–15, ostatni do końca
@@ -354,8 +364,8 @@ const Views = {
       if (rodz === 'fix') czas = x.wiel ? `${dzTyg(a)} ${hm(a)} – ${dzTyg(b2)} ${hm(b2)}` : `${hm(a)}–${hm(b2)}`;
       else if (rodz === 'auto') czas = `~${hmMin(s)}–${hmMin(e)} · ${String(Math.round((e - s) / 6) / 10).replace('.', ',')} h`;
       else czas = 'cały dzień' + (x.wiel && a && b2 ? ` · ${a.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}–${b2.toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })}` : '');
-      return `<button class="pblk${kl}${rodz === 'auto' ? ' pauto' : ''} ${t.zamk ? 'done' : ''}" data-t="${U.esc(t.id)}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
-        <span class="pt">${czas}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${cw ? czChip(cw) + ` <span class="czchip c-gr">${U.esc(cw.od)}–${U.esc(cw.do)}</span>` : pst(t)}${rodz === 'auto' ? '<span class="pauton">Kierownik nie określił pory dnia</span>' : ''}</button>`;
+      return `<button class="pblk${kl}${rodz === 'auto' ? ' pauto' : ''} ${t.zamk ? 'done' : ''}${t.prop ? ' pprop' : ''}" data-t="${U.esc(t.id)}" data-os="${U.esc(x.os || '')}" style="${st};--c:${kol(t)}">${pogodaZad(t)}
+        <span class="pt">${czas}${t.zamk ? ' · ✓' : ''}</span>${pbud(t)}<b>${U.esc(t.nazwa)}</b>${t.prop ? `<span class="czchip c-pro">do zatwierdzenia${t.lok ? ' · niewysłane' : ''}</span>` : t.zProp && !cw ? '<span class="czchip c-pro">propozycja godzin</span>' : cw ? czChip(cw) + ` <span class="czchip c-gr">${U.esc(cw.od)}–${U.esc(cw.do)}</span>` : pst(t)}${rodz === 'auto' ? '<span class="pauton">Kierownik nie określił pory dnia</span>' : ''}</button>`;
     };
     // tory: zadania nachodzące na siebie dzielą szerokość kolumny; stykające się (koniec = początek) – nie
     const kolumnaHtml = k => {
@@ -381,7 +391,7 @@ const Views = {
       <section class="phero">
         <div class="phtop">
           <div class="grow"><div class="phhi">${U.esc(powitanie)}</div><h1>${wszyscy ? 'Plan wszystkich' : 'Twój plan'}</h1></div>
-          ${Session.isBiuro() ? `<button class="btn sm pnz" id="pNZ">${ic('plus')} Nowe zadanie<span class="bn" id="pNZn" hidden></span></button><button class="btn sm pnz psh" id="pSH" title="Pobierz zmiany z ClickUp do harmonogramu i wyślij zaległe zapisy">⟳</button>` : ''}
+          ${Session.isBiuro() ? `<button class="btn sm pnz" id="pNZ">${ic('plus')} Nowe zadanie<span class="bn" id="pNZn" hidden></span></button><button class="btn sm pnz psh" id="pSH" title="Pobierz zmiany z ClickUp do harmonogramu i wyślij zaległe zapisy">⟳</button>` : S.user ? `<button class="btn sm pnz" id="pNZp">${ic('plus')} Nowe zadanie</button>` : ''}
           <div class="seg pseg"><button id="pMy" class="${wszyscy ? '' : 'on'}">Mój plan</button><button id="pAll" class="${wszyscy ? 'on' : ''}">Wszyscy</button></div>
         </div>
         <div class="pweekwrap" id="pWeekWrap"><div class="pweek" id="pWeek" title="Przeciągnij w lewo / prawo, aby przesunąć dni">
@@ -455,19 +465,22 @@ const Views = {
     $('#pAll').onclick = async () => { await zapiszWid({ all: true }); idz({ all: true }); };
     if ($('#pNZ')) { $('#pNZ').onclick = async () => { const q = (await DB.get('zadNoweKolejka')) || []; if (q.length) Dialogs.zadKolejka(); else Dialogs.noweZadanie(null, dzien); }; planNZ(); }
     if ($('#pSH')) $('#pSH').onclick = () => harmSyncTeraz();
+    if ($('#pNZp')) $('#pNZp').onclick = () => Dialogs.zadPlanForm(dzien > dzis ? dzien : '');   // od 1.59.0: pracownik – zadanie na jutro lub później
     $('#pMy').onclick = async () => { await zapiszWid({ all: false }); idz({ all: false }); };
     { const pp = view.querySelector('.ppeople'); if (pp && ppScroll) pp.scrollLeft = ppScroll; }   // 1.23.2: pasek osób zostaje w miejscu po wyborze osoby
     view.querySelectorAll('[data-who]').forEach(b => b.onclick = async () => { ppScroll = b.closest('.ppeople').scrollLeft; const u = new Set(ukryci); u.has(b.dataset.who) ? u.delete(b.dataset.who) : u.add(b.dataset.who);
       await zapiszWid({ wybrani: kolejnosc.filter(o => !u.has(o.name)).map(o => o.name) }); idz({ ukryj: [...u] }); });
     // dotknięcie zadania → okienko z danymi z ClickUp, statusem i „Przejdź do budowy” (od 1.12.0)
     view.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
-      const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []));
+      const t = zad.find(x => x.id === b.dataset.t); if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []), dzien, null, Session.isBiuro() && b.dataset.os ? b.dataset.os : undefined);   // biuro – za osobę z kolumny
     });
     // od 1.58.0: czas pracy – podgląd wpisu; dotknięcie pustego miejsca w swojej kolumnie → „Co robiłem?” (praca spoza planu)
     // od 1.58.6: zatwierdzony blok zadania otwiera pełne okno zadania (z „Przejdź do budowy”), z kłódką
     view.querySelectorAll('[data-cz]').forEach(b => b.onclick = () => { const w = CZW.concat(NBW).find(x => x.wid === b.dataset.cz); if (!w) return;
       const t = !w.nieob && w.zad && zad.find(x => x.id === w.zad);
-      if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []), dzien, null, w.osoba); else Dialogs.czasInfo(w); });
+      if (t) Dialogs.zadanie(t, budowaZ(t), osobyTxt(t, (S.boot && S.boot.pracownicy) || []), dzien, null, w.osoba);
+      else if (w.stan === 'prop' && S.user && w.osoba === S.user.name) Dialogs.doUzupelnienia(true);   // od 1.59.0: propozycja pracy spoza planu dla mnie
+      else Dialogs.czasInfo(w); });
     // przytrzymanie pustego miejsca w swojej kolumnie: kółko z zielonym postępem (jak na rzutach) → praca spoza planu / urlop / nieobecność
     view.querySelectorAll('.pcol').forEach((c, i) => {
       let tm = null, ring = null, x0 = 0, y0 = 0;
@@ -477,7 +490,9 @@ const Views = {
         x0 = e.clientX; y0 = e.clientY; const r = c.getBoundingClientRect(), y = e.clientY - r.top;
         ring = document.createElement('span'); ring.className = 'pring'; ring.style.left = (e.clientX - r.left) + 'px'; ring.style.top = y + 'px'; c.appendChild(ring);
         const m = h0 * 60 + Math.floor(y / PX * 2) * 30;
-        tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30); Dialogs.coRobilem(dzien, { start: m, osoba: kolumny[i].o.name }); }, 2000);   // jak przytrzymanie kropki na rzucie
+        tm = setTimeout(() => { stop(); if (navigator.vibrate) navigator.vibrate(30);
+          if (dzien > dzis) Dialogs.zadPlanForm(dzien, { start: m, osoba: kolumny[i].o.name });   // od 1.59.0: przyszły dzień → nowe zadanie (do zatwierdzenia)
+          else Dialogs.coRobilem(dzien, { start: m, osoba: kolumny[i].o.name }); }, 2000);   // jak przytrzymanie kropki na rzucie
       });
       c.addEventListener('pointermove', e => { if (tm && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
       ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => c.addEventListener(ev, stop));
@@ -1933,59 +1948,94 @@ const Dialogs = {
     $('#ns').onclick = async () => { const t = $('#nt').value.trim(); if (!t) return; await addEvent('notatka', urz, { tekst: t, foto: photos }); UI.toast('Notatka zapisana'); UI.close(); };
   },
 
-  /* Okienko zadania z kalendarza (od 1.12.0): dane z ClickUp, 3 statusy (offline), przejście do budowy */
+  /* Okienko zadania z kalendarza (od 1.12.0; od 1.59.0 jedno okno dla każdego zadania): budowa, faza, status, notatka, trzy przyciski
+     Wykonane / Do kontynuacji / Niepodjęte – nieaktywne dla przyszłych dni i zatwierdzonych; propozycje innych z „Akceptuję”; stan wpisu (czeka / odrzucone / zatwierdzone) */
   async zadanie(t, bud, osoby, dzien, preSt, kogo) {
-    let wyb = preSt || null, powod = '';
     dzien = dzien || (UI.cur === 'plan' && UI.par.d) || U.day(new Date());
-    const ja = S.user ? S.user.name : '', kto = kogo || ja;
-    const mojW = kto ? (await Czas.dla(kto, dzien)).find(w => w.zad === t.id) : null;   // od 1.58.0: mój wpis czasu do tego zadania (od 1.58.6: albo osoby z klikniętej kolumny)
-    // od 1.58.6: propozycje innych osób dla mnie z tego dnia – potwierdzam albo wpisuję swoje
-    const PR = ja && kto === ja ? (await Czas.propozycje(ja)).filter(w => w.data === dzien) : [];
-    const plZ = ((await DB.get('plan')) || {}).zadania || [];
+    const ja = S.user ? S.user.name : '', kto = kogo || ja, biuro = Session.isBiuro(), dzis = U.day(new Date()), przyszle = dzien > dzis;
+    const W = await Czas.lista(), moje = w => w.osoba === kto && w.zad === t.id && w.data === dzien && !w.nieob;
+    const mojW = kto ? W.find(w => moje(w) && Czas.akt(w) && w.stan !== 'prop') : null;   // mój wpis czasu (od 1.58.6: albo osoby z klikniętej kolumny)
+    const odrzW = !mojW && kto ? W.filter(w => moje(w) && w.stan === 'odrzB').pop() : null;   // odrzucone przez biuro – do poprawy
+    const PR = kto && (kto === ja || biuro) ? W.filter(w => moje(w) && w.stan === 'prop' && w.kto !== ja) : [];   // propozycje innych dla mnie do tego zadania
+    const zablok = !!(mojW && mojW.stan === 'zatw');
+    const lokalne = t.prop && t.lok && (t.autor === ja || biuro) && await Czas.zpLokalne(t.id);
+    const aktywne = !przyszle && !zablok && !t.prop && (kto === ja || biuro);   // od 1.59.0: biuro – także za osobę z klikniętej kolumny / wiersza
+    let wyb = preSt || (aktywne && mojW && STATUS_ZAD[mojW.st] ? mojW.st : null), powod = '';
     const a = t.start ? new Date(t.start) : null, b = t.koniec ? new Date(t.koniec) : null;
     const kiedy = maGodziny(t) ? hm(a) + ' – ' + hm(b) : b ? 'do ' + b.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) + (t.godzKoniec ? ' ' + hm(b) : '') : '—';
+    const f16 = x => { const s = String(x || ''); if (/Z$|[+-]\d\d:\d\d$/.test(s) && !isNaN(new Date(s))) { const d = new Date(s); return U.day(d) + ' ' + hm(d); } return s.replace('T', ' ').slice(0, 16); };   // czas tabletu (UTC) → lokalny
+    const hTxt = w => `${U.esc(w.od)}–${U.esc(w.do)} · ${CZ.hTxt(CZ.h(w.od, w.do))}`;
+    const stanKarta = () => {
+      if (mojW) { const kim = kto === ja ? 'Mój czas pracy' : 'Czas pracy: ' + U.esc(kto);
+        const info = mojW.stan === 'zatw' ? `🔒 Zatwierdził(a) ${mojW.zatw && mojW.zatw.auto ? 'automatycznie (zgodne z planem)' : U.esc((mojW.zatw || {}).kto || 'biuro')}${mojW.zatw && mojW.zatw.ts ? ' · ' + U.esc(f16(mojW.zatw.ts)) : ''}${mojW.zatw && mojW.zatw.korekta ? ' · korekta: ' + U.esc(mojW.zatw.korekta) : ''}`
+          : mojW.lok ? 'Zapisane na tablecie – wyśle się przy synchronizacji. Możesz je jeszcze zmienić.' : 'Czeka na zatwierdzenie przez biuro – do decyzji możesz je zmienić.';
+        return `<div class="card czz ${mojW.stan === 'zatw' ? 'czlock' : ''}"><div class="row"><span class="lbl grow">${kim} – ${U.esc(PC_dzien(dzien))}</span><span class="czchip ${mojW.stan === 'zatw' ? 'c-lock' : 'c-gr'}">${mojW.stan === 'zatw' ? '🔒 zatwierdzone' : mojW.lok ? 'niewysłane' : 'czeka na zatwierdzenie'}</span></div>
+          <b>${hTxt(mojW)}</b> <span class="mute">${U.esc(CZ_ST_TXT[mojW.st] || '')}</span><div class="mute">${info}</div></div>`; }
+      if (odrzW) return `<div class="card czz czodrz"><div class="row"><span class="lbl grow">Odrzucone do poprawy</span><span class="czchip c-bad">do poprawy</span></div>
+        <b>${hTxt(odrzW)}</b> <span class="mute">${U.esc(CZ_ST_TXT[odrzW.st] || '')}</span><div class="mute">Odrzucił(a) ${U.esc((odrzW.odrzB || {}).kto || 'biuro')}${odrzW.odrzB && odrzW.odrzB.ts ? ' · ' + U.esc(f16(odrzW.odrzB.ts)) : ''}${odrzW.odrzB && odrzW.odrzB.powod ? ' – ' + U.esc(odrzW.odrzB.powod) : ''}. Wybierz status i wpisz godziny ponownie.</div></div>`;
+      return '';
+    };
+    const propKarta = () => !PR.length ? '' : `<div class="card czprop"><div class="lbl">Poprawki zgłoszone do tego zadania – zaakceptuj albo wybierz swój status poniżej</div>
+      ${PR.map((w, i) => { const zm = [];
+        if (w.plan && (w.plan.od !== w.od || w.plan.do !== w.do)) zm.push(`godziny: plan ${U.esc(w.plan.od)}–${U.esc(w.plan.do)} → ${U.esc(w.od)}–${U.esc(w.do)}`);
+        if (w.powod) zm.push('powód: ' + U.esc(w.powod));
+        if (w.termin) zm.push('dokończenie: ' + U.esc(PC_dzien(w.termin.data) + ' ' + w.termin.od + '–' + w.termin.do));
+        if (w.notatka) zm.push('notatka: ' + U.esc(String(w.notatka).slice(0, 200)));
+        if (w.kom) zm.push('komentarz: ' + U.esc(String(w.kom).slice(0, 200)));
+        return `<div class="czpr"><div class="grow"><b>${U.esc(w.kto)} proponuje: ${hTxt(w)} · ${U.esc(CZ_ST_TXT[w.st] || w.st)}</b><span class="mute"> · ${U.esc(f16(w.ts))}</span>${zm.length ? `<ul class="czzm">${zm.map(z => `<li>${z}</li>`).join('')}</ul>` : ''}</div>
+          <button class="btn sm ok" data-prp="${i}">Akceptuję</button></div>`; }).join('')}</div>`;
+    const propZad = () => !t.prop ? '' : `<div class="card czprop"><div class="row"><span class="lbl grow">Nowe zadanie – czeka na zatwierdzenie przez biuro</span><span class="czchip c-pro">${t.lok ? 'niewysłane' : 'wysłane'}</span></div>
+      <div class="mute">Dodał(a) ${U.esc(t.autor || '')}${t.utw ? ' · ' + U.esc(f16(t.utw)) : ''}. ${t.lok ? 'Dopóki nie wyśle się z tabletu, autor może je zmienić lub usunąć.' : 'Wysłane – o zatwierdzeniu, zmianie lub anulowaniu decyduje biuro.'}</div>
+      <div class="row" style="gap:8px;margin-top:8px">${lokalne ? '<button class="btn sm" id="zpE">Edytuj</button><button class="btn sm" id="zpU">Usuń</button>' : ''}${biuro && !t.lok ? '<button class="btn sm ok" id="zpA">Zatwierdź</button><button class="btn sm" id="zpZ">Zmień</button><button class="btn sm" id="zpC">Anuluj zadanie</button>' : ''}</div></div>`;
+    const uwaga = przyszle ? 'Zadanie zaplanowane – status i godziny wpiszesz w dniu zadania.' : t.prop ? 'Najpierw zatwierdzenie przez biuro.' : zablok ? 'Zatwierdzone przez biuro – zmienić może tylko biuro.' : kto !== ja && !biuro ? 'Za tę osobę wpiszesz godziny, przytrzymując palec w jej kolumnie.' : kto !== ja ? 'Wpisujesz za: ' + kto + '.' : '';
     const draw = () => {
       modal.innerHTML = `<div class="ov bottom" id="ov"><section class="zsheet" role="dialog" aria-label="Zadanie">
         <div class="grab"></div>
-        <div class="row">${bud ? `<span class="chip">${U.esc(bud.kod)} · ${U.esc(String(bud.nazwa).replace(bud.kod, '').trim())}</span>` : `<span class="chip gr">${U.esc(t.listaNazwa || 'spoza budów ELWIS')}</span>`}<span class="chip gr">${U.esc(stNazwa(t.status || ''))}${t.czeka ? ' · czeka na wysłanie' : ''}</span></div>
+        <div class="row">${bud ? `<span class="chip">${U.esc(bud.kod)} · ${U.esc(String(bud.nazwa).replace(bud.kod, '').trim())}</span>` : `<span class="chip gr">${U.esc(t.kod || t.listaNazwa || 'spoza budów ELWIS')}</span>`}${t.faza ? `<span class="chip gr">Faza: ${U.esc(t.faza)}</span>` : ''}<span class="chip ${t.prop ? 'pr' : 'gr'}">Status: ${U.esc(t.prop ? 'do zatwierdzenia' : stNazwa(t.status || '') || '—')}${t.czeka ? ' · czeka na wysłanie' : ''}</span></div>
         <h2>${U.esc(t.nazwa)}</h2>
         <div class="zfacts"><div>Kiedy<b class="m">${U.esc(kiedy)}</b>${t.est ? 'szac. ' + String(Math.round(t.est / 36e5 * 10) / 10).replace('.', ',') + ' h' : ''}</div><div>Kto<b>${U.esc(osoby || '—')}</b></div></div>
-        ${t.opis ? `<div><span class="lbl">Opis z ClickUp</span><p class="zopis">${U.esc(t.opis)}</p></div>` : ''}
-        ${mojW ? `<div class="card czz"><div class="row"><span class="lbl grow">${kto === ja ? 'Mój czas pracy' : 'Czas pracy: ' + U.esc(kto)} – ${U.esc(PC_dzien(dzien))}</span>${czChip(mojW)}</div><b>${U.esc(mojW.od)}–${U.esc(mojW.do)} · ${CZ.hTxt(CZ.h(mojW.od, mojW.do))}</b> <span class="mute">${U.esc(CZ_ST_TXT[mojW.st] || '')}</span></div>` : ''}
-        ${PR.length ? `<div class="card czprop"><div class="lbl">Propozycje dla Ciebie z tego dnia – potwierdź albo wpisz swoje</div>
-          ${PR.map((w, i) => `<div class="czpr"><div class="grow"><b>${U.esc(w.kod || '')} · ${U.esc(w.nazwa || w.opis || '')}</b><br><span class="mute">${U.esc(w.od)}–${U.esc(w.do)} (${CZ.hTxt(CZ.h(w.od, w.do))}) · ${U.esc(CZ_ST_TXT[w.st] || w.st)} · zaproponował(a) ${U.esc(w.kto)}</span></div>
-            <button class="btn sm ok" data-prp="${i}">Potwierdź</button><button class="btn sm" data-prw="${i}">Wpisz swoje</button></div>`).join('')}</div>` : ''}
-        ${mojW && mojW.stan === 'zatw' ? '<p class="mute">🔒 Zatwierdzone przez biuro – zmienić może tylko biuro.</p>' : kto !== ja ? '' : `<div><span class="lbl">Jak poszło?</span>
-          <div class="st3" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}">${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div></div>`}
-        ${wyb && wyb !== 'complete' ? `<div class="zwhy"><span class="lbl">Powód (opcjonalnie)</span>
+        <div><span class="lbl">Notatka</span><p class="zopis">${t.opis ? U.esc(t.opis) : '<span class="mute">brak</span>'}</p></div>
+        ${propZad()}${stanKarta()}${propKarta()}
+        <div><span class="lbl">Jak poszło?</span>
+          <div class="st3${aktywne ? '' : ' dis'}" style="margin-top:8px">${Object.entries(STATUS_ZAD).map(([k, v]) => `<button class="sb ${v.b} ${wyb === k ? 'on' : ''}" data-st="${k}" ${aktywne ? '' : 'disabled'}>${ic(v.ic)}${v.t}<small>${k}</small></button>`).join('')}</div>
+          ${uwaga ? `<p class="mute" style="margin:8px 0 0">${U.esc(uwaga)}</p>` : ''}</div>
+        ${aktywne && wyb && wyb !== 'complete' ? `<div class="zwhy"><span class="lbl">Powód (opcjonalnie)</span>
           <div class="cats">${POWODY_ZAD.map(x => `<button data-pw="${U.esc(x)}" class="${x === powod ? 'on' : ''}">${U.esc(x)}</button>`).join('')}</div>
           <label><span class="lbl" style="display:block;margin-bottom:4px">Komentarz (opcjonalnie)</span><textarea id="zk" placeholder="Co zrobione, co zostało, warunek powrotu"></textarea></label></div>` : ''}
-        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}${mojW && mojW.stan === 'zatw' || kto !== ja ? '' : `<button class="btn pri" id="zOk" ${wyb && !(mojW && mojW.stan === 'zatw') ? '' : 'disabled'}>${wyb === 'on hold' ? 'Zapisz i wpisz, co robiłem' : wyb ? 'Dalej – godziny pracy' : 'Zapisz status'}</button>`}</div>
+        <div class="zact">${bud ? `<button class="btn out" id="zBud">${ic('bud')}Przejdź do budowy</button>` : '<button class="btn" id="zX">Zamknij</button>'}${biuro && !t.prop ? '<button class="btn out" id="zEd">✎ Edytuj zadanie</button>' : ''}${aktywne ? `<button class="btn pri" id="zOk" ${wyb ? '' : 'disabled'}>${wyb === 'on hold' ? 'Zapisz i wpisz, co robiłem' : wyb ? 'Dalej – godziny pracy' : 'Wybierz status'}</button>` : ''}</div>
       </section></div>`;
       $('#ov').onclick = e => { if (e.target.id === 'ov') UI.close(); };
-      modal.querySelectorAll('[data-st]').forEach(x => x.onclick = () => { const k = $('#zk') ? $('#zk').value : ''; wyb = x.dataset.st; draw(); if (k && $('#zk')) $('#zk').value = k; });
+      if (aktywne) modal.querySelectorAll('[data-st]').forEach(x => x.onclick = () => { const k = $('#zk') ? $('#zk').value : ''; wyb = x.dataset.st; draw(); if (k && $('#zk')) $('#zk').value = k; });
       modal.querySelectorAll('[data-pw]').forEach(x => x.onclick = () => { const k = $('#zk').value; powod = powod === x.dataset.pw ? '' : x.dataset.pw; draw(); $('#zk').value = k; });
       if ($('#zX')) $('#zX').onclick = UI.close;
+      if ($('#zEd')) $('#zEd').onclick = () => this.zadPlanForm(dzien, { zad: t, bud });   // od 1.59.0: biuro – edycja zadania
       if ($('#zBud')) $('#zBud').onclick = () => { UI.close(); openProject(bud.kod); };
       modal.querySelectorAll('[data-prp]').forEach(x => x.onclick = async () => { const w = PR[+x.dataset.prp];
-        await Czas.dodaj([Czas.zdarzenie('potw', { ref: w.wid, osoba: ja })]); UI.close(); UI.toast('Potwierdzono – trafi do zatwierdzenia przez biuro'); UI.refresh(); });
-      modal.querySelectorAll('[data-prw]').forEach(x => x.onclick = async () => { const w = PR[+x.dataset.prw]; UI.close();
-        if (w.zad) { const t2 = plZ.find(z => z.id === w.zad) || (w.zad === t.id ? t : { id: w.zad, nazwa: w.nazwa, lista: w.lista || '', kod: w.kod, faza: w.faza });
-          const b2 = ((S.boot && S.boot.projekty) || []).find(p => p.kod === (t2.kod || w.kod));
-          return Dialogs.czasPracy(t2, dzien, w.st === 'update required' ? 'update required' : 'complete', { bud: b2 }); }
-        await Czas.dodaj([Czas.zdarzenie('odrz', { ref: w.wid, osoba: ja })]);   // praca spoza planu: odrzucam propozycję i wpisuję swoje
-        Dialogs.coRobilem(dzien, { kod: w.kod }); });
+        if (kto !== ja) { UI.close(); return Dialogs.czasPracy(t, dzien, w.st === 'update required' ? 'update required' : 'complete', { bud, osoba: kto }); }   // biuro za osobę: godziny jak w propozycji, do korekty
+        await Czas.dodaj([Czas.zdarzenie('potw', { ref: w.wid, osoba: ja })]); UI.close(); UI.toast('Zaakceptowano – trafi do zatwierdzenia przez biuro'); UI.refresh(); });
+      const zpX = async () => (await Czas.zadPlany()).find(x => x.zid === t.id);
+      if ($('#zpE')) $('#zpE').onclick = async () => { const x = await zpX(); if (x) this.zadPlanForm(x.data, { ed: x }); };
+      if ($('#zpU')) $('#zpU').onclick = async () => { if (!(await Czas.zpLokalne(t.id))) return UI.toast('Zadanie zostało już wysłane – o usunięciu decyduje biuro');
+        if (!confirm('Usunąć to zadanie?')) return; await Czas.zpZapisz({ zid: t.id, usun: true }); UI.close(); UI.toast('Usunięto'); UI.refresh(); };
+      if ($('#zpA')) $('#zpA').onclick = async () => { if (await this.zpDecyzja(t.id, 'zatw')) { UI.close(); UI.refresh(); } };
+      if ($('#zpC')) $('#zpC').onclick = async () => { if (await this.zpDecyzja(t.id, 'anul')) { UI.close(); UI.refresh(); } };
+      if ($('#zpZ')) $('#zpZ').onclick = async () => { const x = await zpX(); if (x) this.zadPlanForm(x.data, { ed: x, admin: true }); else UI.toast('Brak danych zgłoszenia – odśwież'); };
       if ($('#zOk')) $('#zOk').onclick = async () => {
         if (!wyb) return;
         const kom = $('#zk') ? $('#zk').value.trim() : '';
         // od 1.58.0: Wykonane / Do kontynuacji → godziny pracy (status trafia do ClickUp po zatwierdzeniu przez biuro)
-        if (wyb !== 'on hold') { UI.close(); return Dialogs.czasPracy(t, dzien, wyb, { bud, powod, kom }); }
+        if (wyb !== 'on hold') { UI.close(); return Dialogs.czasPracy(t, dzien, wyb, { bud, powod, kom, osoba: kto }); }
+        const mojCu = String(((S.boot && S.boot.pracownicy) || []).find(p => p.name === kto)?.cu || '');
+        if (!(t.osoby || []).includes(mojCu)) {   // od 1.59.0: zadanie spoza mojego planu (z propozycji) – „niepodjęte” odrzuca tylko propozycję, statusu zadania nie zmienia
+          if (PR.length && kto === ja) await Czas.dodaj(PR.map(w => Czas.zdarzenie('odrz', { ref: w.wid, osoba: ja })));
+          UI.close(); UI.toast('Propozycja odrzucona'); UI.refresh(); return;
+        }
         const k = (await DB.get('zadKolejka')) || [];
         k.push({ id: U.uid('z'), task: t.id, status: wyb, powod: wyb === 'complete' ? '' : powod, komentarz: wyb === 'complete' ? '' : kom, kto: S.user.name, ts: U.now(), nazwa: t.nazwa });
         await DB.set('zadKolejka', k); await liczOczekujace();
         UI.close(); UI.toast(navigator.onLine ? 'Status zapisany' : 'Status zapisany – wyśle się po połączeniu z siecią');
         if (navigator.onLine) Sync.soon();
-        Dialogs.coRobilem(dzien, { tytul: '„' + t.nazwa + '” – niepodjęte' + (powod ? ' · powód: ' + powod : ''), kod: bud && bud.kod });   // od 1.58.0
+        Dialogs.coRobilem(dzien, { tytul: '„' + t.nazwa + '” – niepodjęte' + (powod ? ' · powód: ' + powod : ''), kod: bud && bud.kod, osoba: kto });   // od 1.58.0
       };
     };
     draw();

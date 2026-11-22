@@ -5,7 +5,7 @@
  * Schemat danych 1.x. Opis API: docs/API.md.
  */
 
-const SCRIPT_VERSION = '1.58.7';
+const SCRIPT_VERSION = '1.59.0';
 const P = PropertiesService.getScriptProperties();
 
 /* ===================== Instalacja (uruchamia Łukasz raz, z edytora) ===================== */
@@ -364,7 +364,7 @@ function plan_(od, doDnia) {
     const st = txt_(r[8]).toLowerCase();
     out.push({ id: k, nazwa: txt_(r[5]), status: st, zamk: Object.keys(ZAMK).length ? !!ZAMK[st] : /^(complete|closed|done|cancelled|zamkni)/.test(st),
       lista: txt_(r[32]), listaNazwa: txt_(r[33]), kod: txt_(r[2]), faza: txt_(r[3]), start: s, koniec: e, godzStart: gs, godzKoniec: ge,
-      osoby: os, url: txt_(r[34]),
+      osoby: os, url: txt_(r[34]), prop: st === ZP_ST, autor: txt_(r[25]), zm: txt_(r[27]), zmT: txt_(r[28]),
       est: Math.round(Number(txt_(r[13]).replace(',', '.') || 0) * 36e5), opis: txt_(r[6]).slice(0, 1500), zrodlo: txt_(r[24]) });
   });
   const res = { ok: true, zadania: out, pobrano: Date.now(), zrodlo: 'harmonogram', sync: P.getProperty('HARM_SYNC') || '' };
@@ -469,7 +469,10 @@ function kolejkaCU_() {
   const sh = harmSh_('Kolejka ClickUp'), v = sh.getDataRange().getDisplayValues(); let n = 0, bl = 0;
   for (let i = 1; i < v.length; i++) { if (v[i][5] !== 'czeka') continue;
     let d = {}; try { d = JSON.parse(v[i][4] || '{}'); } catch (e) { }
-    try { if (v[i][2] === 'status') { cu_('put', 'task/' + v[i][3], { status: d.status }); if (d.komentarz) cu_('post', 'task/' + v[i][3] + '/comment', { comment_text: d.komentarz, notify_all: false }); }
+    try { if (v[i][2] === 'status') { const id = /^EL-/.test(v[i][3]) ? elCu_(v[i][3]) : v[i][3]; if (!id) continue;   // od 1.59.0: zadanie z ELWIS – czeka na założenie w ClickUp
+        cu_('put', 'task/' + id, { status: d.status }); if (d.komentarz) cu_('post', 'task/' + id + '/comment', { comment_text: d.komentarz, notify_all: false }); }
+      else if (v[i][2] === 'utworz') zadPlanCU_(v[i][3]);
+      else if (v[i][2] === 'edytuj') { if (!zadEdytujCU_(v[i][3], d)) continue; }
       sh.getRange(i + 1, 6, 1, 2).setValues([['ok', '']]); n++; }
     catch (e) { sh.getRange(i + 1, 6, 1, 2).setValues([['błąd', String(e.message || e).slice(0, 300)]]); bl++; }
   }
@@ -2060,6 +2063,9 @@ function czasStan_(evs) {
       const w = Object.assign({}, d, { kto: e.kto, ts: e.ts, tablet: e.tablet, eid: [e.id], stan: e.kto === d.osoba ? 'wlasne' : 'prop' });
       if (W[w.wid]) return;
       if (d.kor && W[d.kor]) { const st = W[d.kor], poZ = st.stan === 'zatw'; st.stan = 'zastapiony'; st.przez = w.wid; if (poZ) { st.korekta = true; w.korOf = d.kor; } w.stan = 'prop'; W[w.wid] = w; return; }   // edycja biura: przed zatwierdzeniem – zwykłe zastąpienie, po zatwierdzeniu – korekta (ClickUp: komentarz + godziny)
+      // od 1.59.0: poprawka po zwrocie zatwierdzonego wpisu – gdy stary był już w ClickUp, nowy po zatwierdzeniu idzie jako korekta
+      const zw = Object.values(W).find(z => z.stan === 'odrzB' && z.zwrot && !z.przez && z.osoba === w.osoba && (w.zad ? z.zad === w.zad && z.data === w.data : w.nieob ? z.nieob : z.spoza && !z.zad && z.data === w.data && z.kod === w.kod));
+      if (zw) { zw.przez = w.wid; if (zwSync_(zw)) w.korOf = zw.wid; }
       const k = klucz(w), inne = aktywne(k);
       if (inne.some(x => x.stan === 'zatw')) { w.stan = 'po_zatw'; W[w.wid] = w; return; }
       if (w.stan === 'prop' && inne.some(x => x.stan === 'wlasne')) { w.stan = 'zignorowany'; W[w.wid] = w; return; }
@@ -2076,12 +2082,14 @@ function czasStan_(evs) {
       w.zatw = { kto: e.kto, ts: e.srv || e.ts, auto: !!d.auto, powod: d.powod || '', korekta: (d.od && d.od !== w.od) || (d.do && d.do !== w.do) ? (w.od + '–' + w.do + ' → ' + d.od + '–' + d.do + (d.powod ? ' (' + d.powod + ')' : '')) : '' };
       if (d.od) w.od = d.od; if (d.do) w.do = d.do; if (d.termin !== undefined) w.termin = d.termin;
     } else if (e.typ === 'odrzB') {
-      const w = W[d.wid]; if (!w || ['wlasne', 'prop'].indexOf(w.stan) < 0) return;
+      const w = W[d.wid]; if (!w || ['wlasne', 'prop', 'zatw'].indexOf(w.stan) < 0) return;
+      if (w.stan === 'zatw') w.zwrot = true;   // od 1.59.0: zatwierdzony wpis zwrócony do użytkownika do poprawy
       w.eid.push(e.id); w.stan = 'odrzB'; w.odrzB = { kto: e.kto, ts: e.srv || e.ts, powod: d.powod || '' };
     }
   });
   return W;
 }
+function zwSync_(z) { try { return z.zad ? !!syncByl_('zad:' + (/^EL-/.test(z.zad) ? (elCu_(z.zad) || z.zad) : z.zad)) : z.nieob ? !!syncByl_('nieob:' + z.wid) : !!syncByl_('spoza:' + z.wid); } catch (e) { return false; } }
 function zgodnyZPlanem_(w) { return !!(w.zad && w.plan && w.od === w.plan.od && w.do === w.plan.do && (w.st === 'complete' || w.st === 'dzien')); }
 
 /** Operacja `czas` (od 1.58.0): push (tablety), stan, zatw / odrzB / ust (tylko rola biuro). */
@@ -2096,7 +2104,17 @@ function czas_(b, tablet) {
     const dodaj = (e, typ) => { if (!e.id || istn[e.id]) return; istn[e.id] = 1;
       noweZ.push([e.id, txt_(e.ts) || teraz, teraz, tablet, txt_(e.kto) || kto, typ, txt_((e.d || {}).osoba || e.osoba || ''), JSON.stringify(e.d || {}).slice(0, 45000)]); };
     const osobyOk = {}; ludzie_().forEach(o => { osobyOk[o.name] = 1; });   // tablet współdzielony: kolejka może mieć wpisy kilku osób
-    if (b.op === 'push') (b.zd || []).forEach(e => { if (['wpis', 'potw', 'odrz'].indexOf(e.typ) >= 0 && osobyOk[txt_(e.kto)]) { if (e.d) delete e.d.kor; dodaj(e, e.typ); } });
+    const plany = [];   // od 1.59.0: zadania na przyszłe dni dodane na tablecie (do zatwierdzenia przez biuro)
+    if (b.op === 'push') (b.zd || []).forEach(e => { if (['wpis', 'potw', 'odrz'].indexOf(e.typ) >= 0 && osobyOk[txt_(e.kto)]) { if (e.d) delete e.d.kor; dodaj(e, e.typ); }
+      else if (e.typ === 'zadPlan' && osobyOk[txt_(e.kto)] && e.id && !istn[e.id]) { dodaj(e, 'zadPlan'); plany.push(e); } });
+    else if (b.op === 'zadEd') {   // od 1.59.0: biuro – edycja dowolnego zadania z harmonogramu (plan dnia, harmonogram tygodnia)
+      if (!biuro) throw new Error('Edycja zadań – tylko rola biuro');
+      zadEdytuj_(txt_(b.id), b.zm || {}, kto, teraz);
+    }
+    else if (b.op === 'zadDec') {   // od 1.59.0: biuro – zatwierdzenie / zmiana / anulowanie zadania dodanego przez pracownika
+      if (!biuro) throw new Error('Zatwierdzanie zadań – tylko rola biuro');
+      (b.lista || []).forEach(x => { const e = { id: 'b-' + Utilities.getUuid().slice(0, 13), ts: teraz, kto: kto, d: x }; dodaj(e, 'zadDec'); plany.push(Object.assign(e, { typ: 'zadDec' })); });
+    }
     else if (b.op === 'zatw' || b.op === 'odrzB') {
       if (!biuro) throw new Error('Zatwierdzanie godzin – tylko rola biuro');
       const przed = Utilities.formatDate(new Date(Date.now() - 1000), TZ, "yyyy-MM-dd'T'HH:mm:ss");   // wpis biura: czas serwera, tuż przed decyzją (zegar komputera bywa przesunięty)
@@ -2108,11 +2126,12 @@ function czas_(b, tablet) {
       if (b.autoBiuro !== undefined) konfigUstaw_('czas_auto_biuro', b.autoBiuro ? 'tak' : 'nie', 'tak = wpisy roli biuro (własne i za innych) zatwierdzane od razu');
     }
     if (noweZ.length) harmDopisz_('Zdarzenia czasu', noweZ);
+    if (plany.length) zadPlany_(plany, teraz);
     // od 1.58.5: przetwarzanie (arkusz, ClickUp) tylko gdy coś przyszło lub biuro zdecydowało; samo pobranie stanu – szybko (zaległe ponawia noc)
     const wyn = noweZ.length || b.op !== 'push' ? czasPrzetworz_(teraz, true) : { bledy: [] };
     const odDnia = dodajDni_(dzienTz_(Date.now()), -21), W = czasStan_(czasZdarzenia_(odDnia));
     const wpisy = Object.values(W).filter(w => w.data >= odDnia && (biuro || w.osoba === kto || w.kto === kto));
-    return { ok: true, wpisy: wpisy, auto: konfig_().czas_auto === 'tak', autoBiuro: konfig_().czas_auto_biuro === 'tak', harmSync: P.getProperty('HARM_SYNC') || '', bledy: wyn.bledy, czas: Date.now() };
+    return { ok: true, wpisy: wpisy, zadProp: zadProp_(kto, biuro), auto: konfig_().czas_auto === 'tak', autoBiuro: konfig_().czas_auto_biuro === 'tak', harmSync: P.getProperty('HARM_SYNC') || '', bledy: wyn.bledy, czas: Date.now() };
   } finally { lock.releaseLock(); }
 }
 
@@ -2141,8 +2160,13 @@ function czasPrzetworz_(teraz, bezCU) {   // bezCU – zapytania tabletów i PC:
     const i = cpv.findIndex(r => String(r[23] || '').split(';').map(x => x.trim()).indexOf(w.wid) >= 0);
     if (i > 0 && !/zastąpiony/.test(cpv[i][21])) cp.getRange(i + 1, 22).setValue('zastąpiony korektą biura (' + w.przez + ')');
   });
+  Object.values(W).filter(w => w.stan === 'odrzB' && w.zwrot && juz[w.wid]).forEach(w => {   // od 1.59.0: zwrócone do poprawy
+    const i = cpv.findIndex(r => String(r[23] || '').split(';').map(x => x.trim()).indexOf(w.wid) >= 0);
+    if (i > 0 && !/zwrócone/.test(cpv[i][21])) cp.getRange(i + 1, 22).setValue('zwrócone do poprawy: ' + w.odrzB.kto + ' ' + String(w.odrzB.ts).replace('T', ' ').slice(0, 16) + (w.odrzB.powod ? ' – ' + w.odrzB.powod : '')); });
   const nb = harmSh_('Nieobecności'), nbJuz = {}; nb.getDataRange().getDisplayValues().slice(1).forEach(r => { const m = String(r[4] || '').match(/\[(w[^\]]+)\]/); if (m) nbJuz[m[1]] = 1; });
   const nbv = nb.getDataRange().getDisplayValues();
+  Object.values(W).filter(w => w.nieob && w.stan === 'odrzB' && w.zwrot && nbJuz[w.wid]).forEach(w => { const i = nbv.findIndex(r => String(r[4] || '').indexOf('[' + w.wid + ']') >= 0);
+    if (i > 0 && !/zwrócone/.test(nbv[i][4])) nb.getRange(i + 1, 5).setValue(nbv[i][4] + ' · zwrócone do poprawy (' + w.odrzB.kto + ')'); });
   Object.values(W).filter(w => w.nieob && w.stan === 'zastapiony' && w.korekta && nbJuz[w.wid]).forEach(w => { const i = nbv.findIndex(r => String(r[4] || '').indexOf('[' + w.wid + ']') >= 0);
     if (i > 0 && !/zastąpione/.test(nbv[i][4])) nb.getRange(i + 1, 5).setValue(nbv[i][4] + ' · zastąpione korektą biura (' + w.przez + ')'); });
   const nbRows = Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !nbJuz[w.wid]).map(w => [w.osoba, w.data, w.dataDo || w.data, w.rodzaj === 'urlop' ? 'U' : w.rodzaj === 'zwolnienie' ? 'L4' : w.rodzaj === 'inne' ? 'I' : 'N', nbDni_(w.dni) + ((w.dni || 1) % 1 ? ' (ostatni dzień – pół dnia)' : '') + (w.uwagi ? ' · ' + w.uwagi : '') + ' · zatwierdził ' + (w.zatw.auto ? 'auto' : w.zatw.kto) + ' [' + w.wid + ']']);
@@ -2156,7 +2180,7 @@ function czasPrzetworz_(teraz, bezCU) {   // bezCU – zapytania tabletów i PC:
   // ClickUp
   if (!bezCU && P.getProperty('CLICKUP_TOKEN')) {
     const zadania = {}; Object.values(W).filter(w => w.zad && !w.korOf).forEach(w => { (zadania[w.zad] = zadania[w.zad] || []).push(w); });
-    Object.keys(zadania).forEach(zid => { try { czasZadanieCU_(zid, zadania[zid]); } catch (e) { bledy.push(e.message); syncLog_('zadanie', 'zad:' + zid, zid, 'błąd', e.message); } });
+    Object.keys(zadania).forEach(zid => { try { const cz = /^EL-/.test(zid) ? elCu_(zid) : zid; if (cz) czasZadanieCU_(cz, zadania[zid]); } catch (e) { bledy.push(e.message); syncLog_('zadanie', 'zad:' + zid, zid, 'błąd', e.message); } });
     const czekaSp = w => Object.values(W).some(x => !x.zad && x.spoza && x.data === w.data && x.kod === w.kod && ['wlasne', 'prop'].indexOf(x.stan) >= 0);   // od 1.58.6: cały dzień budowy rozstrzygnięty
     Object.values(W).filter(w => !w.zad && w.spoza && w.stan === 'zatw' && !w.korOf && !czekaSp(w)).forEach(w => { try { czasSpozaCU_(w); } catch (e) { bledy.push(e.message); syncLog_('spoza', 'spoza:' + w.wid, '', 'błąd', e.message); } });
     Object.values(W).filter(w => w.nieob && w.stan === 'zatw' && !w.korOf).forEach(w => { try { czasNieobCU_(w); } catch (e) { bledy.push(e.message); syncLog_('nieobecność', 'nieob:' + w.wid, '', 'błąd', e.message); } });
@@ -2184,6 +2208,129 @@ function harmZadanie_(o) {
     Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), '', '', o.status === 'complete' || o.status === 'cancelled' ? Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') : '', o.zastapione || '', '']]);
 }
 function cuIds_(osoby) { const L = {}; ludzie_().forEach(o => { L[o.name] = Number(o.id); }); return osoby.map(n => L[n]).filter(Boolean); }
+
+/* ===== Zadania na przyszłe dni dodane na tablecie (od 1.59.0) =====
+ * Zdarzenie `zadPlan` (kolejka czasu): { zid, kod, faza, nazwa, osoby[], data, od, do, notatka, usun }. Wiersz w Harmonogram → Zadania
+ * o ID = zid, status „do zatwierdzenia”, Źródło ELWIS. Autor zmienia je i usuwa tylko przed wysłaniem z tabletu; potem decyduje biuro.
+ * Decyzja biura (`zadDec`: zatw | anul, opcjonalnie zm = poprawione pola) – zatwierdzone → „to do” i założenie w ClickUp w tle. */
+const ZP_ST = 'do zatwierdzenia';
+function zpWiersz_(v, zid) { for (let i = v.length - 1; i > 0; i--) if (txt_(v[i][0]) === zid) return i; return -1; }
+function zpPola_(d) {
+  const re = /^\d{4}-\d{2}-\d{2}$/, hm = /^\d{1,2}:\d{2}$/;
+  if (!re.test(txt_(d.data)) || !hm.test(txt_(d.od)) || !hm.test(txt_(d.do)) || minOf_(d.do) <= minOf_(d.od)) throw new Error('Zadanie: zła data lub godziny');
+  const ok = {}; ludzie_().forEach(o => { ok[o.name] = o; });
+  const osoby = (d.osoby || []).map(txt_).filter(n => ok[n]); if (!osoby.length) throw new Error('Zadanie: brak osób');
+  if (!txt_(d.nazwa)) throw new Error('Zadanie: brak nazwy');
+  return { kod: txt_(d.kod).slice(0, 20), faza: fazyProj_().indexOf(txt_(d.faza)) >= 0 ? txt_(d.faza) : 'Montaż i Wykonawstwo', nazwa: txt_(d.nazwa).slice(0, 180), opis: txt_(d.notatka).slice(0, 2000),
+    start: d.data + ' ' + CZ_HM_(d.od), termin: d.data + ' ' + CZ_HM_(d.do), h: String(Math.round((minOf_(d.do) - minOf_(d.od)) / 6) / 10).replace('.', ','), osoby: osoby.join('; '),
+    ekipa: [...new Set(osoby.map(n => ok[n].ek).filter(Boolean))].join('; ') };
+}
+function CZ_HM_(s) { const [h, m] = String(s).split(':'); return ('0' + h).slice(-2) + ':' + ('0' + (m || '0')).slice(-2); }
+function zadPlany_(evs, teraz) {
+  const sh = harmSh_('Zadania'), N = HARM_TABS['Zadania'].length, rb = rolaBiuro_(), autoB = konfig_().czas_auto_biuro === 'tak';
+  const t = String(teraz).replace('T', ' ').slice(0, 16), hist = [], kol = [], c = x => String(x == null ? '' : x).replace(/^[=+@-]/, "'$&");
+  let v = sh.getDataRange().getDisplayValues();
+  const zapisz = (i, r) => { sh.getRange(i + 1, 1, 1, N).setNumberFormat(TEXT).setValues([r.slice(0, N).map(c)]); v[i] = r; };
+  const pola = (r, p) => { r[2] = p.kod; r[3] = p.faza; r[5] = p.nazwa; r[6] = p.opis; r[10] = p.start; r[11] = p.termin; r[12] = 'nie'; r[13] = p.h; r[14] = p.osoby; r[15] = p.ekipa; };
+  const zatw = (i, r, kto) => { r[8] = 'to do'; r[27] = kto; r[28] = t; hist.push([harmLicznik_('HZ_N', 'H-'), r[0], t, kto, 'Status', ZP_ST, 'to do (zatwierdził ' + kto + ')', 'ELWIS']);
+    kol.push(['u-' + r[0], t, 'utworz', r[0], '{}', 'czeka', '']); };
+  evs.slice().sort((a, b) => (txt_(a.ts) < txt_(b.ts) ? -1 : 1)).forEach(e => {
+    const d = e.d || {}, zid = txt_(d.zid), kto = txt_(e.kto); if (!/^EL-[\w-]{4,40}$/.test(zid)) return;
+    try {
+      let i = zpWiersz_(v, zid);
+      if (e.typ === 'zadDec') {
+        if (i < 0) return; const r = v[i].slice(); while (r.length < N) r.push('');
+        if (txt_(r[8]) !== ZP_ST || txt_(r[31])) return;   // już rozstrzygnięte
+        if (d.zm) { const p = zpPola_(d.zm); pola(r, p); hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Zmiana biura', v[i][5] + ' ' + v[i][10] + '–' + String(v[i][11]).slice(11), p.nazwa + ' ' + p.start + '–' + p.termin.slice(11), 'ELWIS']); }
+        if (d.dec === 'anul') { r[8] = 'cancelled'; r[31] = 'anulowane przez ' + kto + ' ' + t; r[27] = kto; r[28] = t; hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Status', ZP_ST, 'anulowane', 'ELWIS']); }
+        else if (d.dec === 'zatw') zatw(i, r, kto);
+        else { r[27] = kto; r[28] = t; }
+        zapisz(i, r); return;
+      }
+      if (i < 0) {
+        if (d.usun) return;
+        const p = zpPola_(d), r = new Array(N).fill('');
+        r[0] = zid; pola(r, p); r[7] = 'zadanie'; r[8] = ZP_ST; r[9] = 'normalny'; r[24] = 'ELWIS'; r[25] = kto; r[26] = t; r[27] = kto; r[28] = t;
+        const pr = p.kod ? projektyBaza_().find(x => x.kod === p.kod) : null; if (pr) { r[32] = txt_(pr.cu); r[33] = txt_(pr.nazwa); }
+        if (rb[kto] && autoB) zatw(-1, r, kto);
+        sh.getRange(sh.getLastRow() + 1, 1, 1, N).setNumberFormat(TEXT).setValues([r.map(c)]); v = sh.getDataRange().getDisplayValues();
+        hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Nowe zadanie', '', p.nazwa + ' · ' + p.start + '–' + p.termin.slice(11) + ' · ' + p.osoby, 'tablet']); return;
+      }
+      const r = v[i].slice(); while (r.length < N) r.push('');
+      if (txt_(r[8]) !== ZP_ST || txt_(r[31])) { hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Edycja pominięta', '', 'zadanie już rozstrzygnięte przez biuro', 'tablet']); return; }
+      if (!rb[kto]) { hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Edycja pominięta', '', 'zadanie już wysłane – decyduje biuro', 'tablet']); return; }   // po wysłaniu zmienia już tylko biuro
+      if (d.usun) { r[8] = 'cancelled'; r[31] = 'usunięte przez ' + kto + ' ' + t; hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Usunięte', '', 'przez autora', 'tablet']); }
+      else { const p = zpPola_(d); pola(r, p); hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Edycja', '', p.nazwa + ' · ' + p.start + '–' + p.termin.slice(11) + ' · ' + p.osoby, 'tablet']); }
+      r[27] = kto; r[28] = t; zapisz(i, r);
+    } catch (er) { hist.push([harmLicznik_('HZ_N', 'H-'), zid, t, kto, 'Błąd', '', String(er.message || er).slice(0, 200), 'tablet']); }
+  });
+  harmDopisz_('Historia zmian', hist); harmDopisz_('Kolejka ClickUp', kol);
+  P.setProperty('PLAN_VER', String(Date.now()));
+}
+/** Edycja zadania przez biuro: wiersz w Harmonogram → Zadania (zablokowany przed nadpisaniem z ClickUp) + zmiana w ClickUp w tle. */
+function zadEdytuj_(id, d, kto, teraz) {
+  const sh = harmSh_('Zadania'), N = HARM_TABS['Zadania'].length, v = sh.getDataRange().getDisplayValues();
+  let i = -1; for (let k = v.length - 1; k > 0; k--) if (txt_(v[k][1]) === id || txt_(v[k][0]) === id) { i = k; break; }
+  if (i < 0) throw new Error('Nie ma zadania ' + id + ' w harmonogramie');
+  const re = /^\d{4}-\d{2}-\d{2}$/, hm = /^\d{1,2}:\d{2}$/, dDo = txt_(d.dataDo) || txt_(d.data);
+  if (!re.test(txt_(d.data)) || !re.test(dDo) || dDo < d.data || !hm.test(txt_(d.od)) || !hm.test(txt_(d.do)) || (dDo === d.data && minOf_(d.do) <= minOf_(d.od))) throw new Error('Zadanie: zła data lub godziny');
+  const ok = {}; ludzie_().forEach(o => { ok[o.name] = o; });
+  const osoby = (d.osoby || []).map(txt_).filter(n => ok[n]); if (!osoby.length) throw new Error('Zadanie: brak osób');
+  if (!txt_(d.nazwa)) throw new Error('Zadanie: brak nazwy');
+  const t = String(teraz).replace('T', ' ').slice(0, 16), r = v[i].slice(); while (r.length < N) r.push('');
+  const nowe = { 2: txt_(d.kod).slice(0, 20), 3: fazyProj_().indexOf(txt_(d.faza)) >= 0 ? txt_(d.faza) : txt_(r[3]), 5: txt_(d.nazwa).slice(0, 180), 6: txt_(d.notatka).slice(0, 2000),
+    10: d.data + ' ' + CZ_HM_(d.od), 11: dDo + ' ' + CZ_HM_(d.do), 12: 'nie', 14: osoby.join('; '), 15: [...new Set(osoby.map(n => ok[n].ek).filter(Boolean))].join('; ') };
+  if (dDo === d.data) nowe[13] = String(Math.round((minOf_(d.do) - minOf_(d.od)) / 6) / 10).replace('.', ',');
+  const NAZWY = { 2: 'Kod', 3: 'Faza', 5: 'Nazwa', 6: 'Opis', 10: 'Start', 11: 'Termin', 13: 'Szac. czas (h)', 14: 'Osoby' }, hist = [];
+  Object.keys(nowe).forEach(k => { if (NAZWY[k] && txt_(r[k]) !== nowe[k]) hist.push([harmLicznik_('HZ_N', 'H-'), r[0], t, kto, NAZWY[k], r[k], nowe[k], 'ELWIS – edycja biura']); r[k] = nowe[k]; });
+  if (!hist.length) return;
+  r[24] = 'ELWIS'; r[27] = kto; r[28] = t;   // zablokowane – zmiana w ClickUp już go nie nadpisze
+  const c = x => String(x == null ? '' : x).replace(/^[=+@-]/, "'$&");
+  sh.getRange(i + 1, 1, 1, N).setNumberFormat(TEXT).setValues([r.slice(0, N).map(c)]);
+  harmDopisz_('Historia zmian', hist);
+  if (txt_(r[1]) || /^EL-/.test(txt_(r[0]))) harmDopisz_('Kolejka ClickUp', [['e-' + Utilities.getUuid().slice(0, 10), t, 'edytuj', txt_(r[1]) || txt_(r[0]), JSON.stringify({ kto: kto, zmiany: hist.map(h => h[4] + ': ' + h[5] + ' → ' + h[6]).join('; ').slice(0, 1500) }), 'czeka', '']]);
+  P.setProperty('PLAN_VER', String(Date.now()));
+}
+/** Kolejka `edytuj`: nazwa, terminy, szacowany czas i osoby z wiersza harmonogramu → ClickUp, komentarz z listą zmian. */
+function zadEdytujCU_(id, d) {
+  const cuId = /^EL-/.test(id) ? elCu_(id) : id; if (!cuId) return false;   // zadanie z ELWIS jeszcze niezałożone – założy się już z nowymi danymi
+  const v = harmSh_('Zadania').getDataRange().getDisplayValues(); let r = null; for (let k = v.length - 1; k > 0; k--) if (txt_(v[k][1]) === cuId) { r = v[k]; break; } if (!r) return true;
+  const s = txt_(r[10]), e = txt_(r[11]), cur = cu_('get', 'task/' + cuId), nowe = cuIds_(txt_(r[14]).split(';').map(x => x.trim()).filter(String)), stare = (cur.assignees || []).map(a => Number(a.id));
+  const body = { name: txt_(r[5]), start_date: msDnia_(s.slice(0, 10), s.slice(11, 16) || '07:00'), start_date_time: true, due_date: msDnia_(e.slice(0, 10), e.slice(11, 16) || '15:00'), due_date_time: true,
+    assignees: { add: nowe.filter(x => stare.indexOf(x) < 0), rem: stare.filter(x => nowe.indexOf(x) < 0) } };
+  if (txt_(r[13])) body.time_estimate = Math.round(Number(txt_(r[13]).replace(',', '.')) * 36e5);
+  cu_('put', 'task/' + cuId, body);
+  cu_('post', 'task/' + cuId + '/comment', { comment_text: 'ELWIS · zmiana biura (' + txt_(d.kto) + '): ' + txt_(d.zmiany), notify_all: false });
+  return true;
+}
+/** Zadania czekające na decyzję biura – biuro: wszystkie, pracownik: swoje i te, w których jest. */
+function zadProp_(kto, biuro) {
+  const out = [], dz = dzienTz_(Date.now());
+  harmSh_('Zadania').getDataRange().getDisplayValues().slice(1).forEach(r => {
+    const st = txt_(r[8]); if (!/^EL-/.test(txt_(r[0])) || txt_(r[31])) return;
+    if (st !== ZP_ST && !(st !== 'cancelled' && txt_(r[10]).slice(0, 10) >= dz)) return;   // czekające + zatwierdzone przyszłe (tablet pokazuje je także poza oknem planu)
+    const os = txt_(r[14]).split(';').map(x => x.trim()).filter(String);
+    if (!biuro && txt_(r[25]) !== kto && os.indexOf(kto) < 0) return;
+    out.push({ zid: txt_(r[0]), kod: txt_(r[2]), faza: txt_(r[3]), nazwa: txt_(r[5]), notatka: txt_(r[6]), data: txt_(r[10]).slice(0, 10), od: txt_(r[10]).slice(11, 16), do: txt_(r[11]).slice(11, 16), osoby: os, autor: txt_(r[25]), utw: txt_(r[26]), zm: txt_(r[27]), zmT: txt_(r[28]), lista: txt_(r[32]), listaNazwa: txt_(r[33]), status: st, cu: txt_(r[1]) });
+  });
+  return out;
+}
+/** ID ClickUp zadania dodanego w ELWIS (po założeniu w ClickUp), inaczej ''. */
+function elCu_(zid) { const v = harmSh_('Zadania').getDataRange().getDisplayValues(), i = zpWiersz_(v, zid); return i > 0 ? txt_(v[i][1]) : ''; }
+/** Kolejka ClickUp `utworz`: zatwierdzone zadanie z ELWIS → nowe zadanie w liście projektu (pod fazą), ID i link wraca do wiersza. */
+function zadPlanCU_(zid) {
+  const sh = harmSh_('Zadania'), v = sh.getDataRange().getDisplayValues(), i = zpWiersz_(v, zid); if (i < 0) throw new Error('Brak zadania ' + zid);
+  const r = v[i]; if (txt_(r[1]) || txt_(r[31])) return;   // już w ClickUp albo anulowane
+  const pr = projektyBaza_().find(x => x.kod === txt_(r[2])); if (!pr || !pr.cu) throw new Error('Projekt ' + txt_(r[2]) + ' bez listy ClickUp w Bazie');
+  const dz = txt_(r[10]).slice(0, 10), od = txt_(r[10]).slice(11, 16), dd = txt_(r[11]).slice(11, 16), osoby = txt_(r[14]).split(';').map(x => x.trim()).filter(String);
+  const opis = [txt_(r[6]), 'Dodane w ELWIS: ' + txt_(r[25]) + ' ' + txt_(r[26]) + ' · zatwierdził ' + txt_(r[27]) + ' ' + txt_(r[28]) + ' [' + zid + ']'].filter(String).join('\n\n');
+  const t = cu_('post', 'list/' + pr.cu + '/task', { name: txt_(r[5]), parent: faza_(pr.cu, txt_(r[3]) || 'Montaż i Wykonawstwo'), assignees: cuIds_(osoby), description: opis,
+    start_date: msDnia_(dz, od), start_date_time: true, due_date: msDnia_(dz, dd), due_date_time: true, time_estimate: Math.round((minOf_(dd) - minOf_(od)) * 6e4), notify_all: false });
+  sh.getRange(i + 1, 2).setNumberFormat(TEXT).setValue(t.id);
+  sh.getRange(i + 1, 33, 1, 3).setNumberFormat(TEXT).setValues([[txt_(pr.cu), txt_(pr.nazwa), txt_(t.url)]]);
+  syncLog_('utworz', 'zp:' + zid, t.id, 'ok', '');
+  P.setProperty('PLAN_VER', String(Date.now()));
+}
 
 /** Zadanie z planu: gdy wszystkie osoby z planu mają rozstrzygnięty dzień końcowy – status albo anulowanie + nowe zadania. */
 /** Zadanie z arkusza „ELWIS – Harmonogram” → Zadania (ostatnie niepuste wartości wierszy o tym ID ClickUp). */

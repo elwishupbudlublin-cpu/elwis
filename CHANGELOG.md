@@ -1,5 +1,13 @@
 # Zmiany
 
+## 1.59.0 – 2026-11-22 (aplikacja i serwer)
+- Zadania na jutro i później dodawane przez pracownika („+ Nowe zadanie”, przytrzymanie palca na przyszłym dniu): budowa, faza, opis, osoby, dzień, godziny, notatka. Widoczne od razu w planie wybranych osób (pamięć tabletu), status „do zatwierdzenia”. Autor zmienia / usuwa je tylko przed wysłaniem z tabletu; potem decyduje biuro (Zatwierdź / Zmień / Anuluj – panel PC i okno zadania). Zatwierdzone → „to do” i założenie w ClickUp w tle (lista projektu, faza).
+- Jedno okno zadania: budowa, faza, status, notatka; trzy przyciski Wykonane / Do kontynuacji / Niepodjęte (nieaktywne dla przyszłych dni, zadań do zatwierdzenia i zatwierdzonych); poprawki innych osób z podsumowaniem zmian i „Akceptuję”; stan wpisu: niewysłane / czeka na zatwierdzenie / odrzucone do poprawy (kto, powód) / zatwierdzone (kto, kiedy).
+- Zadanie spoza kalendarza osoby, do którego ktoś zaproponował jej godziny, pojawia się w jej planie; „Niepodjęte” odrzuca wtedy tylko propozycję.
+- Biuro: okno zadania za osobę z klikniętego wiersza / kolumny; „Edytuj zadanie” (budowa, faza, nazwa, osoby, dni, godziny, notatka) – harmonogram bazy (blokada przed nadpisaniem z ClickUp) i ClickUp w tle z komentarzem.
+- Panel PC „Do zatwierdzenia” / „Zatwierdzone”: najpierw podgląd wszystkich danych wpisu, potem Zatwierdź / Modyfikuj (z dodaniem osoby) / Cofnij do poprawy; zatwierdzone – Modyfikuj / Zwróć do użytkownika (wiersz „Czas pracy” oznaczony, poprawka jako korekta w ClickUp). Sortowanie po kolumnach. Zaznaczanie bez przerysowania listy, przewinięcie zachowane, odświeżanie w tle tylko przy zmianach.
+- Harmonogram tygodnia: zwijanie zadań osoby (▾/▸), godziny dnia przy osobie (poniżej 8 h jasnozielone, 8 h zielone, ponad 8 h czerwone).
+
 ## 1.58.7 – 2026-11-21 (serwer)
 - Synchronizacja harmonogramu z ClickUp tylko dla zadań dzisiejszych i przyszłych (45 dni) – przeszłe są już w arkuszu. Jednorazowy import od 1. dnia miesiąca do dziś: funkcja `harmImportMiesiac` (uruchamiana ręcznie).
 

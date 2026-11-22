@@ -946,3 +946,18 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .phtop .pnz.psh{left:calc(50% + 120px);width:50px;padding:0;font-size:22px;justify-content:center}
 @media (max-width:700px){.phtop .pnz.psh{left:auto}}
 .czprop{border-color:#93C5FD;background:#F5F9FF}.czpr{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.czpr:first-of-type{border-top:0}
+/* 1.59.0: zadania na przyszłe dni do zatwierdzenia, nieaktywne przyciski statusu */
+.pblk.pprop{border-style:dashed;background:repeating-linear-gradient(135deg,#fff,#fff 8px,#F5F3FF 8px,#F5F3FF 16px)}
+.st3.dis .sb{opacity:.45;cursor:not-allowed;filter:grayscale(.6)}
+.chip.pr{background:#EDE9FE;color:#5B21B6}
+.czlock{border-color:#CBD5E1;background:#F8FAFC}.czodrz{border-color:#FCA5A5;background:#FEF2F2}
+.czzm{margin:4px 0 0 18px;padding:0;font-size:14px;color:#475569}
+.zpdlg{width:min(720px,96vw)}.zpdlg .sbody{display:flex;flex-direction:column;gap:12px}.zpdlg label input[type=text],.zpdlg textarea{width:100%}
+.pctzp td{vertical-align:top}
+.pcso{cursor:pointer;user-select:none;white-space:nowrap}.pcso:hover{color:var(--ink,#0F172A)}.pcso.on{color:#1D4ED8}
+.pcpod{display:flex;flex-direction:column;gap:6px}.pcpd{display:grid;grid-template-columns:120px 1fr;gap:8px;font-size:14px}.pcpd span{color:var(--mute)}.pcpd b{font-weight:600}
+/* 1.59.0: harmonogram tygodnia – godziny dnia i zwijanie osób */
+.pchd{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:4px}
+.pchd.h-lo{background:#DCFCE7;color:#166534}.pchd.h-ok{background:#16A34A;color:#fff}.pchd.h-hi{background:#DC2626;color:#fff}
+.pczwb{border:0;background:none;font-size:14px;width:22px;cursor:pointer;color:var(--mute);padding:0}
+.pctyd tr.pczw td{padding-top:6px;padding-bottom:6px}.pczn2{display:block;font-size:12px}

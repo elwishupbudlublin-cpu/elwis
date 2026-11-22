@@ -279,7 +279,7 @@ const Sync = {
     } finally {
       S.syncing = false; S.prog = null;
       await liczOczekujace();
-      UI.net(); if (!['login', 'setup', 'protokol'].includes(UI.cur)) UI.refresh();   // formularza protokołu nie przerysowujemy w trakcie pisania
+      UI.net(); if (!['login', 'setup', 'protokol', 'pcCzas'].includes(UI.cur)) UI.refresh();   // od 1.59.0: zatwierdzanie odświeża się samo (bez gubienia zaznaczeń i przewinięcia)   // formularza protokołu nie przerysowujemy w trakcie pisania
     }
   },
   /* Wysłanie zmian z tabletu (od 1.56.1 osobno): kod = tylko jedna budowa (np. przed „Word” w protokole) */
