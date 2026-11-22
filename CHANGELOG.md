@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.60.1 – 2026-11-22 (aplikacja; serwer tylko numer wersji)
+- Okno „Do uzupełnienia” po zalogowaniu na tablecie: lista przewija się wewnątrz okna, „Później” zawsze widoczne na dole (wcześniej okno wychodziło poza ekran i nie dało się przewinąć). To samo w pozostałych oknach z nagłówkiem i stopką; wysokość okien wg widocznego ekranu (dvh).
+
 ## 1.60.0 – 2026-11-22 (aplikacja i serwer)
 - Panel PC – nowy dział **Serwis** (wdrożenie testowe): Przekazanie do serwisu, Obiekty na gwarancji, Kalendarz przeglądów, Zgłoszenia serwisowe. Dane w osobnym arkuszu „ELWIS – Serwis” w folderze _Serwis na Dysku (per obiekt folder z podfolderami Przeglądy / Zgłoszenia / Gwarancja i skrótem do folderu budowy). „Zaplanuj” tworzy zadanie w ClickUp (lista budowy, faza Zamknięcie i Serwis, tag „serwis”); „Wykonane” przelicza następny termin. Zadania serwisowe nie trafiają na tablety ani do harmonogramu montażu. Serwer: operacja `serwis` (tylko rola biuro), klucze Konfiguracji folder_serwis_id, serwis_arkusz_id, serwis_zespol.
 - Biuro → **Raporty**: godziny pracowników z zatwierdzonych wpisów (osoby × dni z urlopami i nieobecnościami; budowy × osoby), miesiąc i osoba, CSV i druk / PDF.

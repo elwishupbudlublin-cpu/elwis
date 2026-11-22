@@ -1018,3 +1018,8 @@ body.pc .phtop .pnz.psh{width:42px;font-size:20px}
 .prf select{width:auto;min-width:200px}
 .srak a.btn{text-decoration:none}#view .pct td:has(> .srch){white-space:nowrap}
 .pczb{font-size:11px;font-weight:600;color:#1e3a8a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+/* od 1.60.1: „Do uzupełnienia” (i inne okna z nagłówkiem / stopką) – przewijana tylko treść, stopka z „Później” zawsze widoczna; wysokość wg widocznego ekranu tabletu (dvh) */
+.dialog{max-height:92vh;max-height:calc(100dvh - 24px)}
+.czdlg,.tydlg,.tabdlg,.nzdlg,.zpdlg,.srdlg{display:flex;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 24px)}
+.czdlg .sbody,.zpdlg .sbody,.srdlg .sbody{min-height:0;flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.czdlg .shead,.czdlg .sfoot{flex:0 0 auto}
