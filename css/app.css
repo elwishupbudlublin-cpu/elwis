@@ -980,3 +980,9 @@ body.pc main#view select,body.pc #modal select{padding-right:32px!important}
 .pcmies td.pcos,.pcmies th.pcos,.pcmies .pcgrw td{text-align:left!important;padding-left:10px!important}
 .pctyd #tZW{font-size:11px;padding:4px 8px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .pcmies .pczm{min-height:18px}
+/* 1.59.2: Budowy na PC – kafelki ostatnich i paski postępu */
+.pckafle{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.pckaf{text-align:left;display:flex;flex-direction:column;gap:6px;align-items:stretch}.pckn{font-size:15px}.pckt{font-size:12px}
+.pch2{font-size:16px;margin:4px 0 10px}
+.pcbud td.pcpr{min-width:130px}.pcbud td.pcpr .tbar3{width:120px}
+@media (max-width:1500px){.pckafle{grid-template-columns:repeat(2,1fr)}}

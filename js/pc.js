@@ -284,17 +284,25 @@ Object.assign(Views, {
     const so = Object.assign({ k: 'kod', d: 1 }, (await DB.get('pcSortBud')) || {});
     const q = par.q || '';
     const naz = p => String(p.nazwa || '').replace(p.kod, '').trim() || p.nazwa;
-    const KOL = [['kod', 'Kod'], ['naz', 'Nazwa'], ['kier', 'Kierownik'], ['w', 'Urządz.'], ['d', 'Rozp.'], ['p', 'Podł.'], ['u', 'Uruch.'], ['r', 'Do rozp.'], ['f', 'Front'], ['b', 'Braki'], ['nt', 'Notatki'], ['t', 'Ostatni wpis'], ['off', 'Na PC']];
-    const wart = (p, k) => { const L = LM[p.kod] || {}; return k === 'kod' ? p.kod : k === 'naz' ? naz(p) : k === 'kier' ? (p.kierownik || '') : k === 'off' ? (off.has(p.kod) ? 1 : 0) : k === 't' ? (L.t || '') : (L[k] != null ? L[k] : -1); };
+    const KOL = [['kod', 'Kod'], ['naz', 'Nazwa'], ['kier', 'Kierownik'], ['pr', 'Postęp'], ['w', 'Urządz.'], ['d', 'Rozp.'], ['p', 'Podł.'], ['u', 'Uruch.'], ['r', 'Do rozp.'], ['f', 'Front'], ['b', 'Braki'], ['nt', 'Notatki'], ['t', 'Ostatni wpis'], ['off', 'Na PC']];
+    const wart = (p, k) => { const L = LM[p.kod] || {}; return k === 'kod' ? p.kod : k === 'naz' ? naz(p) : k === 'kier' ? (p.kierownik || '') : k === 'off' ? (off.has(p.kod) ? 1 : 0) : k === 't' ? (L.t || '') : k === 'pr' ? (L.w ? (L.u * 1e6 + L.p * 1e3 + L.d) / L.w : -1) : (L[k] != null ? L[k] : -1); };
     const nq = U.norm(q);
     const lista = all.filter(p => !nq || U.norm([p.kod, p.nazwa, p.adres, p.kierownik].join(' ')).includes(nq))
       .sort((a, b) => { const x = wart(a, so.k), y = wart(b, so.k); return (typeof x === 'number' && typeof y === 'number' ? x - y : so.k === 'kod' ? natCmp(String(x), String(y)) : String(x).localeCompare(String(y), 'pl')) * so.d; });
     const brakPC = all.filter(p => !off.has(p.kod) && dostepDoBudowy(p)).length;
     const pct = (L, k) => L && L.w ? `<small>${Math.round(L[k] / L.w * 100)}%</small>` : '';
+    // od 1.59.2: kafelki 6 ostatnio otwieranych budów (potem – z najnowszym wpisem) z paskami postępu jak na tablecie
+    const recent = ((await DB.get('recent')) || []).map(k => all.find(p => p.kod === k)).filter(Boolean);
+    const ost = recent.concat(all.filter(p => !recent.includes(p) && (LM[p.kod] || {}).t).sort((a, b) => String((LM[b.kod] || {}).t).localeCompare(String((LM[a.kod] || {}).t)))).slice(0, 6);
+    const kafel = p => { const L = LM[p.kod];
+      const dod = L ? [L.f ? `<span class="lfront">${ic('front')} ${L.f}</span>` : '', L.b ? `<span class="usterki">⚠ ${L.b} ${odmUsterki(L.b)}</span>` : '', L.nt ? `<span class="lnot">${ic('note')} ${L.nt}</span>` : ''].filter(Boolean).join('') : '';
+      return `<button class="tile btc pckaf" data-k="${U.esc(p.kod)}"><span class="row"><span class="m bkd">${U.esc(p.kod)}</span>${p.wojskowy === 'tak' ? '<span class="chip warn" style="margin-left:auto">W</span>' : ''}</span>
+        <b class="pckn">${U.esc(naz(p))}</b>${p.kierownik ? `<span class="lkier sm">${ic('kier')}${U.esc(p.kierownik)}</span>` : ''}
+        ${L ? `<span class="lstat"><span class="lgrp kol">${kolDoRozp(L, true)}${kolPostep(L)}</span>${dod ? `<span class="ldod">${dod}</span>` : ''}${pasek3(L)}</span>${L.t ? `<span class="mute pckt">ostatni wpis ${U.esc(PC.data(L.t))}${L.k ? ' · ' + U.esc(L.k) : ''}</span>` : ''}` : '<span class="mute">liczniki po pobraniu danych budowy</span>'}</button>`; };
     PC.widok('Budowy', `<input class="pcq" id="bQ" placeholder="Szukaj: kod, nazwa, adres, kierownik" value="${U.esc(q)}"><button class="btn sm" id="bPob">Pobierz dane wszystkich budów${brakPC ? ` (${brakPC})` : ''}</button>`,
-      `<div class="pctw"><table class="pct pcbud"><thead><tr>${KOL.map(([k, t]) => `<th><button class="pcsrt${so.k === k ? ' on' : ''}" data-s="${k}">${t}${so.k === k ? (so.d > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('')}</tr></thead>
+      `${!q && ost.length ? `<h2 class="pch2">Ostatnie budowy</h2><div class="pckafle">${ost.map(kafel).join('')}</div><h2 class="pch2">Wszystkie aktywne budowy</h2>` : ''}<div class="pctw"><table class="pct pcbud"><thead><tr>${KOL.map(([k, t]) => `<th><button class="pcsrt${so.k === k ? ' on' : ''}" data-s="${k}">${t}${so.k === k ? (so.d > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('')}</tr></thead>
        <tbody>${lista.map(p => { const L = LM[p.kod];
-         return `<tr class="pcrow" data-k="${U.esc(p.kod)}"><td><b>${U.esc(p.kod)}</b></td><td>${U.esc(naz(p))}${p.wojskowy === 'tak' ? ' <span class="chip warn">W</span>' : ''}</td><td>${U.esc(p.kierownik || '')}</td>
+         return `<tr class="pcrow" data-k="${U.esc(p.kod)}"><td><b>${U.esc(p.kod)}</b></td><td>${U.esc(naz(p))}${p.wojskowy === 'tak' ? ' <span class="chip warn">W</span>' : ''}</td><td>${U.esc(p.kierownik || '')}</td><td class="pcpr">${L && L.w ? pasek3(L) : ''}</td>
            ${L ? `<td>${L.w}</td><td>${L.d} ${pct(L, 'd')}</td><td>${L.p} ${pct(L, 'p')}</td><td>${L.u} ${pct(L, 'u')}</td><td>${L.r != null ? L.r : ''}</td><td>${L.f || ''}</td><td class="${L.b ? 'o-bad' : ''}">${L.b || ''}</td><td>${L.nt || ''}</td><td>${L.t ? U.esc(PC.data(L.t)) + (L.k ? ` <small>${U.esc(L.k)}</small>` : '') : ''}</td>` : '<td colspan="9" class="mute">liczniki po pobraniu danych budowy</td>'}
            <td>${off.has(p.kod) ? '✓' : ''}</td></tr>`; }).join('')}</tbody></table></div>
        <p class="mute pcleg">Wiersz otwiera budowę. „Na PC” – dane budowy w pamięci komputera (bez rzutów i dokumentów, te pobierają się przy otwarciu).</p>`,

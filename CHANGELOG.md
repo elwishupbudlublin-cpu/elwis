@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.59.2 – 2026-11-22 (aplikacja)
+- Budowy na komputerze: kafelki 6 ostatnich budów (ostatnio otwierane, potem z najnowszym wpisem) z licznikami i paskami postępu jak na tablecie; kolumna „Postęp” z paskiem w tabeli budów (sortowanie).
+
 ## 1.59.1 – 2026-11-22 (aplikacja i serwer)
 - Przyszły dzień („+ Nowe zadanie”, przytrzymanie palca): wybór rodzaju wpisu – admin: + Zadanie / Urlop / Nieobecność / Inne; pracownik: Nowe zadanie / Urlop / Nieobecność / Inne.
 - Zadanie kilkudniowe nie zajmuje dni wolnych (weekendy, święta), chyba że zaznaczono „praca również w dni wolne” (Edytuj zadanie; tag w harmonogramie bazy).
