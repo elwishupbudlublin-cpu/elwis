@@ -104,7 +104,7 @@ const UI = {
     if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box) && znaczniki.every(id => urzE().some(u => u.id === id))
       && !urzE().some(u => u._nowe && u.arkusz === this.pv.ark && u.x !== '' && u.x != null && !znaczniki.includes(u.id))) {
       const F = fold(S.ev); const urz = urzE();
-      this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; return { cls: ST[st], label: id + ' – ' + st }; });
+      this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; const kr = u ? krokiDev(u, F) : []; return { cls: ST[st], label: id + ' – ' + st + (kr.length ? ' · kroki ' + kr.filter(Boolean).length + '/' + kr.length : ''), kroki: kr }; });
       const side = $('.planbox .side'); const ark = this.pv.ark;
       if (side) { const a = urz.filter(u => u.arkusz === ark); side.innerHTML = legend(a, F) + attention(a, F); side.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u)); }
       this.net(); return;
@@ -951,7 +951,7 @@ const Views = {
       const f = fid && await DB.getFile(fid);
       if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
       $('#noplan').remove();
-      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => ({ id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], label: idOz(u) + ' – ' + sOf(u) }));
+      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => { const kr = krokiDev(u, F); return { id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], kroki: kr, label: idOz(u) + ' – ' + sOf(u) + (kr.length ? ' · kroki ' + kr.filter(Boolean).length + '/' + kr.length : '') }; });
       // przytrzymanie znacznika i przesunięcie = zmiana pozycji z potwierdzeniem (od 1.30.0)
       const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id),
         { onMove: (id, x, y, wroc, ok) => Dialogs.pozycja(id, { x, y, ark }, wroc, ok) }); pv.ark = ark; UI.pv = pv;

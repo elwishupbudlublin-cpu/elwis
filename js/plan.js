@@ -1,4 +1,9 @@
 /* ELWIS – rzut z powiększaniem i przesuwaniem (dotyk, mysz), znaczniki urządzeń. */
+/* od 1.61.0: rząd kwadracików pod kropką – jeden na krok; zrobiony = zielony */
+function sqHtml(k) {
+  return k && k.length ? `<span class="sqs" aria-hidden="true">${k.map(v => `<i class="${v ? 'on' : ''}"></i>`).join('')}</span>` : '';
+}
+
 function PlanView(box, imgUrl, markers, onTap, opt) {
   opt = opt || {};
   const layer = document.createElement('div'); layer.className = 'layer';
@@ -58,7 +63,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     rozsun();
     for (const m of markers) {
       const b = document.createElement('button');
-      b.className = 'mk ' + m.cls; b.dataset.id = m.id; ustaw(b, m);
+      b.className = 'mk ' + m.cls; b.dataset.id = m.id; ustaw(b, m); b.innerHTML = sqHtml(m.kroki);
       b.setAttribute('aria-label', m.label); b.title = m.label;
       layer.appendChild(b);
     }
@@ -159,7 +164,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   box.addEventListener('wheel', e => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   const api = {
     box,
-    recolor(fn) { layer.querySelectorAll('.mk').forEach(b => { const r = fn(b.dataset.id); b.className = 'mk ' + r.cls; b.title = r.label; b.setAttribute('aria-label', r.label); }); },
+    recolor(fn) { layer.querySelectorAll('.mk').forEach(b => { const r = fn(b.dataset.id); b.className = 'mk ' + r.cls; b.title = r.label; b.setAttribute('aria-label', r.label); b.innerHTML = sqHtml(r.kroki); }); },
     zoomIn() { const r = box.getBoundingClientRect(); zoomAt(1.3, r.width / 2, r.height / 2); },
     zoomOut() { const r = box.getBoundingClientRect(); zoomAt(1 / 1.3, r.width / 2, r.height / 2); },
     fit,

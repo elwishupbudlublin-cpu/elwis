@@ -104,6 +104,12 @@ function devStatus(u, F) {
   return done || st.sn || u.sn ? 'w toku' : 'czeka';   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
 }
 
+/* od 1.61.0: kroki typu urządzenia jako tablica zrobione (true) / do zrobienia (false) – kwadraciki pod kropką na rzucie */
+function krokiDev(u, F) {
+  const kr = (F.dev[u.id] || {}).kroki || {};
+  return typOf(u.id).kroki.map((k, i) => !!(kr[i] && kr[i].val));
+}
+
 /* Urządzenia dodane z tabletu (od 1.15.0, zdarzenie `urz_nowe`, tylko rola biuro): widoczne od razu – także offline,
    zanim serwer dopisze je do listy urządzeń. Do czasu synchronizacji mają ID tymczasowe `<prefiks>~xxxx`. */
 function czyTmp(id) { return /~/.test(String(id || '')); }
