@@ -876,6 +876,7 @@ const Views = {
     const sOf = u => devStatus(u, F);
     // sortowanie listy (od 1.14.0): ID ELWIS albo oznaczenie z projektu – zawsze w grupach kondygnacji; wybór zapamiętany na tablecie
     const sortUrz = par.s || (await DB.get('sortUrz')) || 'id';
+    const pokStatus = (await DB.get('pokazStatus')) === true;   // od 1.61.0: kwadraciki kroków na rzucie
     const q = U.norm(par.q || '');
     // system (od 1.31.0): wybór z listy rozwijanej – urządzenia, które w kolumnie System mają ID tej szafy; „-” = bez systemu
     const sysF = par.sys || '';
@@ -895,6 +896,7 @@ const Views = {
       <div class="ubar">
       <div class="row" style="margin-bottom:${mode === 'lista' ? 8 : 0}px">
         <div class="tabs grow ubtn" style="margin:0">${['rzut', 'lista'].map(m => `<button class="tab ${m === mode ? 'on' : ''}" data-m="${m}">${m === 'rzut' ? 'Rzut' : 'Lista'}</button>`).join('')}
+        <button class="tab ${pokStatus ? 'on' : ''}" id="uSt" aria-pressed="${pokStatus}" title="Pokaż status: kwadraciki kroków i nr seryjny nad kropkami rzutu" style="flex:none">Pokaż status</button>
         <span style="width:8px;flex:none"></span>
         <label class="tsel ${sysF ? 'on' : ''}"><span hidden>System</span><select id="uSys" aria-label="System">
           <option value="">Wszystkie systemy</option><optgroup label="System (szafa / rozdzielnica)">${systemy.map(x => `<option value="${U.esc(x)}" ${x === sysF ? 'selected' : ''}>${U.esc(idOz(x))} (${urz.filter(u => sysList(u).includes(x)).length})</option>`).join('')}
@@ -916,7 +918,7 @@ const Views = {
       ${mode === 'rzut' ? `
         <div class="tabs">${sheets.map(a => arkBtn(a, a === ark)).join('')}</div>
         ${par.wskaz ? `<div class="wskazbar">${ic('plus')} <b class="grow">${par.wskaz.urz ? `Dotknij miejsce urządzenia ${U.esc(idOz(par.wskaz.urz))} na rzucie ${U.esc(ark)}${sheets.length > 1 ? ' – inny rzut wybierz wyżej' : ''}` : `Dotknij miejsce nowego urządzenia na rzucie ${U.esc(ark)}`}</b><button class="btn sm" id="wAnul">Anuluj</button></div>` : ''}
-        <div class="planbox"><div class="plan" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
+        <div class="planbox"><div class="plan ${pokStatus ? '' : 'sq-off'}" id="plan"><div class="noplan" id="noplan">Ładuję rzut…</div>
           <div class="planctl"><button id="zin" aria-label="Powiększ">+</button><button id="zout" aria-label="Pomniejsz">−</button><button id="zfit" aria-label="Cały rzut">⤢</button></div></div>
           <div class="side">${legend(urz.filter(u => u.arkusz === ark), F)}${attention(urz.filter(u => u.arkusz === ark), F)}</div></div>`
         : `<div class="list" id="wyn" style="margin-top:10px">${groupBy(vis.slice().sort((a, b) => (poziomNr(a.kond) - poziomNr(b.kond)) || natCmp(a.arkusz || '', b.arkusz || '')), u => u.kond + '\u0001' + u.arkusz).map(([g, arr]) => `<div class="li lgrp">${U.esc(poziomTxt(arr[0].kond))} <span class="mute">${U.esc(arr[0].arkusz || '')} (${arr.length})</span></div>` + posort(arr).map(u => `
@@ -929,6 +931,7 @@ const Views = {
     $('#uSys').onchange = e => UI.go('rzut', { ...par, sys: e.target.value });
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
     if ($('#uq')) szukajNaZywo($('#uq'), () => Views.rzut(UI.par));
+    if ($('#uSt')) $('#uSt').onclick = async () => { const on = !pokStatus; await DB.set('pokazStatus', on); $('#uSt').classList.toggle('on', on); $('#uSt').setAttribute('aria-pressed', String(on)); const pl = $('#plan'); if (pl) pl.classList.toggle('sq-off', !on); };
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: par.wskaz && par.wskaz.urz ? { urz: par.wskaz.urz } : null }));
     // urządzenie bez pozycji na rzucie (od 1.30.0): „Ustaw na rzucie” → tryb wskazywania dla tego urządzenia
     view.querySelectorAll('[data-poz]').forEach(b => b.onclick = e => { e.stopPropagation(); const u = urz.find(x => x.id === b.dataset.poz) || {};

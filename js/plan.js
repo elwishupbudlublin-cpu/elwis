@@ -27,7 +27,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   }
   /* od 1.61.0: kwadraciki kroków (.sqs) nad kropką – przy oddalaniu kropki zbliżają się i kwadraciki nachodziłyby na siebie:
      każdy znacznik dostaje tyle podniesienia (--lift, px ekranu), żeby jego rząd nie kolidował z już ułożonymi wyżej/niżej. */
-  const SQ_W = 42, SQ_H = 12;   // px ekranu – szerokość rzędu kwadracików i skok podniesienia
+  const SQ_W = 52, SQ_H = 14;   // px ekranu – szerokość rzędu kwadracików i skok podniesienia
   function sqLift() {
     if (!markers || !loaded) return;
     const pos = markers.map(m => ({ m, x: tx + (m.px != null ? m.px : m.x) * W * s + (m.dx || 0), y: ty + (m.py != null ? m.py : m.y) * H * s, lift: 0 }))
