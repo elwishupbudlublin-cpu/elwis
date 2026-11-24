@@ -1025,6 +1025,6 @@ body.pc .phtop .pnz.psh{width:42px;font-size:20px}
 .czdlg .shead,.czdlg .sfoot{flex:0 0 auto}
 
 /* od 1.61.0: kwadraciki kroków pod kropką urządzenia na rzucie (zielony = zrobiony) */
-.mk .sqs{position:absolute;left:50%;bottom:calc(100% + 3px*var(--inv,1));transform:translateX(-50%);display:flex;gap:calc(2px*var(--inv,1));pointer-events:none;white-space:nowrap}
+.mk .sqs{position:absolute;left:50%;bottom:calc(100% + 3px*var(--inv,1) + var(--lift,0)*1px*var(--inv,1));transform:translateX(-50%);display:flex;gap:calc(2px*var(--inv,1));pointer-events:none;white-space:nowrap}
 .mk .sqs i{display:block;width:calc(8px*var(--inv,1));height:calc(8px*var(--inv,1));background:#fff;border:calc(1.5px*var(--inv,1)) solid #334155;border-radius:calc(1px*var(--inv,1));box-sizing:border-box}
 .mk .sqs i.on{background:#16a34a;border-color:#15803d}

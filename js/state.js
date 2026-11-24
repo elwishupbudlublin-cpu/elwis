@@ -104,10 +104,11 @@ function devStatus(u, F) {
   return done || st.sn || u.sn ? 'w toku' : 'czeka';   // od 1.30.0: wpisany nr seryjny = prace rozpoczęte
 }
 
-/* od 1.61.0: kroki typu urządzenia jako tablica zrobione (true) / do zrobienia (false) – kwadraciki pod kropką na rzucie */
+/* od 1.61.0: kwadraciki pod kropką na rzucie – pierwszy: nr seryjny wpisany lub zdjęcie tabliczki; dalej: kroki typu (true = zrobione) */
 function krokiDev(u, F) {
-  const kr = (F.dev[u.id] || {}).kroki || {};
-  return typOf(u.id).kroki.map((k, i) => !!(kr[i] && kr[i].val));
+  const dv = F.dev[u.id] || {}, kr = dv.kroki || {};
+  const tab = !!((dv.sn || u.sn) || (dv.foto || []).some(f => f.rodzaj === 'tabliczka'));
+  return [tab, ...typOf(u.id).kroki.map((k, i) => !!(kr[i] && kr[i].val))];
 }
 
 /* Urządzenia dodane z tabletu (od 1.15.0, zdarzenie `urz_nowe`, tylko rola biuro): widoczne od razu – także offline,

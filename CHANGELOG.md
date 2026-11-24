@@ -1,7 +1,7 @@
 # Zmiany
 
 ## 1.61.0 – 2026-11-24 (aplikacja; serwer tylko numer wersji)
-- Rzut: pod każdą kropką urządzenia rząd kwadracików – jeden na krok pracy z typu urządzenia; zrobiony krok = zielony, do zrobienia = pusty. Podpis kropki pokazuje liczbę zrobionych kroków (np. „kroki 2/4”). Dane z tych samych kroków co na liście urządzeń; schemat i zapisy bez zmian.
+- Rzut: pod każdą kropką urządzenia rząd kwadracików – pierwszy (z lewej) zielony, gdy wpisany nr seryjny albo zdjęcie tabliczki; dalej jeden na krok. Przy oddalaniu, gdy kropki się zbliżają, kwadraciki podnoszą się w górę, żeby nie nachodziły na siebie i na kropki pracy z typu urządzenia; zrobiony krok = zielony, do zrobienia = pusty. Podpis kropki pokazuje liczbę zrobionych kroków (np. „kroki 2/4”). Dane z tych samych kroków co na liście urządzeń; schemat i zapisy bez zmian.
 
 ## 1.60.1 – 2026-11-22 (aplikacja; serwer tylko numer wersji)
 - Okno „Do uzupełnienia” po zalogowaniu na tablecie: lista przewija się wewnątrz okna, „Później” zawsze widoczne na dole (wcześniej okno wychodziło poza ekran i nie dało się przewinąć). To samo w pozostałych oknach z nagłówkiem i stopką; wysokość okien wg widocznego ekranu (dvh).

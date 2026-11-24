@@ -25,10 +25,32 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     const lim = (t, c, v) => c <= v ? Math.min(Math.max(t, Math.min(0, v - c) - M), Math.max(0, v - c) + M) : Math.min(Math.max(t, v - c - M), M);
     tx = lim(tx, cw, r.width); ty = lim(ty, ch, r.height);
   }
+  /* od 1.61.0: kwadraciki kroków (.sqs) nad kropką – przy oddalaniu kropki zbliżają się i kwadraciki nachodziłyby na siebie:
+     każdy znacznik dostaje tyle podniesienia (--lift, px ekranu), żeby jego rząd nie kolidował z już ułożonymi wyżej/niżej. */
+  const SQ_W = 42, SQ_H = 12;   // px ekranu – szerokość rzędu kwadracików i skok podniesienia
+  function sqLift() {
+    if (!markers || !loaded) return;
+    const pos = markers.map(m => ({ m, x: tx + (m.px != null ? m.px : m.x) * W * s + (m.dx || 0), y: ty + (m.py != null ? m.py : m.y) * H * s, lift: 0 }))
+      .sort((a, b) => a.x - b.x);
+    const ulozone = [];
+    for (const p of pos) {
+      let ok = false;
+      while (!ok) {
+        ok = true;
+        for (const q of ulozone) {
+          if (Math.abs(p.x - q.x) < SQ_W && Math.abs(p.lift - q.lift) < SQ_H) { p.lift = q.lift + SQ_H; ok = false; break; }
+        }
+      }
+      ulozone.push(p);
+      const b = layer.querySelector(`.mk[data-id="${CSS.escape(p.m.id)}"]`);
+      if (b) b.style.setProperty('--lift', String(p.lift));
+    }
+  }
   function apply() {
     clamp();
     layer.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
     layer.style.setProperty('--inv', String(1 / s));
+    sqLift();
   }
   function fit() {
     const r = box.getBoundingClientRect();
@@ -67,7 +89,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       b.setAttribute('aria-label', m.label); b.title = m.label;
       layer.appendChild(b);
     }
-    fit(); loaded = true;
+    fit(); loaded = true; sqLift();
     if (czekaFocus) { const id = czekaFocus; czekaFocus = null; api.focus(id); }
   };
   box.addEventListener('pointerdown', e => {
