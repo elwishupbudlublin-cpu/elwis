@@ -1026,7 +1026,11 @@ body.pc .phtop .pnz.psh{width:42px;font-size:20px}
 
 /* od 1.61.0: kwadraciki ukryte przy wyłączonym „Pokaż status” */
 .plan.sq-off .sqs{display:none}
-/* od 1.61.0: kwadraciki kroków pod kropką urządzenia na rzucie (zielony = zrobiony) */
-.mk .sqs{position:absolute;left:50%;bottom:calc(100% + 3px*var(--inv,1) + var(--lift,0)*1px*var(--inv,1));transform:translateX(-50%);display:flex;gap:calc(2px*var(--inv,1));pointer-events:none;white-space:nowrap}
-.mk .sqs i{display:block;width:calc(10px*var(--inv,1));height:calc(10px*var(--inv,1));background:#fff;border:calc(1.5px*var(--inv,1)) solid #334155;border-radius:calc(1px*var(--inv,1));box-sizing:border-box}
-.mk .sqs i.on{background:#16a34a;border-color:#15803d}
+/* od 1.61.0: kwadraciki kroków nad kropką – w osobnej warstwie nad rzutem, rozmiar w pikselach ekranu (10 px) */
+.sqlayer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;overflow:visible}
+.sqs{position:absolute;display:flex;gap:2px;transform:translateX(-50%);white-space:nowrap;pointer-events:none}
+.sqs i{display:block;width:10px;height:10px;box-sizing:border-box;background:#fff;border:1.5px solid #334155;border-radius:1px}
+.sqs i.on{background:#16a34a;border-color:#15803d}
+
+/* od 1.61.0: dymek nad kropką na rzucie (najechanie myszką) */
+.mktip{position:absolute;display:none;transform:translate(-50%,-100%);pointer-events:none;z-index:30;background:#0f172a;color:#fff;font-size:13px;line-height:1.45;padding:8px 10px;border-radius:8px;white-space:pre-line;max-width:280px;box-shadow:0 4px 14px rgba(0,0,0,.25)}

@@ -104,7 +104,7 @@ const UI = {
     if (this.cur === 'rzut' && this.pv && document.contains(this.pv.box) && znaczniki.every(id => urzE().some(u => u.id === id))
       && !urzE().some(u => u._nowe && u.arkusz === this.pv.ark && u.x !== '' && u.x != null && !znaczniki.includes(u.id))) {
       const F = fold(S.ev); const urz = urzE();
-      this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; const kr = u ? krokiDev(u, F) : []; const k = kr.slice(1); return { cls: ST[st], label: id + ' – ' + st + (k.length ? ' · kroki ' + k.filter(Boolean).length + '/' + k.length : ''), kroki: kr }; });
+      this.pv.recolor(id => { const u = urz.find(x => x.id === id); const st = u ? devStatus(u, F) : 'czeka'; const kr = u ? krokiDev(u, F) : []; const k = kr.slice(1); return { cls: ST[st], label: id + ' – ' + st + (k.length ? ' · kroki ' + k.filter(Boolean).length + '/' + k.length : ''), tip: u ? tipUrz(u, F) : id, kroki: kr }; });
       const side = $('.planbox .side'); const ark = this.pv.ark;
       if (side) { const a = urz.filter(u => u.arkusz === ark); side.innerHTML = legend(a, F) + attention(a, F); side.querySelectorAll('[data-u]').forEach(b => b.onclick = () => Dialogs.device(b.dataset.u)); }
       this.net(); return;
@@ -931,7 +931,7 @@ const Views = {
     $('#uSys').onchange = e => UI.go('rzut', { ...par, sys: e.target.value });
     view.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { await DB.set('sortUrz', b.dataset.s); UI.go('rzut', { ...par, s: b.dataset.s }); });
     if ($('#uq')) szukajNaZywo($('#uq'), () => Views.rzut(UI.par));
-    if ($('#uSt')) $('#uSt').onclick = async () => { const on = !pokStatus; await DB.set('pokazStatus', on); $('#uSt').classList.toggle('on', on); $('#uSt').setAttribute('aria-pressed', String(on)); const pl = $('#plan'); if (pl) pl.classList.toggle('sq-off', !on); };
+    if ($('#uSt')) $('#uSt').onclick = async () => { const on = !$('#uSt').classList.contains('on'); await DB.set('pokazStatus', on); $('#uSt').classList.toggle('on', on); $('#uSt').setAttribute('aria-pressed', String(on)); const pl = $('#plan'); if (pl) pl.classList.toggle('sq-off', !on); };
     view.querySelectorAll('[data-a]').forEach(b => b.onclick = () => UI.go('rzut', { ...par, ark: b.dataset.a, focus: null, wskaz: par.wskaz && par.wskaz.urz ? { urz: par.wskaz.urz } : null }));
     // urządzenie bez pozycji na rzucie (od 1.30.0): „Ustaw na rzucie” → tryb wskazywania dla tego urządzenia
     view.querySelectorAll('[data-poz]').forEach(b => b.onclick = e => { e.stopPropagation(); const u = urz.find(x => x.id === b.dataset.poz) || {};
@@ -954,7 +954,7 @@ const Views = {
       const f = fid && await DB.getFile(fid);
       if (!f) { $('#noplan').textContent = 'Brak rzutu ' + ark + ' w pamięci tabletu. Połącz się z WiFi i zsynchronizuj (plik „' + ark + '.jpg” w folderze Do wglądu).'; return; }
       $('#noplan').remove();
-      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => { const kr = krokiDev(u, F), k = kr.slice(1); return { id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], kroki: kr, label: idOz(u) + ' – ' + sOf(u) + (k.length ? ' · kroki ' + k.filter(Boolean).length + '/' + k.length : '') }; });
+      const marks = vis.filter(u => u.arkusz === ark && u.x !== '' && u.x != null).map(u => { const kr = krokiDev(u, F), k = kr.slice(1); return { id: u.id, x: +u.x, y: +u.y, cls: ST[sOf(u)], kroki: kr, tip: tipUrz(u, F), label: idOz(u) + ' – ' + sOf(u) + (k.length ? ' · kroki ' + k.filter(Boolean).length + '/' + k.length : '') }; });
       // przytrzymanie znacznika i przesunięcie = zmiana pozycji z potwierdzeniem (od 1.30.0)
       const pv = PlanView($('#plan'), URL.createObjectURL(f.blob), marks, id => Dialogs.device(id),
         { onMove: (id, x, y, wroc, ok) => Dialogs.pozycja(id, { x, y, ark }, wroc, ok) }); pv.ark = ark; UI.pv = pv;
@@ -2140,6 +2140,23 @@ function etapTile(e, F) {
 /* ---------- Oznaczenie z projektu (kolumna „Oznaczenie proj.”, schemat 1.7, od 1.14.0) ---------- */
 function urzO(id) { return ((S.proj || {}).urzadzenia || []).find(x => x.id === id) || null; }
 function ozOf(id) { const u = typeof id === 'object' ? id : urzO(id); return u && u.oz ? u.oz : ''; }
+/* od 1.61.0: tekst dymka nad kropką na rzucie (PC) – status, nr seryjny, tabliczka, kroki */
+function tipUrz(u, F) {
+  const dv = F.dev[u.id] || {}, t = typOf(u.id), kr = dv.kroki || {};
+  const st = { czeka: 'czeka', 'w toku': 'w toku', gotowe: 'gotowe', brak: 'otwarty brak' }[devStatus(u, F)] || '';
+  const sn = dv.sn || u.sn;
+  const tab = (dv.foto || []).some(f => f.rodzaj === 'tabliczka');
+  const zrob = t.kroki.filter((k, i) => kr[i] && kr[i].val).length;
+  return [
+    idOz(u) + ' · ' + t.nazwa,
+    'Status: ' + st,
+    'Nr seryjny: ' + (sn || 'brak'),
+    'Tabliczka: ' + (tab ? 'zdjęta' : 'brak'),
+    'Kroki: ' + zrob + '/' + t.kroki.length,
+    ...t.kroki.map((k, i) => (kr[i] && kr[i].val ? '✔ ' : '○ ') + k)
+  ].join('\n');
+}
+
 function idOz(id) { const i = typeof id === 'object' ? id.id : id, o = ozOf(id); return o ? i + ' · ' + o : i; }
 const ozHtml = id => { const o = ozOf(id); return o ? ` <span class="oz">${U.esc(o)}</span>` : ''; };
 /* Poziom kondygnacji (od 1.15.0): opis na przyciskach i nagłówkach oraz kolejność od najniższego do najwyższego.

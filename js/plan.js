@@ -1,7 +1,7 @@
 /* ELWIS – rzut z powiększaniem i przesuwaniem (dotyk, mysz), znaczniki urządzeń. */
 /* od 1.61.0: rząd kwadracików pod kropką – jeden na krok; zrobiony = zielony */
-function sqHtml(k) {
-  return k && k.length ? `<span class="sqs" aria-hidden="true">${k.map(v => `<i class="${v ? 'on' : ''}"></i>`).join('')}</span>` : '';
+function sqInner(k) {
+  return (k || []).map(v => `<i class="${v ? 'on' : ''}"></i>`).join('');
 }
 
 function PlanView(box, imgUrl, markers, onTap, opt) {
@@ -9,6 +9,21 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   const layer = document.createElement('div'); layer.className = 'layer';
   const img = new Image(); img.src = imgUrl; img.alt = 'Rzut';
   layer.appendChild(img); box.appendChild(layer);
+  // od 1.61.0: kwadraciki kroków w osobnej warstwie nad rzutem – rozmiar w pikselach ekranu (nie skaluje się z powiększeniem)
+  const sqLayer = document.createElement('div'); sqLayer.className = 'sqlayer'; box.appendChild(sqLayer);
+  const sqEls = {};
+  // od 1.61.0: dymek przy najechaniu myszką (PC) – opis statusu urządzenia
+  const tip = document.createElement('div'); tip.className = 'mktip'; box.appendChild(tip);
+  const tipHide = () => { tip.style.display = 'none'; };
+  layer.addEventListener('pointerover', e => {
+    const b = e.target.closest && e.target.closest('.mk[data-id]');
+    if (!b || e.pointerType !== 'mouse' || !b.dataset.tip) return tipHide();
+    tip.textContent = b.dataset.tip; tip.style.display = 'block';
+    const r = b.getBoundingClientRect(), br = box.getBoundingClientRect();
+    tip.style.left = (r.left - br.left + r.width / 2) + 'px';
+    tip.style.top = (r.top - br.top - 8) + 'px';
+  });
+  layer.addEventListener('pointerout', e => { if (e.pointerType === 'mouse') tipHide(); });
   let s = 1, tx = 0, ty = 0, W = 1, H = 1, minS = 0.1, loaded = false, czekaFocus = null;
   const pts = new Map(); let last = null, moved = false, start = null, tap = false, tapTimer = 0;
   const TAP_TOL = 12;   // px – drżenie palca nie jest przesunięciem
@@ -42,12 +57,12 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
         }
       }
       ulozone.push(p);
-      const b = layer.querySelector(`.mk[data-id="${CSS.escape(p.m.id)}"]`);
-      if (b) b.style.setProperty('--lift', String(p.lift));
+      const e = sqEls[p.m.id];
+      if (e) { e.style.left = p.x + 'px'; e.style.top = (p.y - 15 - 3 - p.lift - 10) + 'px'; }
     }
   }
   function apply() {
-    clamp();
+    clamp(); if (tip) tip.style.display = 'none';
     layer.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
     layer.style.setProperty('--inv', String(1 / s));
     sqLift();
@@ -85,9 +100,11 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     rozsun();
     for (const m of markers) {
       const b = document.createElement('button');
-      b.className = 'mk ' + m.cls; b.dataset.id = m.id; ustaw(b, m); b.innerHTML = sqHtml(m.kroki);
-      b.setAttribute('aria-label', m.label); b.title = m.label;
+      b.className = 'mk ' + m.cls; b.dataset.id = m.id; ustaw(b, m);
+      b.setAttribute('aria-label', m.label); b.dataset.tip = m.tip || m.label;
       layer.appendChild(b);
+      const e = document.createElement('div'); e.className = 'sqs'; e.dataset.id = m.id; e.setAttribute('aria-hidden', 'true');
+      e.innerHTML = sqInner(m.kroki); sqLayer.appendChild(e); sqEls[m.id] = e;
     }
     fit(); loaded = true; sqLift();
     if (czekaFocus) { const id = czekaFocus; czekaFocus = null; api.focus(id); }
@@ -144,7 +161,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
       const wroc = () => { d.el.classList.remove('drag'); ustaw(d.el, d.m); };
       if (!d.ruch || e.type !== 'pointerup') { wroc(); return; }
       const fx = Math.round(d.fx * 1e4) / 1e4, fy = Math.round(d.fy * 1e4) / 1e4;
-      opt.onMove(d.m.id, fx, fy, wroc, () => { d.el.classList.remove('drag'); d.m.x = fx; d.m.y = fy; rozsun(); layer.querySelectorAll('.mk[data-id]').forEach(b => { const m = markers.find(x => x.id === b.dataset.id); if (m) ustaw(b, m); }); });
+      opt.onMove(d.m.id, fx, fy, wroc, () => { d.el.classList.remove('drag'); d.m.x = fx; d.m.y = fy; rozsun(); layer.querySelectorAll('.mk[data-id]').forEach(b => { const m = markers.find(x => x.id === b.dataset.id); if (m) ustaw(b, m); }); sqLift(); });
       return;
     }
     tap = single && !moved && e.type === 'pointerup';
@@ -186,7 +203,7 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
   box.addEventListener('wheel', e => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   const api = {
     box,
-    recolor(fn) { layer.querySelectorAll('.mk').forEach(b => { const r = fn(b.dataset.id); b.className = 'mk ' + r.cls; b.title = r.label; b.setAttribute('aria-label', r.label); b.innerHTML = sqHtml(r.kroki); }); },
+    recolor(fn) { layer.querySelectorAll('.mk').forEach(b => { const r = fn(b.dataset.id); b.className = 'mk ' + r.cls; b.dataset.tip = r.tip || r.label; b.setAttribute('aria-label', r.label); if (sqEls[b.dataset.id]) sqEls[b.dataset.id].innerHTML = sqInner(r.kroki); }); },
     zoomIn() { const r = box.getBoundingClientRect(); zoomAt(1.3, r.width / 2, r.height / 2); },
     zoomOut() { const r = box.getBoundingClientRect(); zoomAt(1 / 1.3, r.width / 2, r.height / 2); },
     fit,
