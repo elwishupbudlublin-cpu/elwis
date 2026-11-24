@@ -1028,8 +1028,8 @@ body.pc .phtop .pnz.psh{width:42px;font-size:20px}
 .plan.sq-off .sqs{display:none}
 /* od 1.61.0: kwadraciki kroków nad kropką – w osobnej warstwie nad rzutem, rozmiar w pikselach ekranu (10 px) */
 .sqlayer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;overflow:visible}
-.sqs{position:absolute;display:flex;gap:2px;transform:translateX(-50%);white-space:nowrap;pointer-events:none}
-.sqs i{display:block;width:10px;height:10px;box-sizing:border-box;background:#fff;border:1.5px solid #334155;border-radius:1px}
+.sqs{position:absolute;display:flex;gap:2px;margin:0;padding:0;transform:translateX(-50%);white-space:nowrap;pointer-events:none;transition:none;animation:none;opacity:1;filter:none;font-size:0;line-height:0;letter-spacing:0;box-shadow:none}
+.sqs i{display:block;margin:0;padding:0;width:10px;height:10px;min-width:10px;min-height:10px;box-sizing:border-box;background:#fff;border:1.5px solid #334155;border-radius:1px;transition:none;animation:none;box-shadow:none;outline:none;transform:none}
 .sqs i.on{background:#16a34a;border-color:#15803d}
 
 /* od 1.61.0: dymek nad kropką na rzucie (najechanie myszką) */

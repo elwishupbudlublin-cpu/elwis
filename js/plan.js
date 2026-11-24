@@ -40,26 +40,17 @@ function PlanView(box, imgUrl, markers, onTap, opt) {
     const lim = (t, c, v) => c <= v ? Math.min(Math.max(t, Math.min(0, v - c) - M), Math.max(0, v - c) + M) : Math.min(Math.max(t, v - c - M), M);
     tx = lim(tx, cw, r.width); ty = lim(ty, ch, r.height);
   }
-  /* od 1.61.0: kwadraciki kroków (.sqs) nad kropką – przy oddalaniu kropki zbliżają się i kwadraciki nachodziłyby na siebie:
-     każdy znacznik dostaje tyle podniesienia (--lift, px ekranu), żeby jego rząd nie kolidował z już ułożonymi wyżej/niżej. */
-  const SQ_W = 52, SQ_H = 14;   // px ekranu – szerokość rzędu kwadracików i skok podniesienia
+  /* od 1.61.0: kwadraciki kroków (.sqs) stoją stale 10 px nad krawędzią kropki (kropka 30 px, środek w punkcie znacznika) */
+  const SQ_GAP = 10, MK_R = 15, SQ_H = 10;
   function sqLift() {
     if (!markers || !loaded) return;
-    const pos = markers.map(m => ({ m, x: tx + (m.px != null ? m.px : m.x) * W * s + (m.dx || 0), y: ty + (m.py != null ? m.py : m.y) * H * s, lift: 0 }))
-      .sort((a, b) => a.x - b.x);
-    const ulozone = [];
-    for (const p of pos) {
-      let ok = false;
-      while (!ok) {
-        ok = true;
-        for (const q of ulozone) {
-          if (Math.abs(p.x - q.x) < SQ_W && Math.abs(p.lift - q.lift) < SQ_H) { p.lift = q.lift + SQ_H; ok = false; break; }
-        }
-      }
-      ulozone.push(p);
-      const e = sqEls[p.m.id];
-      if (e) { e.style.left = p.x + 'px'; e.style.top = (p.y - 15 - 3 - p.lift - 10) + 'px'; }
-    }
+    markers.forEach(m => {
+      const e = sqEls[m.id]; if (!e) return;
+      const x = tx + (m.px != null ? m.px : m.x) * W * s + (m.dx || 0);
+      const y = ty + (m.py != null ? m.py : m.y) * H * s;
+      e.style.left = x + 'px';
+      e.style.top = (y - MK_R - SQ_GAP - SQ_H) + 'px';
+    });
   }
   function apply() {
     clamp(); if (tip) tip.style.display = 'none';
