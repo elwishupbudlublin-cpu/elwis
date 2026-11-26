@@ -12,7 +12,13 @@ const PC = {
       if (e.key !== 'Escape' || !this.on() || !modal.innerHTML.trim()) return;
       const bt = [...modal.querySelectorAll('button')].reverse().find(b => /^(Anuluj|Zamknij|Wróć|×|✕)$/.test(b.textContent.trim()) || b.classList.contains('x') || b.dataset.close != null);
       e.preventDefault(); if (bt) bt.click(); else UI.close();
-    }); window.addEventListener('resize', () => { clearTimeout(this._rz); this._rz = setTimeout(() => UI.refresh(), 250); }); },
+    });
+    // od 1.61.1: otwarcie klawiatury na tablecie zmienia tylko wysokość okna – nie przerysowujemy widoku (formularz protokołu gubił fokus i klawiaturę)
+    let szer = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth === szer) return; szer = window.innerWidth;
+      clearTimeout(this._rz); this._rz = setTimeout(() => UI.refresh(), 250);
+    }); },
   IKO: {
     cal: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path>',
     day: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4M9 14h3v3H9z"></path>',

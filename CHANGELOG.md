@@ -1,5 +1,8 @@
 # Zmiany
 
+## 1.61.1 – 2026-11-26 (aplikacja; serwer tylko numer wersji)
+- Protokół uruchomienia na tablecie: klawiatura numeryczna nie znika podczas wpisywania ilości (np. detektorów). Przyczyną było przerysowanie widoku po zmianie wysokości okna, które klawiatura wywołuje; przerysowanie następuje teraz tylko przy zmianie szerokości okna.
+
 ## 1.61.0 – 2026-11-24 (aplikacja; serwer tylko numer wersji)
 - Rzut: pod każdą kropką urządzenia rząd kwadracików – pierwszy (z lewej) zielony, gdy wpisany nr seryjny albo zdjęcie tabliczki; dalej jeden na krok. Kwadraciki stoją stale 10 px nad krawędzią kropki, bez podnoszenia i animacji. Przycisk „Pokaż status” obok Rzut / Lista – kwadraciki są domyślnie ukryte, włączone zapamiętywane na tablecie. Na PC po najechaniu myszką na kropkę dymek: numer i typ, status, nr seryjny, tabliczka, lista kroków (✔ zrobiony, ○ do zrobienia) pracy z typu urządzenia; zrobiony krok = zielony, do zrobienia = pusty. Podpis kropki pokazuje liczbę zrobionych kroków (np. „kroki 2/4”). Dane z tych samych kroków co na liście urządzeń; schemat i zapisy bez zmian.
 
